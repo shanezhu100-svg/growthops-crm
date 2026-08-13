@@ -1,0 +1,164 @@
+:138px;
+      overflow-y:auto;
+      overscroll-behavior:contain;
+      scrollbar-width:thin;
+      scrollbar-color:#cbd5e1 transparent;
+    }
+    .provider-contact-list.is-all::-webkit-scrollbar { width:5px; }
+    .provider-contact-list.is-all::-webkit-scrollbar-track { background:transparent; }
+    .provider-contact-list.is-all::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:999px; }
+    .provider-contact-row { min-height:138px; }
+    .provider-contact-view-note {
+      display:inline-flex; align-items:center; gap:5px; padding:3px 7px; border-radius:999px;
+      background:#fff; border:1px solid #ede9fe; color:#7c3aed; font-size:9px; font-weight:800; white-space:nowrap;
+    }
+
+    /* Toolkit dropdown theme: emerald accent to match the 投放工具 workspace */
+    select.tool-select {
+      -webkit-appearance:none; appearance:none;
+      background-color:#f8fffc;
+      border:1px solid #d1fae5;
+      color:#0f172a;
+      font-weight:700;
+      padding-right:38px;
+      cursor:pointer;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='m6.5 8 3.5 3.5L13.5 8' stroke='%23059669' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat:no-repeat;
+      background-position:right 10px center;
+      background-size:18px 18px;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.8);
+    }
+    select.tool-select:hover { background-color:#f0fdf4; border-color:#86efac; }
+    select.tool-select:focus { background-color:#fff; border-color:#10b981; box-shadow:0 0 0 4px rgba(16,185,129,.12); }
+    select.tool-select:disabled { background-color:#f8fafc; border-color:#e2e8f0; color:#94a3b8; cursor:not-allowed; opacity:1; }
+    select.tool-select option { background:#fff; color:#334155; font-weight:600; }
+    select.tool-select option:checked { background:#ecfdf5; color:#047857; }
+
+    /* Blue secondary select, used for the account step to visually distinguish hierarchy */
+    select.account-select {
+      background-color:#f8fbff; border-color:#dbeafe;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='m6.5 8 3.5 3.5L13.5 8' stroke='%232563eb' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    }
+    select.account-select:hover { background-color:#eff6ff; border-color:#93c5fd; }
+    select.account-select:focus { background-color:#fff; border-color:#3b82f6; box-shadow:0 0 0 4px rgba(59,130,246,.10); }
+  </style>
+</head>
+<body>
+<div id="app" v-cloak class="min-h-screen">
+  <div v-if="!currentUser" class="fixed inset-0 z-[200] bg-slate-950 flex items-center justify-center p-4">
+    <form @submit.prevent="login" class="w-full max-w-md bg-white rounded-3xl p-7 soft-shadow">
+      <div class="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center mb-5"><i class="fa-solid fa-shield-halved"></i></div>
+      <div class="text-[10px] font-bold tracking-[.18em] text-indigo-500">SECURE WORKSPACE</div><h1 class="text-2xl font-black mt-1">登录客户增长运营中台</h1><p class="text-xs text-slate-400 mt-2">角色权限演示已启用。正式部署时请接服务器认证和数据库。</p>
+      <div class="mt-6 space-y-4"><div><label class="text-[11px] font-bold text-slate-500 block mb-1.5">账号</label><input v-model.trim="loginForm.username" autocomplete="username" class="field" placeholder="请输入登录账号" /></div><div><label class="text-[11px] font-bold text-slate-500 block mb-1.5">密码</label><input v-model="loginForm.password" type="password" autocomplete="current-password" class="field" placeholder="请输入登录密码" /></div><button class="w-full h-11 rounded-xl bg-slate-950 text-white text-sm font-extrabold">登录</button></div>
+      <div class="mt-5 rounded-2xl bg-amber-50 border border-amber-100 p-4 text-[10px] text-amber-700 leading-relaxed"><b class="text-amber-800">部署提示：</b> 当前文件仍是浏览器本地数据版本。正式公网部署前请切换到服务端认证与数据库，避免在前端保存真实账号密码、2FA 与财务敏感数据。</div>
+    </form>
+  </div>
+  <!-- Global operation feedback -->
+  <div v-if="currentUser && toastMessage" class="fixed top-5 left-1/2 -translate-x-1/2 z-[300] w-[calc(100%-2rem)] max-w-xl pointer-events-none">
+    <div class="rounded-2xl border border-slate-200 bg-slate-950/95 text-white shadow-2xl px-4 py-3 flex items-start gap-3 backdrop-blur">
+      <div class="mt-0.5 w-7 h-7 rounded-lg bg-white/10 text-emerald-300 flex items-center justify-center shrink-0"><i class="fa-solid fa-circle-info text-xs"></i></div>
+      <div class="min-w-0 flex-1"><div class="text-[10px] font-extrabold text-slate-300">操作提示</div><div class="text-xs font-semibold leading-relaxed mt-0.5 break-words">{{ toastMessage }}</div></div>
+    </div>
+  </div>
+
+  <!-- In-page confirmation dialog: avoids browser confirm() being blocked in preview/iframe environments -->
+  <div v-if="currentUser && confirmDialog.show" class="fixed inset-0 z-[420] modal-backdrop flex items-center justify-center p-4" @click.self="cancelConfirmDialog">
+    <div class="w-full max-w-md rounded-3xl bg-white border border-slate-200 shadow-2xl overflow-hidden">
+      <div class="p-5 border-b border-slate-100 flex items-start gap-3">
+        <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" :class="confirmDialog.tone==='warning'?'bg-amber-50 text-amber-600':'bg-rose-50 text-rose-600'">
+          <i :class="confirmDialog.tone==='warning'?'fa-solid fa-triangle-exclamation':'fa-solid fa-trash-can'"></i>
+        </div>
+        <div class="min-w-0 flex-1">
+          <h3 class="font-extrabold text-slate-900">{{ confirmDialog.title || '确认操作' }}</h3>
+          <p class="mt-2 text-xs leading-relaxed text-slate-500 whitespace-pre-line">{{ confirmDialog.message }}</p>
+        </div>
+        <button type="button" @click="cancelConfirmDialog" class="w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-400"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="p-4 bg-slate-50 flex items-center justify-end gap-2">
+        <button type="button" @click="cancelConfirmDialog" class="h-10 px-4 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-600 hover:bg-slate-50">取消</button>
+        <button type="button" @click="runConfirmDialog" class="h-10 px-5 rounded-xl text-white text-xs font-extrabold shadow-sm" :class="confirmDialog.tone==='warning'?'bg-amber-500 hover:bg-amber-400':'bg-rose-600 hover:bg-rose-500'">
+          {{ confirmDialog.confirmText || '确认删除' }}
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Desktop Sidebar -->
+  <aside class="hidden lg:flex fixed inset-y-0 left-0 z-40 w-64 flex-col border-r border-slate-200 bg-slate-950 text-white">
+    <div class="h-20 px-5 flex items-center border-b border-white/10">
+      <button @click="navigateTo('dashboard')" class="w-full flex items-center gap-3 text-left">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-950/40">
+          <i class="fa-solid fa-chart-simple"></i>
+        </div>
+        <div class="min-w-0">
+          <div class="font-extrabold tracking-tight truncate">客户增长运营中台</div>
+          <div class="text-[10px] text-slate-400 mt-0.5">CLIENT GROWTH OPS</div>
+        </div>
+      </button>
+    </div>
+
+    <nav class="flex-1 px-3 py-5 space-y-1 overflow-y-auto scrollbar">
+      <div class="px-3 pb-2 text-[10px] font-bold tracking-[.18em] text-slate-500">WORKSPACE</div>
+      <button v-for="item in visibleMenuItems" :key="item.key" @click="navigateTo(item.key)"
+              class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition"
+              :class="currentPage === item.key ? 'bg-white text-slate-950 shadow-sm font-bold' : 'text-slate-300 hover:bg-white/10 hover:text-white'">
+        <span class="w-8 h-8 rounded-lg flex items-center justify-center" :class="currentPage === item.key ? item.activeIconBg : 'bg-white/5'">
+          <i :class="item.icon"></i>
+        </span>
+        <span class="flex-1 text-left">{{ item.label }}</span>
+        <span v-if="item.key === 'alerts' && alertList.length" class="min-w-6 h-6 px-1.5 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black flex items-center justify-center">{{ alertList.length }}</span>
+      </button>
+    </nav>
+
+    <div class="p-3 border-t border-white/10">
+      <div class="rounded-2xl bg-white/5 border border-white/10 p-3">
+        <div class="text-xs font-semibold text-slate-200">{{ currentUser ? currentUser.name + ' · ' + currentRoleLabel : '未登录' }}</div>
+        <div class="text-[10px] text-slate-500 mt-1 leading-relaxed">已启用角色权限、全量数据备份与恢复。当前单文件版仍使用本地数据仓库，正式上线可替换为服务器数据库。</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Mobile Header -->
+  <header class="lg:hidden sticky top-0 z-40 glass border-b border-slate-200">
+    <div class="h-16 px-4 flex items-center justify-between gap-3">
+      <button @click="mobileMenuOpen = !mobileMenuOpen" class="w-10 h-10 rounded-xl border border-slate-200 bg-white text-slate-700">
+        <i class="fa-solid fa-bars"></i>
+      </button>
+      <div class="flex-1 min-w-0">
+        <div class="font-extrabold text-sm truncate">客户增长运营中台</div>
+        <div class="text-[10px] text-slate-400 truncate">FB / TikTok · 合同 · 资产 · SOP · 数据</div>
+      </div>
+      <button @click="openClientForm()" class="w-10 h-10 rounded-xl bg-slate-950 text-white">
+        <i class="fa-solid fa-plus"></i>
+      </button>
+    </div>
+    <div v-if="mobileMenuOpen" class="border-t border-slate-200 bg-white px-3 py-3 grid grid-cols-2 gap-2">
+      <button v-for="item in visibleMenuItems" :key="item.key" @click="navigateTo(item.key); mobileMenuOpen=false" class="px-3 py-2.5 rounded-xl text-left text-xs font-semibold border" :class="currentPage===item.key ? 'border-indigo-200 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600'">
+        <i :class="item.icon" class="mr-2"></i>{{ item.label }}
+      </button>
+    </div>
+  </header>
+
+  <main class="lg:ml-64 min-h-screen">
+    <!-- Topbar -->
+    <div class="hidden lg:flex sticky top-0 z-30 h-20 items-center justify-between gap-4 px-7 xl:px-10 border-b border-slate-200 glass">
+      <div>
+        <div class="text-[11px] font-semibold uppercase tracking-[.16em] text-slate-400">{{ pageEyebrow }}</div>
+        <div class="text-xl font-extrabold tracking-tight mt-0.5">{{ pageTitle }}</div>
+      </div>
+      <div class="flex items-center gap-2">
+        <div class="hidden xl:flex items-center text-xs text-slate-500">
+          <span>{{ todayText }}</span>
+        </div>
+        <button v-if="currentUser" @click="logout" class="h-10 px-3 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:bg-slate-50" title="退出当前账号"><i class="fa-solid fa-arrow-right-from-bracket mr-1.5"></i>退出</button>
+        <button v-if="currentUser?.role==='ADMIN'" @click="resetDemoData" class="h-10 px-3 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:bg-slate-50" title="恢复初始演示数据">
+          <i class="fa-solid fa-rotate-left mr-1.5"></i>重置演示
+        </button>
+        <button @click="openClientForm()" class="h-10 px-4 rounded-xl bg-slate-950 text-white text-xs font-bold hover:bg-slate-800 shadow-sm">
+          <i class="fa-solid fa-plus mr-1.5"></i>新增客户
+        </button>
+      </div>
+    </div>
+
+    <div class="px-4 sm:px-6 lg:px-7 xl:px-10 py-6 lg:py-8 max-w-[1600px] mx-auto">
+      <transition name="page" mode="out-in"
