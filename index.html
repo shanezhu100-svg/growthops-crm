@@ -13,10 +13,7 @@
   <div class="boot"><div class="card"><div class="spin"></div><strong>GrowthOps CRM 正在加载</strong><div class="muted">首次打开会读取应用资源，请稍候。</div></div></div>
   <script>
   (async()=>{
-    const parts=[
-      'app/part-001.txt','app/part-002.txt','app/part-003.txt','app/part-004.txt',
-      'app/part-005.txt','app/part-006.txt','app/part-007.txt'
-    ];
+    const parts=Array.from({length:13},(_,i)=>`app/part-${String(i+1).padStart(3,'0')}.txt`);
     try{
       const texts=await Promise.all(parts.map(async p=>{const r=await fetch(p,{cache:'no-cache'});if(!r.ok)throw new Error(p+' '+r.status);return r.text()}));
       const b64=texts.join('').trim();
