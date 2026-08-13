@@ -1,0 +1,52 @@
+rm()" class="h-10 px-4 rounded-xl bg-indigo-600 text-white text-xs font-bold"><i class="fa-solid fa-plus mr-1.5"></i>新增客户</button>
+            </div>
+          </div>
+
+          <div class="bg-white border border-slate-200 rounded-2xl soft-shadow overflow-hidden">
+            <div class="p-4 border-b border-slate-100 flex items-center justify-between"><div class="text-xs text-slate-500">共 <strong class="text-slate-900">{{ filteredClients.length }}</strong> 家客户</div><div class="text-[10px] text-slate-400">支持本地实时搜索与筛选</div></div>
+            <div class="hidden md:block overflow-x-auto scrollbar">
+              <table class="w-full min-w-[1100px] text-xs">
+                <thead class="bg-slate-50 text-slate-500"><tr><th class="p-4 text-left">客户 / 产品</th><th class="p-4 text-left">平台</th><th class="p-4 text-left">项目 / 月服务费</th><th class="p-4 text-left">BM / BC</th><th class="p-4 text-left">广告账号</th><th class="p-4 text-left">合同到期</th><th class="p-4 text-left">状态</th><th class="p-4 text-right">操作</th></tr></thead>
+                <tbody class="divide-y divide-slate-100">
+                  <tr v-for="client in filteredClients" :key="client.id" class="hover:bg-slate-50/60">
+                    <td class="p-4"><button @click="openClientDetail(client.id)" class="text-left"><div class="font-extrabold text-slate-900">{{ client.name }}</div><div class="text-[10px] text-slate-400 mt-1">{{ client.product }}</div></button></td>
+                    <td class="p-4"><platform-badges :platform="client.platform"></platform-badges></td>
+                    <td class="p-4"><div class="font-semibold">{{ client.project }}</div><div class="font-extrabold text-emerald-600 mt-1">{{ formatMoney(client.monthlyFee, client.currency) }}/月</div></td>
+                    <td class="p-4 font-mono text-[11px]"><div v-if="client.fbBmId"><span class="text-slate-400">BM</span> {{ client.fbBmId }}</div><div v-if="client.tkBcId" class="mt-1"><span class="text-slate-400">BC</span> {{ client.tkBcId }}</div><span v-if="!client.fbBmId&&!client.tkBcId" class="text-slate-300">—</span></td>
+                    <td class="p-4 font-mono text-[11px]"><div v-if="client.fbAdAccountId">{{ client.fbAdAccountId }}</div><div v-if="client.tkAdAccountId" class="mt-1">{{ client.tkAdAccountId }}</div><span v-if="!client.fbAdAccountId&&!client.tkAdAccountId" class="text-slate-300">—</span></td>
+                    <td class="p-4"><div class="font-mono">{{ client.endDate }}</div><div class="text-[10px] font-semibold mt-1" :class="daysUntil(client.endDate)<=7?'text-amber-600':'text-slate-400'">{{ contractStatusText(client) }}</div></td>
+                    <td class="p-4"><span class="inline-flex px-2 py-1 rounded-full text-[10px] font-bold" :class="client.archived?'bg-slate-200 text-slate-600':client.status==='ACTIVE'?'bg-emerald-50 text-emerald-700':'bg-slate-100 text-slate-600'">{{ client.archived?'已归档':(client.status==='ACTIVE'?'合作中':'暂停') }}</span></td>
+                    <td class="p-4 text-right"><div class="flex justify-end gap-1"><button type="button" @click="openClientDetail(client.id)" class="h-8 px-2.5 rounded-lg bg-slate-100 text-slate-700 font-semibold">详情</button><button v-if="!client.archived" type="button" @click="openClientForm(client)" class="w-8 h-8 rounded-lg hover:bg-indigo-50 text-indigo-600" title="编辑客户"><i class="fa-solid fa-pen"></i></button><button v-if="!client.archived && canArchiveClients()" type="button" @click="archiveClient(client)" class="w-8 h-8 rounded-lg hover:bg-amber-50 text-amber-600" title="归档客户"><i class="fa-solid fa-box-archive"></i></button><button v-if="client.archived && canArchiveClients()" type="button" @click="restoreClient(client)" class="w-8 h-8 rounded-lg hover:bg-emerald-50 text-emerald-600" title="恢复客户"><i class="fa-solid fa-box-open"></i></button><button v-if="client.archived && currentUser?.role==='ADMIN'" type="button" @click="deleteClient(client)" class="w-8 h-8 rounded-lg hover:bg-rose-50 text-rose-500" title="永久删除归档客户"><i class="fa-regular fa-trash-can"></i></button></div></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="md:hidden p-3 space-y-3">
+              <div v-for="client in filteredClients" :key="client.id" class="p-4 rounded-2xl border border-slate-200">
+                <div class="flex justify-between gap-3"><div><div class="font-extrabold text-sm">{{ client.name }}</div><div class="text-[11px] text-slate-400 mt-1">{{ client.product }}</div></div><platform-badges :platform="client.platform"></platform-badges></div>
+                <div class="grid grid-cols-2 gap-3 mt-4 text-[11px]"><div><div class="text-slate-400">月服务费</div><div class="font-bold mt-1">{{ formatMoney(client.monthlyFee,client.currency) }}</div></div><div><div class="text-slate-400">合同到期</div><div class="font-mono font-bold mt-1">{{ client.endDate }}</div></div></div>
+                <button @click="openClientDetail(client.id)" class="w-full h-9 mt-4 rounded-xl bg-slate-950 text-white text-xs font-bold">查看客户详情</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Client Detail -->
+        <section v-else-if="currentPage==='client-detail' && selectedClient" key="client-detail" class="space-y-5">
+          <div v-if="selectedClient.archived" class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3"><div><div class="text-xs font-extrabold text-slate-700"><i class="fa-solid fa-box-archive mr-1.5"></i>该客户已归档</div><div class="text-[10px] text-slate-400 mt-1">历史广告、财务、开户与回款数据仍完整保留，不参与当前运营预警。</div></div><button v-if="canArchiveClients()" type="button" @click="restoreClient(selectedClient)" class="h-8 px-3 rounded-lg bg-emerald-600 text-white text-[10px] font-bold">恢复客户</button></div>
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div class="flex items-start gap-3"><button @click="navigateTo('clients')" class="w-10 h-10 rounded-xl border border-slate-200 bg-white"><i class="fa-solid fa-arrow-left"></i></button><div><div class="flex items-center gap-2 flex-wrap"><h2 class="text-2xl font-extrabold tracking-tight">{{ selectedClient.name }}</h2><platform-badges :platform="selectedClient.platform"></platform-badges></div><p class="text-xs text-slate-500 mt-1">{{ selectedClient.product }} · {{ selectedClient.project }}</p></div></div>
+            <div class="flex gap-2 flex-wrap"><button v-if="!selectedClient.archived" type="button" @click="openClientForm(selectedClient)" class="h-10 px-4 rounded-xl border border-slate-200 bg-white text-xs font-bold"><i class="fa-solid fa-pen mr-1.5"></i>编辑资料</button><button v-if="!selectedClient.archived && canArchiveClients()" type="button" @click="archiveClient(selectedClient)" class="h-10 px-4 rounded-xl border border-amber-200 bg-amber-50 text-amber-700 text-xs font-bold"><i class="fa-solid fa-box-archive mr-1.5"></i>归档</button><button v-if="!selectedClient.archived" type="button" @click="selectedSopClientId=selectedClient.id; navigateTo('sop')" class="h-10 px-4 rounded-xl bg-slate-950 text-white text-xs font-bold"><i class="fa-solid fa-list-check mr-1.5"></i>执行 SOP</button></div>
+          </div>
+
+          <div class="grid grid-cols-2 xl:grid-cols-4 gap-3">
+            <div class="bg-white border border-slate-200 rounded-2xl p-4"><div class="text-[11px] text-slate-400">月服务费</div><div class="text-xl font-extrabold text-emerald-600 mt-2">{{ formatMoney(selectedClient.monthlyFee, selectedClient.currency) }}</div><div class="text-[10px] text-slate-400 mt-1">{{ billingModeText(selectedClient.billingMode) }}</div></div>
+            <div class="bg-white border border-slate-200 rounded-2xl p-4"><div class="text-[11px] text-slate-400">合同周期</div><div class="text-sm font-bold mt-2">{{ selectedClient.startDate }} → {{ selectedClient.endDate }}</div></div>
+            <div class="bg-white border border-slate-200 rounded-2xl p-4"><div class="text-[11px] text-slate-400">付款到期日</div><div class="text-xl font-extrabold text-amber-600 mt-2">每月 {{ selectedClient.renewalAlertDay }} 号</div></div>
+            <div class="bg-white border border-slate-200 rounded-2xl p-4"><div class="text-[11px] text-slate-400">合作状态</div><div class="mt-2"><span class="inline-flex px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700">合作中</span></div></div>
+          </div>
+
+          <div class="grid grid-cols-1 xl:grid-cols-3 gap-5">
+            <div class="xl:col-span-2 space-y-5">
+              <div class="bg-white border border-slate-200 rounded-2xl soft-shadow overflow-hidden">
+               
