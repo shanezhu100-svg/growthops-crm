@@ -1,5 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
-  "trailingSlash": false
+  "trailingSlash": false,
+  "buildCommand": "rm -rf dist && mkdir dist && cp index.html dist/index.html && cp upgrade.js dist/upgrade.js && cp upgrade.css dist/upgrade.css && python3 -c \"from pathlib import Path; p=Path('dist/index.html'); s=p.read_text(); s=s.replace('</head>','<link rel=\\\"stylesheet\\\" href=\\\"/upgrade.css\\\"></head>'); s=s.replace('</body>','<script src=\\\"/upgrade.js\\\"></script></body>'); p.write_text(s)\"",
+  "outputDirectory": "dist"
 }
