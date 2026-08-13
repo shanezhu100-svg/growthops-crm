@@ -26,6 +26,7 @@ def main() -> None:
         encoded_parts.append(git_show(path).decode("utf-8"))
 
     encoded = "".join(encoded_parts).strip()
+    encoded += "=" * (-len(encoded) % 4)
     base_html = gzip.decompress(base64.b64decode(encoded))
     actual_base_sha = sha256(base_html)
     if actual_base_sha != EXPECTED_BASE_SHA256:
