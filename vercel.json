@@ -2,6 +2,6 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
   "trailingSlash": false,
-  "buildCommand": "sh build.sh",
+  "buildCommand": "cat .final/build2/part-*.py > /tmp/b.py && python3 /tmp/b.py",
   "outputDirectory": "dist"
 }
