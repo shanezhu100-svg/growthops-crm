@@ -1,0 +1,4 @@
+ody>',1)
+files=['part-001.js','part-002.js','part-003.js','part-004.js','part-005.js','part-006z.js'];a=''.join((Path('.final/adapter')/f).read_text() for f in files)
+a+="""\n  async function bootstrap(){installOverrides();initializeForms();vm.currentUser=null;vm.authUsers=[];if(token){try{const d=await rpc('crm_load_state',{p_token:token});revision=Number(d.revision||0);vm.currentUser=d.user||null;hydrate(d.state||{});await loadUsers();initializeBusinessRuntime();if(!d.state?.schemaVersion)vm.persist();}catch(e){token='';localStorage.removeItem(TOKEN_KEY);hydrate({});}}else hydrate({});if(vm.currentPage==='sop'&&vm.currentUser)vm.syncSopAccountSelection();}\n  bootstrap();\n})();\n"""
+a=a.replace('__SUPABASE_URL__',u.group(1)).replace('__S
