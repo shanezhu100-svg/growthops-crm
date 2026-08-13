@@ -1,4 +1,4 @@
-name: Deploy GrowthOps CRM Cloud to Pages
+name: Deploy GrowthOps CRM to Pages
 
 on:
   push:
@@ -21,18 +21,14 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout full history
+      - name: Checkout site
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Build and verify Supabase cloud CRM
-        run: python .cloud/build_cloud.py
       - name: Setup Pages
         uses: actions/configure-pages@v5
-      - name: Upload verified site
+      - name: Upload current site
         uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: .
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
