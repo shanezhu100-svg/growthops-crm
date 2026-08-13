@@ -1,0 +1,25 @@
+text-left p-3 rounded-xl border border-slate-100 hover:border-slate-200 hover:bg-slate-50 transition">
+                  <div class="flex items-start gap-3">
+                    <div class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" :class="alertStyle(item.typeKey).bg"><i :class="alertStyle(item.typeKey).icon" :class="alertStyle(item.typeKey).text"></i></div>
+                    <div class="min-w-0 flex-1"><div class="font-bold text-xs truncate">{{ item.clientName }}</div><div class="text-[10px] text-slate-400 mt-1 truncate">{{ item.type }} · {{ item.typeKey==='AD_RECHARGE' ? item.balanceText : item.dueDate }}</div></div>
+                    <span class="text-[10px] font-black whitespace-nowrap" :class="item.typeKey==='AD_RECHARGE'?'text-rose-600':item.daysLeft<0?'text-rose-600':item.daysLeft<=3?'text-amber-600':'text-slate-500'">{{ item.typeKey==='AD_RECHARGE' ? (item.balanceStage==='CRITICAL' ? '再次提醒' : '余额不足') : daysLeftLabel(item.daysLeft) }}</span>
+                  </div>
+                </button>
+                <div v-if="!alertList.length" class="py-12 text-center text-xs text-slate-400"><i class="fa-regular fa-circle-check text-3xl text-emerald-500 block mb-2"></i>当前暂无到期或低余额事项</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Clients -->
+        <section v-else-if="currentPage==='clients'" key="clients" class="space-y-5">
+          <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+            <div>
+              <h2 class="text-2xl font-extrabold tracking-tight">客户管理</h2>
+              <p class="text-xs text-slate-500 mt-1">统一管理客户资料、平台账号、合同周期和服务状态。</p>
+            </div>
+            <div class="flex flex-col sm:flex-row gap-2">
+              <div class="relative"><i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i><input v-model="searchQuery" class="h-10 w-full sm:w-72 pl-9 pr-3 rounded-xl border border-slate-200 bg-white text-xs outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400" placeholder="搜索客户 / 产品 / BM / BC / 广告账号" /></div>
+              <select v-model="platformFilter" class="h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold outline-none"><option value="ALL">全部平台</option><option value="FB">Facebook</option><option value="TK">TikTok</option><option value="DUAL">FB + TK</option></select>
+              <button @click="showArchivedClients=!showArchivedClients" type="button" class="h-10 px-3 rounded-xl border text-xs font-bold transition" :class="showArchivedClients?'border-slate-400 bg-slate-900 text-white':'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'"><i class="fa-solid fa-box-archive mr-1.5"></i>{{ showArchivedClients?'隐藏归档':'查看归档' }}</button>
+              <button @click="openClientFo
