@@ -1,0 +1,48 @@
+t.name }} 资产</button></div>
+          <div v-else class="bg-white border border-slate-200 rounded-2xl py-16 text-center text-xs text-slate-400"><i class="fa-solid fa-users text-3xl text-slate-200 block mb-3"></i><div class="font-bold text-slate-600">请先选择客户</div><div class="mt-1">选择客户后，系统只会加载该客户名下的 Facebook / TikTok 账号。</div></div>
+        </section>
+
+        <!-- Analytics -->
+        <section v-else-if="currentPage==='analytics'" key="analytics" class="space-y-5">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div><h2 class="text-2xl font-extrabold tracking-tight">投放数据分析</h2><p class="text-xs text-slate-500 mt-1">广告数据只录入一次并自动同步到账户汇总；账户卡展示 CPM、CTR、CPC、CVR、CPA、ROAS，并可在费用管理的「广告数据同步分析」按日期切换查看。</p></div>
+            <select v-model.number="selectedAnalyticsClientId" @change="syncAnalyticsAccountSelection" class="h-10 min-w-[220px] rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold outline-none focus:ring-2 focus:ring-cyan-100"><option :value="0">所有客户</option><option v-for="c in activeClients" :value="c.id" :key="c.id">{{ c.name }}</option></select>
+          </div>
+          <div v-if="selectedAnalyticsClientId===0" class="space-y-5">
+            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+              <div class="bg-white border border-blue-100 rounded-2xl p-5 soft-shadow"><div class="text-[11px] font-bold text-blue-600">全部 FACEBOOK 消耗</div><div class="text-2xl font-black mt-2">{{ analyticsAllFbSpendText }}</div><div class="text-[10px] text-slate-400 mt-2">{{ analyticsAllFbAccountCount }} 个广告账户</div></div>
+              <div class="bg-white border border-slate-200 rounded-2xl p-5 soft-shadow"><div class="text-[11px] font-bold text-slate-700">全部 TIKTOK 消耗</div><div class="text-2xl font-black mt-2">{{ analyticsAllTkSpendText }}</div><div class="text-[10px] text-slate-400 mt-2">{{ analyticsAllTkAccountCount }} 个广告账户</div></div>
+              <div class="bg-slate-950 text-white rounded-2xl p-5 soft-shadow"><div class="text-[11px] font-bold text-amber-300">所有客户累计广告消耗</div><div class="text-2xl font-black mt-2">{{ analyticsAllSpendText }}</div><div class="text-[10px] text-slate-400 mt-2">{{ activeClients.length }} 个在管客户 · 不同币种分别汇总</div></div>
+              <div class="bg-white border border-emerald-100 rounded-2xl p-5 soft-shadow"><div class="text-[11px] font-bold text-emerald-600">全部累计广告充值</div><div class="text-2xl font-black mt-2 text-emerald-700">{{ analyticsAllRechargeText }}</div><div class="text-[10px] text-slate-400 mt-2">来自全部客户广告账户充值记录</div></div>
+            </div>
+
+            <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              <div class="bg-white border border-blue-100 rounded-2xl p-5 soft-shadow">
+                <div class="flex items-center justify-between gap-3"><div><div class="font-extrabold text-sm text-blue-900"><i class="fa-brands fa-facebook text-blue-600 mr-1.5"></i>Facebook 全客户汇总</div><div class="text-[10px] text-slate-400 mt-1">统一广告数据自动汇总</div></div><span class="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-1 rounded-full">{{ analyticsAllFbMetrics.records }} 条数据</span></div>
+                <div class="grid grid-cols-3 sm:grid-cols-6 gap-2 mt-4"><div v-for="m in [{l:'CPM',v:analyticsAllFbMetrics.cpmText},{l:'CTR',v:analyticsAllFbMetrics.ctrText},{l:'CPC',v:analyticsAllFbMetrics.cpcText},{l:'CVR',v:analyticsAllFbMetrics.cvrText},{l:'CPA',v:analyticsAllFbMetrics.cpaText},{l:'ROAS',v:analyticsAllFbMetrics.roasText}]" :key="m.l" class="rounded-xl bg-slate-50 border border-slate-100 p-3 text-center"><div class="text-[9px] text-slate-400">{{ m.l }}</div><div class="text-xs font-black mt-1">{{ m.v }}</div></div></div>
+              </div>
+              <div class="bg-white border border-slate-200 rounded-2xl p-5 soft-shadow">
+                <div class="flex items-center justify-between gap-3"><div><div class="font-extrabold text-sm text-slate-900"><i class="fa-brands fa-tiktok mr-1.5"></i>TikTok 全客户汇总</div><div class="text-[10px] text-slate-400 mt-1">统一广告数据自动汇总</div></div><span class="text-[10px] font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded-full">{{ analyticsAllTkMetrics.records }} 条数据</span></div>
+                <div class="grid grid-cols-3 sm:grid-cols-6 gap-2 mt-4"><div v-for="m in [{l:'CPM',v:analyticsAllTkMetrics.cpmText},{l:'CTR',v:analyticsAllTkMetrics.ctrText},{l:'CPC',v:analyticsAllTkMetrics.cpcText},{l:'CVR',v:analyticsAllTkMetrics.cvrText},{l:'CPA',v:analyticsAllTkMetrics.cpaText},{l:'ROAS',v:analyticsAllTkMetrics.roasText}]" :key="m.l" class="rounded-xl bg-slate-50 border border-slate-100 p-3 text-center"><div class="text-[9px] text-slate-400">{{ m.l }}</div><div class="text-xs font-black mt-1">{{ m.v }}</div></div></div>
+              </div>
+            </div>
+
+            <div class="bg-white border border-slate-200 rounded-2xl soft-shadow overflow-hidden">
+              <div class="p-5 border-b border-slate-100"><h3 class="font-extrabold text-sm">所有客户投放数据</h3><p class="text-[11px] text-slate-400 mt-1">选择「所有客户」时展示客户级汇总；点击查看后进入该客户的广告账户明细分析。</p></div>
+              <div class="overflow-x-auto scrollbar"><table class="w-full min-w-[980px] text-xs"><thead class="bg-slate-50 text-slate-500"><tr><th class="p-3.5 text-left">客户</th><th class="p-3.5 text-left">FB 账户</th><th class="p-3.5 text-left">TK 账户</th><th class="p-3.5 text-left">广告消耗</th><th class="p-3.5 text-left">累计充值</th><th class="p-3.5 text-left">数据记录</th><th class="p-3.5 text-left">操作</th></tr></thead><tbody class="divide-y divide-slate-100"><tr v-for="row in analyticsAllClientRows" :key="row.client.id" class="hover:bg-slate-50/70"><td class="p-3.5"><div class="font-extrabold text-slate-900">{{ row.client.name }}</div><div class="text-[10px] text-slate-400 mt-1">{{ row.client.project || row.client.product || '客户项目' }}</div></td><td class="p-3.5"><span class="font-bold text-blue-700">{{ row.fbAccounts }}</span></td><td class="p-3.5"><span class="font-bold text-slate-800">{{ row.tkAccounts }}</span></td><td class="p-3.5 font-black text-amber-600">{{ row.spendText }}</td><td class="p-3.5 font-black text-emerald-600">{{ row.rechargeText }}</td><td class="p-3.5"><span class="inline-flex px-2 py-1 rounded-full bg-cyan-50 text-cyan-700 font-extrabold text-[10px]">{{ row.records }} 条</span></td><td class="p-3.5 text-left"><button @click="selectAnalyticsClient(row.client.id)" class="h-8 px-3 rounded-lg bg-cyan-50 text-cyan-700 font-bold text-[11px]"><i class="fa-solid fa-chart-column mr-1"></i>查看分析</button></td></tr></tbody></table></div>
+              <div v-if="!analyticsAllClientRows.length" class="py-12 text-center text-xs text-slate-400">暂无客户广告数据</div>
+            </div>
+          </div>
+
+          <div v-else-if="selectedAnalyticsClient" class="space-y-5">
+            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+              <div class="bg-white border border-blue-100 rounded-2xl p-5 soft-shadow"><div class="text-[11px] font-bold text-blue-600">FACEBOOK 广告消耗</div><div class="text-2xl font-black mt-2">{{ platformSpendText(selectedAnalyticsClient,'FB') }}</div><div class="text-[10px] text-slate-400 mt-2">{{ (selectedAnalyticsClient.fbAccounts || []).length }} 个广告账户</div></div>
+              <div class="bg-white border border-slate-200 rounded-2xl p-5 soft-shadow"><div class="text-[11px] font-bold text-slate-700">TIKTOK 广告消耗</div><div class="text-2xl font-black mt-2">{{ platformSpendText(selectedAnalyticsClient,'TK') }}</div><div class="text-[10px] text-slate-400 mt-2">{{ (selectedAnalyticsClient.tkAccounts || []).length }} 个广告账户</div></div>
+              <div class="bg-slate-950 text-white rounded-2xl p-5 soft-shadow"><div class="text-[11px] font-bold text-amber-300">客户累计广告消耗</div><div class="text-2xl font-black mt-2">{{ clientSpendText(selectedAnalyticsClient) }}</div><div class="text-[10px] text-slate-400 mt-2">不同币种分别汇总</div></div>
+              <div class="bg-white border border-emerald-100 rounded-2xl p-5 soft-shadow"><div class="text-[11px] font-bold text-emerald-600">累计广告充值</div><div class="text-2xl font-black mt-2 text-emerald-700">{{ clientRechargeText(selectedAnalyticsClient) }}</div><div class="text-[10px] text-slate-400 mt-2">来自各广告账户充值记录</div></div>
+            </div>
+
+            <div class="grid grid-cols-1 xl:grid-cols-2 gap-5"><analytics-card v-model="selectedAnalyticsFbAccountId" platform="Facebook" icon="fa-brands fa-facebook" tone="blue" :accounts="selectedAnalyticsClient.fbAccounts || []" :data="selectedAnalyticsFbMetrics" :spend-text="selectedAnalyticsFbAccount ? accountSpendText(selectedAnalyticsFbAccount) : '—'"></analytics-card><analytics-card v-model="selectedAnalyticsTkAccountId" platform="TikTok" icon="fa-brands fa-tiktok" tone="dark" :accounts="selectedAnalyticsClient.tkAccounts || []" :data="selectedAnalyticsTkMetrics" :spend-text="selectedAnalyticsTkAccount ? accountSpendText(selectedAnalyticsTkAccount) : '—'"></analytics-card></div>
+            <div class="rounded-xl border border-emerald-100 bg-emerald-50/60 px-4 py-3 text-[11px] text-emerald-800"><i class="fa-solid fa-link mr-1.5"></i><b>统一广告数据：</b>只需要录入一次。同一条记录后续直接更新，广告管理、账户消耗、CTR、CPL、ROAS、余额提醒都会自动重新计算。</div>
+
+            <div class="bg-white border borde
