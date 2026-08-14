@@ -1,0 +1,87 @@
+div class="text-[11px] font-semibold text-slate-500 mb-1.5">主要用途</div><textarea v-model.trim="toolForm.purpose" rows="3" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-emerald-100" placeholder="例如：固定环境登录、素材协作、数据归因、CRM 线索同步等"></textarea></div>
+            <div class="md:col-span-2"><div class="text-[11px] font-semibold text-slate-500 mb-1.5">备注</div><textarea v-model.trim="toolForm.notes" rows="3" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-emerald-100" placeholder="团队权限、使用规范或其他说明"></textarea></div>
+          </div>
+        </div>
+        <div class="flex justify-end gap-2"><button type="button" @click="showToolModal=false" class="h-10 px-4 rounded-xl border border-slate-200 text-xs font-bold">取消</button><button type="submit" class="h-10 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition"><i class="fa-solid fa-check mr-1.5"></i>保存投放工具</button></div>
+      </form>
+    </div>
+  </div>
+
+<script>
+const { createApp } = Vue;
+
+const PlatformBadges = {
+  props:['platform'],
+  template:`<div class="flex items-center gap-1 flex-wrap"><span v-if="platform.includes('FB')" class="inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-extrabold bg-blue-50 text-blue-700 border border-blue-100"><i class="fa-brands fa-facebook mr-1"></i>FB</span><span v-if="platform.includes('TK')" class="inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-extrabold bg-slate-950 text-white"><i class="fa-brands fa-tiktok mr-1"></i>TK</span></div>`
+};
+const InfoRow = { props:['label','value'], template:`<div class="flex items-start justify-between gap-4"><span class="text-slate-400 shrink-0">{{label}}</span><span class="font-mono font-semibold text-right break-all">{{value || '—'}}</span></div>` };
+const FormField = { props:['label'], template:`<label class="block"><span class="block text-[11px] font-semibold text-slate-500 mb-1.5">{{label}}</span><slot></slot></label>` };
+const AnalyticsCard = {
+  props:['platform','icon','tone','data','spendText','accounts','modelValue'],
+  emits:['update:modelValue'],
+  computed:{
+    metricList(){
+      return [
+        {k:'leads',l:'Leads'},
+        {k:'cpl',l:'CPL'},
+        {k:'impressions',l:'Impressions'},
+        {k:'cpm',l:'CPM'},
+        {k:'ctr',l:'CTR'},
+        {k:'cpc',l:'CPC'},
+        {k:'cvr',l:'CVR'},
+        {k:'cpa',l:'CPA'},
+        {k:'roas',l:'ROAS'}
+      ];
+    }
+  },
+  methods:{
+    metricValue(key){
+      if(!this.data || this.data[key]===undefined || this.data[key]===null || this.data[key]==='')return '—';
+      const value=this.data[key];
+      if(['cpl','cpa','cpm','cpc'].includes(key))return (typeof value==='string' && /^[¥$]/.test(value))?value:`$${value}`;
+      if(['ctr','cvr','video3sRate','videoCompleteRate'].includes(key))return String(value).includes('%')?value:`${value}%`;
+      return value;
+    }
+  },
+  template:`<div class="bg-white border border-slate-200 rounded-2xl p-5 soft-shadow"><div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3"><div class="flex items-center gap-2 font-extrabold text-sm"><i :class="icon" :class="tone==='blue'?'text-blue-600':'text-slate-950'"></i>{{platform}}</div><div v-if="accounts && accounts.length" class="flex items-center gap-2"><span class="text-[10px] text-slate-400 shrink-0">广告账户</span><select :value="modelValue" @change="$emit('update:modelValue',$event.target.value)" class="h-9 min-w-[190px] max-w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-100"><option v-for="(account,idx) in accounts" :key="account.id || idx" :value="account.id">{{ account.accountName || platform + ' 账号 ' + (idx+1) }} · {{ account.adAccountId || '未录入 ID' }}</option></select></div><span v-else-if="!data" class="text-[10px] text-slate-400">未开通</span></div><div v-if="accounts && accounts.length" class="mt-3 text-[10px] text-slate-400">切换广告账户后，CPM、CTR、CPC、CVR、CPA、ROAS 等账户效率指标会从统一广告数据自动重新计算；视频指标仍在广告数据记录表查看。</div><div v-if="data || (spendText && spendText!=='—')" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 mt-5"><div class="p-3 rounded-xl bg-amber-50 border border-amber-100"><div class="text-[10px] text-amber-600 font-bold">广告账户消耗</div><div class="font-extrabold text-sm mt-1">{{spendText || '—'}}</div></div><div v-for="m in metricList" :key="m.k" class="p-3 rounded-xl bg-slate-50 border border-slate-100"><div class="text-[10px] text-slate-400">{{m.l}}</div><div class="font-extrabold text-sm mt-1">{{metricValue(m.k)}}</div></div></div><div v-else class="py-10 text-center text-xs text-slate-400">当前广告账户暂无投放数据</div></div>`
+};
+
+const seedClients = [
+  {id:1,name:'极速跨境 - 遥控割草机',product:'智能遥控割草机',platform:'FB+TK',project:'FB+TK 组合全案投放',currency:'USD',monthlyFee:5000,startDate:'2026-08-01',endDate:'2026-08-31',renewalAlertDay:25,status:'ACTIVE',fbBmId:'89123456789',fbAdAccountId:'act_99812039',fbLoginAccount:'ops_grass_fb@crossborder.com',fbLoginPassword:'Demo-FB-Password',tkBcId:'BC-99120391',tkAdAccountId:'tt_552190',tkLoginAccount:'ops_grass_tk@crossborder.com',tkLoginPassword:'Demo-TK-Password',networkName:'US 静态住宅 IP',ipEnvironment:'AdsPower Profile #03',ipDueDate:'2026-08-13',ipCurrency:'USD',ipMonthlyFee:45,sopSteps:['打开 AdsPower 指纹浏览器 Profile #03','检查 US 静态住宅 IP 纯净度与归属地','登录 FB BM 与 TK BC 检查昨日消耗与账户状态','导出前一日 Leads / Orders 并同步至客户 CRM'],riskRules:'TK 账号严禁异地 IP 登录；FB 个人号登录前必须校验 IP 归属地。',renewalHistory:[],fbData:{spend:2500,impressions:'120,000',ctr:3.0,leads:125,cpl:20,roas:2.8},tkData:{spend:2500,impressions:'180,000',ctr:1.5,leads:83,cpl:30.1,roas:1.9}},
+  {id:2,name:'领航智造 - 重型机械',product:'重型挖掘机及配件',platform:'FB',project:'FB Lead 收集代投',currency:'USD',monthlyFee:3000,startDate:'2026-07-15',endDate:'2026-08-15',renewalAlertDay:12,status:'ACTIVE',fbBmId:'10293847561',fbAdAccountId:'act_44012938',fbLoginAccount:'machinery_admin@lead.com',fbLoginPassword:'Demo-FB-Password',tkBcId:'',tkAdAccountId:'',tkLoginAccount:'',tkLoginPassword:'',networkName:'US 独享住宅 IP',ipEnvironment:'AdsPower Profile #08',ipDueDate:'2026-08-14',ipCurrency:'USD',ipMonthlyFee:35,sopSteps:['开启 AdsPower Profile #08 环境','检查专线节点连通性及延迟','进入 FB BM 查看 B2B Lead Form 填报情况'],riskRules:'FB 账号禁止频繁切换设备或异地登录。',renewalHistory:[],fbData:{spend:3000,impressions:'150,000',ctr:1.5,leads:162,cpl:18.52,roas:3.5},tkData:null},
+  {id:3,name:'潮酷3C - 智能硬件',product:'智能穿戴与音频设备',platform:'TK',project:'TK 独立站测品与出海',currency:'CNY',monthlyFee:20000,startDate:'2026-08-05',endDate:'2026-09-05',renewalAlertDay:28,status:'ACTIVE',fbBmId:'',fbAdAccountId:'',fbLoginAccount:'',fbLoginPassword:'',tkBcId:'BC-44102931',tkAdAccountId:'tt_88301923',tkLoginAccount:'3c_media@cooltech.com',tkLoginPassword:'Demo-TK-Password',networkName:'JP 专用机房 IP',ipEnvironment:'AdsPower Profile #12',ipDueDate:'2026-08-15',ipCurrency:'USD',ipMonthlyFee:25,sopSteps:['打开 AdsPower Profile #12','检查 TikTok Ads Manager 风险提示','监测素材 CPM、CTR、CVR 与转化成本','记录当日待迭代素材方向'],riskRules:'TikTok 广告素材需复核版权和落地页一致性。',renewalHistory:[],fbData:null,tkData:{spend:2850,impressions:'210,000',ctr:2.0,leads:95,cpl:30,roas:3.2}},
+  {id:4,name:'森煜 - 电动叉车',product:'电动叉车',platform:'FB+TK',project:'代投与建站',currency:'CNY',monthlyFee:20000,startDate:'2026-07-15',endDate:'2026-08-15',renewalAlertDay:15,status:'ACTIVE',fbBmId:'778192039',fbAdAccountId:'act_55219012',fbLoginAccount:'senyu_fb@crossborder.com',fbLoginPassword:'Demo-FB-Password',tkBcId:'BC-889102',tkAdAccountId:'tt_991023',tkLoginAccount:'senyu_tk@crossborder.com',tkLoginPassword:'Demo-TK-Password',networkName:'US 静态 IP',ipEnvironment:'AdsPower Profile #18',ipDueDate:'2026-08-15',ipCurrency:'USD',ipMonthlyFee:30,sopSteps:['打开 AdsPower Profile #18','检查 FB BM 与 TK BC 账户状态和消耗','核对询盘数量与质量','同步销售跟进反馈'],riskRules:'FB / TK 登录环境均保持固定，禁止跨地区频繁切换。',renewalHistory:[],fbData:{spend:1000,leads:40,cpl:25,ctr:1.8,impressions:'50,000',roas:2.1},tkData:{spend:1000,leads:30,cpl:33,ctr:1.2,impressions:'70,000',roas:1.8}}
+];
+const seedAlerts = [
+  {id:'sa-101',typeKey:'IP',clientName:'潮酷3C - 独立备用 IP',dueDate:'2026-08-15',cost:'$25/月',target:'AdsPower Profile #12 备用环境'}
+];
+
+const seedLeads = [
+  {id:'lead-1',company:'NorthStar Outdoor',contact:'Leo',contactInfo:'WhatsApp +1 202 ***',source:'网站询盘',platformInterest:'FB+TK',budgetCurrency:'USD',expectedBudget:6000,quoteCurrency:'USD',adQuote:1800,stage:'PROPOSAL',nextFollowUp:'2026-08-12',owner:'Mia',notes:'需要美国市场 FB Lead + TikTok 素材测试方案。',createdAt:'2026-08-09'},
+  {id:'lead-2',company:'华南工业设备',contact:'陈经理',contactInfo:'WeChat',source:'客户转介绍',platformInterest:'FB',budgetCurrency:'CNY',expectedBudget:30000,quoteCurrency:'CNY',adQuote:8000,stage:'QUALIFIED',nextFollowUp:'2026-08-11',owner:'Jason',notes:'目标北美 B2B 询盘，正在确认开户主体和落地页。',createdAt:'2026-08-10'}
+];
+const seedOpeningProviders = [
+  {id:'provider-blue-shark',name:'蓝鲨',platforms:'FB+TK',region:'',website:'',contacts:[],contactName:'',contactPhone:'',contactWechat:'',contactEmail:'',rebateRate:0,rebatePolicy:'',policy:'',notes:''},
+  {id:'provider-chijie',name:'炽界',platforms:'FB+TK',region:'',website:'',contacts:[],contactName:'',contactPhone:'',contactWechat:'',contactEmail:'',rebateRate:0,rebatePolicy:'',policy:'',notes:''}
+];
+const seedOpeningDeals = [
+  {id:'opening-1',clientId:1,externalClientName:'',providerId:'provider-blue-shark',contactId:'',platform:'FB',accountType:'企业广告账户',region:'美国',quantity:2,partnerName:'蓝鲨',contactName:'',contactInfo:'',currency:'USD',fee:300,status:'REVIEWING',submitDate:'2026-08-09',expectedDate:'2026-08-13',businessId:'89123456789',adAccountIds:'act_99812039',notes:'资料已提交，等待账户审核。'},
+  {id:'opening-2',clientId:3,externalClientName:'',providerId:'provider-chijie',contactId:'',platform:'TK',accountType:'TikTok Ads 直客账户',region:'日本',quantity:1,partnerName:'炽界',contactName:'',contactInfo:'',currency:'USD',fee:0,status:'OPENED',submitDate:'2026-08-05',expectedDate:'2026-08-07',businessId:'BC-44102931',adAccountIds:'tt_88301923',notes:'已开户并同步到客户账号资产。'}
+];
+const seedMediaTools = [
+  {id:'tool-1',name:'AdsPower',category:'BROWSER',url:'https://www.adspower.com/',loginAccount:'ops-team@example.com',loginPassword:'',purpose:'Facebook / TikTok 固定指纹环境与团队协作。',clientIds:[1,2,3,4],owner:'运营组',status:'ACTIVE',seats:5,notes:'真实生产环境不要在前端存储密码。'},
+  {id:'tool-2',name:'Canva',category:'CREATIVE',url:'https://www.canva.com/',loginAccount:'creative@example.com',loginPassword:'',purpose:'广告图片、短视频封面与社媒素材协作。',clientIds:[1,3],owner:'设计组',status:'ACTIVE',seats:3,notes:''},
+  {id:'tool-3',name:'Google Analytics 4',category:'ANALYTICS',url:'https://analytics.google.com/',loginAccount:'analytics@example.com',loginPassword:'',purpose:'落地页流量、转化路径与广告归因辅助分析。',clientIds:[1,4],owner:'数据组',status:'ACTIVE',seats:2,notes:''}
+];
+
+const seedAuthUsers = [
+  {id:'user-admin',name:'系统管理员',username:'admin',password:'admin123',role:'ADMIN',enabled:true},
+  {id:'user-finance',name:'财务',username:'finance',password:'finance123',role:'FINANCE',enabled:true},
+  {id:'user-ops',name:'投手 / 运营',username:'ops',password:'ops123',role:'OPS',enabled:true},
+  {id:'user-sales',name:'销售',username:'sales',password:'sales123',role:'SALES',enabled:true}
+];
+
+createApp({
+  components:{PlatformBadges,InfoRow,FormField,AnalyticsCard},
+  data(){return{
+    currentPage:'dashboard',mobileMenuOpen:false,globalSearchQuery:'',globalSearchOpen:false,searchQuery:'',platformFilter:'ALL',alertTypeFilter:'ALL',selectedClientId:1,selectedAssetsClientId:1,selectedSopClientId:null,selectedSopAccountKey:'',selectedSopDate:(()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`})(),selectedAnalyticsClientId:1,selectedAnalyticsFbAccountId:null,selectedAnalyticsTkAccountId:null,selectedAnalyticsFbDataDate:'ALL',selectedAnalyticsTkDataDate:'ALL',selectedAdsClientId:1,selectedAdsPlatform:'FB',selectedAdsAccountId:null,credentialsVisible:false,sopChecked:{},showAddAlertModal:false,showReminderTypeManager:false,reminderTypes:[],reminderTypeForm:{key:'',name:''},showExternalAssetModal:false,externalAssetType:'GOOGLE',externalAssetForm:{id:null,accountName:'',customerId:'',mccId:'',username:'',profileId:'',loginAccount:'',loginPassword:'',note:''},showRechargeModal:false,showRenewalModal:false,renewalTarget:null,renewalForm:{mode:'M1',newDueDate:'',note:''},showAdsPlanDetailModal:false,showAdDataModal:false,editingAdDataRecordId:null,selectedPlanDetail:null,toastMessage:'',leadSearch:'',leadPoolFilter:'ACTIVE',leadQuickFilter:'ALL',openingSearch:'',openingPlatformFilter:'ALL',openingStatusFilter:'ALL',openingProviderFilter:'ALL',openingContactSelections:{},openingSpendPeriod:'MONTH',openingMonthKey:`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`,openingQuarterYear:new Date().getFullYear(),openingQuarter:Math.floor(new Date().getMonth()/3)+1,openingYear:new Date().getFullYear(),financePeriod:'MONTH',financeMonthKey:`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`,financeQuarterYear:new Date().getFullYear(),financeQuarter:Math.floor(new Date().getMonth()/3)+1,financeYear:new Date().getFullYear(),financeClientFilter:'ALL',financeProviderFilter:'ALL',financeReconciliationStatusFilter:'ALL',receivableStatusFilter:'ALL',receivableIncomeTypeFilter:'ALL',receivableOwnerFilter:'ALL',receivableLedgerMode:'ALL',receivableDateFilter:'',receivableClientFilter:'ALL',receivableClientSearch:'',showReceivableClientPicker:false,receivablePageSize:10,receivablePage:1,profitDateFilter:'',profitClientSearch:'',showProfitClientPicker:false,profitPageSize:10,profitPage:1,financeActualRebates:[],financeReceivables:[],financeCosts:[],financeReconciliations:[],showReceivableModal:false,showCostModal:false,showReconciliationModal:false,receivableForm:{},costForm:{},reconciliationForm:{},toolSearch:'',toolCategoryFilter:'ALL',selectedToolClientId:'ALL',selectedToolAccountKey:'ALL',toolBindingClientId:'',toolBindingAccountKey:'ALL',showToolClientDropdown:false,toolPasswordVisible:{},showLeadModal:false,showOpeningModal:false,showProviderModal:false,showToolModal:false,showUserModal:false,showSopTaskModal:false,sopExpandedTasks:{},sopTaskForm:{id:null,originalDate:'',date:'',text:'',plan:'',note:''},currentUser:null,authUsers:[],userForm:{},loginForm:{username:'',password:''},backupSnapshots:[],auditLogs:[],confirmDialog:{show:false,title:'',message:'',confirmText:'确认删除',tone:'danger'},confirmAction:null,showArchivedClients:false,showPaymentModal:false,paymentTargetReceivable:null,paymentForm:{date:'',amount:'',method:'',account:'',note:''},financeMonthLocks:{},financeMonthSnapshots:{},formDirty:false,suppressDirtyWatch:false,sto
