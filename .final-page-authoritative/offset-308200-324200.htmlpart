@@ -1,0 +1,88 @@
+der="记录客户需求、痛点、下一步动作、报价反馈等"></textarea></div>
+        <div class="md:col-span-2 flex justify-end gap-2 pt-2"><button type="button" @click="showLeadModal=false" class="h-10 px-4 rounded-xl border border-slate-200 text-xs font-bold">取消</button><button type="submit" class="h-10 px-5 rounded-xl bg-violet-600 text-white text-xs font-bold"><i class="fa-solid fa-check mr-1.5"></i>保存潜在客户</button></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Customer Opening Channel Modal -->
+  <div v-if="showOpeningModal" class="fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4">
+    <div class="w-full max-w-4xl max-h-[92vh] overflow-y-auto scrollbar bg-white rounded-3xl soft-shadow">
+      <div class="p-5 border-b border-slate-100 flex items-center justify-between"><div><div class="text-[10px] font-bold tracking-[.16em] text-blue-500">OPENING CHANNEL</div><h3 class="font-extrabold mt-1">{{ openingForm.id ? '编辑客户开户渠道' : '新增客户开户渠道' }}</h3></div><button @click="showOpeningModal=false" class="w-9 h-9 rounded-xl hover:bg-slate-100" title="关闭"><i class="fa-solid fa-xmark"></i></button></div>
+      <form @submit.prevent="saveOpeningDeal" class="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <form-field label="关联客户"><select v-model="openingForm.clientId" @change="syncOpeningAccountSelection" class="field"><option :value="null">不关联现有客户</option><option v-for="c in clients" :key="c.id" :value="c.id">{{ c.name }}</option></select></form-field>
+        <form-field label="外部客户 / 项目名称"><input v-model.trim="openingForm.externalClientName" class="field" placeholder="未建立客户档案时填写" /></form-field>
+        <form-field label="开户商渠道"><select v-model="openingForm.providerId" @change="applyProviderToOpeningForm" class="field" required><option value="">请选择开户商</option><option v-for="p in openingProviders" :key="p.id" :value="p.id">{{ p.name }} · {{ p.platforms || 'FB+TK' }}</option></select></form-field>
+        <form-field label="开户平台"><select v-model="openingForm.platform" @change="syncOpeningAccountSelection" class="field"><option value="FB">Facebook</option><option value="TK">TikTok</option></select></form-field>
+        <form-field label="对接人 / 返点政策"><select v-model="openingForm.contactId" @change="applyOpeningContactToForm" class="field" :disabled="!openingProviderContacts(openingForm).length"><option value="">{{ openingProviderContacts(openingForm).length ? '请选择对接人' : '该开户商未维护对接人' }}</option><option v-for="contact in openingProviderContacts(openingForm)" :key="contact.id" :value="contact.id">{{ contact.name }} · 返点 {{ Number(contactCurrentRebateRate(contact)||0).toFixed(2) }}%</option></select></form-field>
+        <form-field label="开户类型"><input v-model.trim="openingForm.accountType" class="field" placeholder="例如：企业广告户 / Agency / 直客户" /></form-field>
+        <form-field label="开户地区"><input v-model.trim="openingForm.region" class="field" placeholder="例如：美国 / 欧洲 / 东南亚" /></form-field>
+        <form-field label="开户数量"><input v-model.number="openingForm.quantity" type="number" min="1" class="field" /></form-field>
+        <form-field label="开户费用"><div class="money-input-group"><select v-model="openingForm.currency" class="field money-currency"><option value="USD">USD</option><option value="CNY">CNY</option></select><input v-model.number="openingForm.fee" type="number" min="0" step="0.01" class="field money-amount" placeholder="费用" /></div></form-field>
+        <form-field label="开户状态"><select v-model="openingForm.status" class="field"><option value="PREPARE">资料准备</option><option value="SUBMITTED">已提交</option><option value="REVIEWING">审核中</option><option value="OPENED">已开户</option><option value="REJECTED">异常 / 驳回</option></select></form-field>
+        <form-field label="提交日期"><input v-model="openingForm.submitDate" type="date" class="field" /></form-field>
+        <form-field label="预计完成日期"><input v-model="openingForm.expectedDate" type="date" class="field" /></form-field>
+        <form-field label="渠道 / 返点生效日期 *"><input v-model="openingForm.effectiveStartDate" type="date" class="field" required /></form-field>
+        <form-field label="渠道 / 返点结束日期"><input v-model="openingForm.effectiveEndDate" type="date" class="field" /><div class="mt-1.5 text-[9px] text-slate-400">不填写表示持续有效；更换开户商或对接人时，建议填写上一渠道结束日期。</div></form-field>
+        <form-field label="BM / BC ID"><input v-model.trim="openingForm.businessId" class="field font-mono" placeholder="开户完成后记录" /></form-field>
+        <form-field label="广告账户归属 *"><select v-model="openingForm.accountScope" @change="syncOpeningAccountSelection" class="field"><option value="SPECIFIC">指定广告账户</option><option value="ALL">当前平台全部账户</option></select><div class="mt-1.5 text-[9px] text-slate-400">默认使用“指定广告账户”；只有确认该开户商承接当前平台全部账户时才选择“全部账户”。</div></form-field>
+        <div class="md:col-span-2" v-if="openingForm.clientId && openingForm.accountScope==='SPECIFIC'">
+          <div class="text-[11px] font-semibold text-slate-500 mb-1.5">选择广告账户 *</div>
+          <div v-if="openingAccountOptions(openingForm).length" class="grid grid-cols-1 md:grid-cols-2 gap-2 rounded-2xl border border-slate-200 bg-slate-50/60 p-3">
+            <label v-for="a in openingAccountOptions(openingForm)" :key="a.accountId" class="flex items-center gap-3 rounded-xl bg-white border border-slate-200 px-3 py-2.5 cursor-pointer hover:border-blue-200">
+              <input type="checkbox" :checked="openingAccountSelected(openingForm,a.id)" @change="toggleOpeningAccount(a.id,$event.target.checked)" class="rounded border-slate-300 text-blue-600 focus:ring-blue-200" />
+              <span class="min-w-0"><span class="block text-xs font-bold truncate">{{ a.name }}</span><span class="block text-[10px] text-slate-400 font-mono mt-0.5 truncate">{{ a.id }}</span></span>
+            </label>
+          </div>
+          <div v-else class="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-[10px] text-amber-700"><i class="fa-solid fa-triangle-exclamation mr-1"></i>当前客户在所选平台没有可选择的广告账户，请先到“账号与商业资产”维护广告账户 ID。</div>
+          <div class="mt-1.5 text-[9px]" :class="openingDealAccountIds(openingForm).length?'text-emerald-600':'text-rose-500'">{{ openingDealAccountMatchText(openingForm) }}</div>
+        </div>
+        <div class="md:col-span-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-[10px] text-blue-700" v-if="openingForm.clientId && openingForm.accountScope==='ALL'"><i class="fa-solid fa-circle-info mr-1"></i>该开户渠道会承接当前客户 {{ openingForm.platform==='TK'?'TikTok':'Facebook' }} 平台的全部广告账户；后续新增账号也会自动纳入该渠道归集。</div>
+        <form-field v-if="!openingForm.clientId" label="广告账户 ID（外部项目）"><input v-model.trim="openingForm.adAccountIds" class="field font-mono" placeholder="外部项目可手工记录广告账户 ID" /></form-field>
+        <div class="md:col-span-2 rounded-2xl bg-blue-50 border border-blue-100 p-4 text-xs" v-if="openingProvider(openingForm)">
+          <div class="flex items-center justify-between gap-3"><div class="font-extrabold text-blue-800">当前开户商：{{ openingProviderName(openingForm) }}</div><span class="text-[10px] font-bold text-blue-600">{{ openingProviderContacts(openingForm).length }} 位对接人</span></div>
+          <div class="grid sm:grid-cols-2 gap-2 mt-2 text-[10px] text-slate-600"><div>当前对接人：<b>{{ openingContactName(openingForm) }}</b></div><div>当前返点比例：<b class="text-violet-700">{{ Number(openingDealRebateRate(openingForm)||0).toFixed(2) }}%</b></div><div>支持平台：{{ openingProvider(openingForm)?.platforms || '—' }}</div><div>服务地区：{{ openingProvider(openingForm)?.region || '—' }}</div><div class="sm:col-span-2">返点政策：{{ openingDealRebatePolicy(openingForm) || '未设置' }}</div></div>
+          <div v-if="!openingProviderContacts(openingForm).length" class="mt-3 rounded-xl bg-amber-50 border border-amber-100 px-3 py-2 text-[10px] text-amber-700"><i class="fa-solid fa-triangle-exclamation mr-1"></i>该开户商还没有对接人，请先编辑开户商并添加对接人及返点政策。</div>
+        </div>
+        <div class="md:col-span-2"><div class="text-[11px] font-semibold text-slate-500 mb-1.5">开户备注</div><textarea v-model.trim="openingForm.notes" rows="4" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-blue-100" placeholder="资料要求、审核反馈、额度、支付方式、异常原因等"></textarea></div>
+        <div class="md:col-span-2 flex justify-end gap-2 pt-2"><button type="button" @click="showOpeningModal=false" class="h-10 px-4 rounded-xl border border-slate-200 text-xs font-bold">取消</button><button type="submit" class="h-10 px-5 rounded-xl bg-blue-600 text-white text-xs font-bold"><i class="fa-solid fa-check mr-1.5"></i>保存客户开户渠道</button></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Opening Provider Modal -->
+  <div v-if="showProviderModal" class="fixed inset-0 z-[60] modal-backdrop flex items-center justify-center p-4">
+    <div class="w-full max-w-3xl max-h-[92vh] overflow-y-auto scrollbar bg-white rounded-3xl soft-shadow">
+      <div class="p-5 border-b border-slate-100 flex items-center justify-between"><div><div class="text-[10px] font-bold tracking-[.16em] text-blue-500">CHANNEL PARTNER</div><h3 class="font-extrabold mt-1">{{ providerForm.id ? '编辑开户商信息' : '添加开户商信息' }}</h3></div><button @click="showProviderModal=false" class="w-9 h-9 rounded-xl hover:bg-slate-100" title="关闭"><i class="fa-solid fa-xmark"></i></button></div>
+      <form @submit.prevent="saveOpeningProvider" class="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <form-field label="开户商 / 渠道名称 *"><input v-model.trim="providerForm.name" required class="field" placeholder="例如：蓝鲨 / 炽界" /></form-field>
+        <form-field label="支持平台"><select v-model="providerForm.platforms" class="field"><option value="FB+TK">Facebook + TikTok</option><option value="FB">Facebook</option><option value="TK">TikTok</option></select></form-field>
+        <form-field label="服务地区"><input v-model.trim="providerForm.region" class="field" placeholder="例如：美国 / 欧洲 / 东南亚 / 全球" /></form-field>
+        <form-field label="官网 / 渠道链接"><input v-model.trim="providerForm.website" class="field" placeholder="https://..." /></form-field>
+        <div class="md:col-span-2 rounded-2xl border border-violet-100 overflow-hidden">
+          <div class="px-4 py-3 bg-violet-50/70 flex items-center justify-between gap-3"><div><div class="text-xs font-extrabold text-violet-800">对接人与独立返点政策</div><div class="text-[10px] text-violet-600 mt-1">同一个开户商可设置多位对接人；客户开户时选择具体对接人，返点按该对接人的比例计算。</div></div><button type="button" @click="addProviderContact" class="h-8 px-3 rounded-lg bg-violet-600 text-white text-[10px] font-extrabold whitespace-nowrap"><i class="fa-solid fa-user-plus mr-1"></i>添加对接人</button></div>
+          <div v-if="providerForm.contacts?.length" class="p-4 space-y-3">
+            <div v-for="(contact,idx) in providerForm.contacts" :key="contact.id" class="rounded-2xl border border-slate-200 p-4 bg-white">
+              <div class="flex items-center justify-between gap-3 mb-3"><div class="flex items-center gap-2"><span class="w-7 h-7 rounded-lg bg-violet-50 text-violet-700 flex items-center justify-center text-[10px] font-black">{{ idx+1 }}</span><div class="text-xs font-extrabold">对接人 {{ idx+1 }}</div></div><button type="button" @click="removeProviderContact(idx,contact)" class="h-8 px-2.5 rounded-lg bg-rose-50 text-rose-600 text-[10px] font-bold"><i class="fa-regular fa-trash-can mr-1"></i>删除</button></div>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <form-field label="对接人名称 *"><input v-model.trim="contact.name" required class="field" placeholder="姓名 / 昵称 / 渠道组" /></form-field>
+                <div class="rounded-xl border border-violet-100 bg-violet-50/60 px-3 py-2 text-[10px] leading-5 text-violet-700"><div class="font-extrabold">当前有效返点</div><div class="text-sm font-black mt-1">{{ Number(contactCurrentRebateRate(contact)||0).toFixed(2) }}%</div><div>历史广告数据按各自日期匹配当时有效政策，不会因新政策而重算。</div></div>
+                <form-field label="手机 / WhatsApp"><input v-model.trim="contact.phone" class="field" placeholder="手机号或 WhatsApp" /></form-field>
+                <form-field label="微信"><input v-model.trim="contact.wechat" class="field" placeholder="微信号" /></form-field>
+                <form-field label="邮箱"><input v-model.trim="contact.email" type="email" class="field" placeholder="name@example.com" /></form-field>
+                <div class="md:col-span-2 rounded-2xl border border-violet-100 overflow-hidden">
+                  <div class="px-3 py-2.5 bg-violet-50 flex items-center justify-between gap-3"><div><div class="text-[10px] font-extrabold text-violet-800">返点政策历史</div><div class="text-[9px] text-violet-600 mt-0.5">每条政策从生效日期起使用；新增比例不要覆盖旧政策。</div></div><button type="button" @click="addContactRebatePolicy(contact)" class="h-7 px-2.5 rounded-lg bg-violet-600 text-white text-[9px] font-bold"><i class="fa-solid fa-plus mr-1"></i>新增政策</button></div>
+                  <div class="p-3 space-y-2">
+                    <div v-for="(policy,pidx) in contact.rebatePolicies" :key="policy.id" class="grid grid-cols-1 md:grid-cols-[150px_130px_1fr_34px] gap-2 items-end rounded-xl border border-slate-100 bg-white p-2.5">
+                      <form-field label="生效日期"><input v-model="policy.effectiveDate" type="date" class="field" /></form-field>
+                      <form-field label="返点比例 (%)"><input v-model.number="policy.rebateRate" type="number" min="0" max="100" step="0.01" class="field font-extrabold text-violet-700" /></form-field>
+                      <form-field label="政策说明"><input v-model.trim="policy.rebatePolicy" class="field" placeholder="例如：次月15日结算 / 异常账户不计返点" /></form-field>
+                      <button type="button" @click="removeContactRebatePolicy(contact,pidx)" :disabled="(contact.rebatePolicies||[]).length<=1" class="h-10 rounded-xl bg-rose-50 text-rose-500 disabled:opacity-30"><i class="fa-regular fa-trash-can"></i></button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div v-else class="p-6 text-center text-[11px] text-slate-400"><i class="fa-regular fa-address-book text-2xl text-slate-300 block mb-2"></i>暂未添加对接人。点击右上角「添加对接人」后可分别设置返点。</div>
+        </div>
+        <div class="md:col-span-2"><div class="text-[11px] font-semibold text-slate-500 mb-1.5">开户政策 / 账期</div><textarea v-model.trim="providerForm.policy" rows="3" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-blue-100" p
