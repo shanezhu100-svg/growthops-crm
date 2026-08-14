@@ -1,0 +1,19 @@
+text-center text-[11px] text-slate-400">暂未添加 Facebook 账号</div>
+                  </div>
+                  <div v-if="selectedClient.platform.includes('TK') || (selectedClient.tkAccounts || []).length" class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div class="flex items-center justify-between gap-3 flex-wrap">
+                      <div class="flex items-center gap-2 font-extrabold text-sm"><i class="fa-brands fa-tiktok"></i>TikTok</div>
+                      <div class="flex items-center gap-2 flex-wrap justify-end">
+                        <span class="text-[10px] font-bold bg-white text-slate-700 border border-slate-200 px-2 py-1 rounded-full">{{ (selectedClient.tkAccounts || []).length }} 个账号</span>
+                        <div v-if="(selectedClient.tkAccounts || []).length>1" class="inline-flex items-center gap-1.5">
+                          <select :value="clampedAssetPagerIndex('detail','TK',(selectedClient.tkAccounts||[]).length)" @change="setAssetPagerIndex('detail','TK',$event.target.value,(selectedClient.tkAccounts||[]).length)" class="h-7 max-w-[150px] rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-bold text-slate-700 outline-none focus:ring-2 focus:ring-slate-100" title="直接选择 TikTok 账号"><option v-for="(a,i) in (selectedClient.tkAccounts||[])" :key="a.id || i" :value="i">{{ a.accountName || `TikTok 账号 ${i+1}` }}</option></select>
+                          <button type="button" @click="changeAssetPager('detail','TK',-1,(selectedClient.tkAccounts||[]).length)" class="w-7 h-7 rounded-lg border border-slate-200 bg-white text-slate-700 disabled:opacity-40" :disabled="clampedAssetPagerIndex('detail','TK',(selectedClient.tkAccounts||[]).length)===0"><i class="fa-solid fa-chevron-left text-[10px]"></i></button>
+                          <span class="text-[10px] font-bold text-slate-700 min-w-[52px] text-center">{{ clampedAssetPagerIndex('detail','TK',(selectedClient.tkAccounts||[]).length)+1 }} / {{ (selectedClient.tkAccounts || []).length }}</span>
+                          <button type="button" @click="changeAssetPager('detail','TK',1,(selectedClient.tkAccounts||[]).length)" class="w-7 h-7 rounded-lg border border-slate-200 bg-white text-slate-700 disabled:opacity-40" :disabled="clampedAssetPagerIndex('detail','TK',(selectedClient.tkAccounts||[]).length)>=(selectedClient.tkAccounts||[]).length-1"><i class="fa-solid fa-chevron-right text-[10px]"></i></button>
+                        </div>
+                      </div>
+                    </div>
+                    <div v-if="selectedClient.tkAccounts && selectedClient.tkAccounts.length" class="mt-4 space-y-3">
+                      <template v-for="(account,idx) in [getPagedItem(selectedClient.tkAccounts,'detail','TK')]" :key="account?.id || 'tk-single'">
+                        <div v-if="account" class="rounded-xl bg-white border border-slate-200 p-3.5">
+                          <div class="flex items-

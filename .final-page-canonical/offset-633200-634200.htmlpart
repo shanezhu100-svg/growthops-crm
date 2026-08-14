@@ -1,0 +1,6 @@
+d))},
+    onSopDateChange(){if(!this.selectedSopDate)this.selectedSopDate=this.localDateKey();this.ensureSopDailyTasks();this.loadSopProgress()},
+    setSopDateToday(){this.selectedSopDate=this.localDateKey();this.onSopDateChange()},
+    resetSopProgress(){if(!this.selectedSopAccount)return;this.sopChecked={};this.saveSopProgress();this.notify(`已重置 ${this.sopSelectedDateBadge} 的完成状态`)},
+    toggleSopTask(taskId){if(!taskId)return;this.sopExpandedTasks[taskId]=!this.sopExpandedTasks[taskId]},
+    openSopTaskModal(step=null){if(!this.selectedSopClient||!this.selectedSopAccount){this.notify('请先选择客户和客户账号');return}if(step&&step.id){this.sopTaskForm={id:step.id,originalDate:this.selectedSopDate||this.localDateKey(),date:this.selectedSopDate||this.localDateKey(),text:String(step.text||''),plan:String(step.plan||''),note:String(step.note||'')}}else{this.sopTaskForm={id:null,originalDate:'',date:this.selectedSopDate||this.localDateKey(),text:'',plan:'',note

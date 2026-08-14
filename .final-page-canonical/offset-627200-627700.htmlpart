@@ -1,0 +1,2 @@
+ool')});this.persist();this.showToolModal=false;this.logAudit(payload.id?'修改投放工具':'新增投放工具',`${payload.name} · ${(payload.bindings||[]).length} 个绑定范围`);this.notify('投放工具已保存')},
+    deleteMediaTool(tool){if(!tool)return;const bindingCount=(tool.bindings||[]).length;this.askConfirm({title:'删除投放工具',message:`确定删除投放工具【${tool.name}】吗？\n该工具当前绑定 ${bindingCount} 个客户/账号范围，删除后这些绑定

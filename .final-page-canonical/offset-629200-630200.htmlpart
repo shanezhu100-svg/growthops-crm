@@ -1,0 +1,6 @@
+turn({BROWSER:'指纹浏览器',CREATIVE:'素材 / 创意',LANDING:'落地页 / 建站',ANALYTICS:'数据分析',CRM:'CRM / 线索',SPY:'广告情报',OTHER:'其他工具'})[category]||'其他工具'},
+    toolCategoryIcon(category){return({BROWSER:'fa-solid fa-fingerprint',CREATIVE:'fa-solid fa-wand-magic-sparkles',LANDING:'fa-solid fa-window-maximize',ANALYTICS:'fa-solid fa-chart-line',CRM:'fa-solid fa-address-book',SPY:'fa-solid fa-binoculars',OTHER:'fa-solid fa-toolbox'})[category]||'fa-solid fa-toolbox'},
+    toolClientNames(tool){return[...new Set((tool.bindings||[]).map(b=>this.clients.find(c=>String(c.id)===String(b.clientId))?.name).filter(Boolean))]},
+    safeToolUrl(url){try{const u=new URL(url);return['http:','https:'].includes(u.protocol)?u.href:'#'}catch(e){return'#'}},
+    localDateKey(date=new Date()){const d=date instanceof Date?date:new Date(date);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`},
+    syncSop

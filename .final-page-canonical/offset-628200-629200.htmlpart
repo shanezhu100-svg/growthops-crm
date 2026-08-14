@@ -1,0 +1,4 @@
+`,platform:'FB',account:a,label:`Facebook · ${a.accountName||`账号 ${idx+1}`} · ${a.adAccountId||'未录入广告账号 ID'}`})),...(c.tkAccounts||[]).map((a,idx)=>({key:`TK:${a.id}`,platform:'TK',account:a,label:`TikTok · ${a.accountName||`账号 ${idx+1}`} · ${a.adAccountId||'未录入广告账号 ID'}`}))]},
+    toolBindingDisplay(tool){return(tool.bindings||[]).map(b=>{const client=this.clients.find(c=>String(c.id)===String(b.clientId));const key=b.accountKey||'ALL';if(key==='ALL')return{...b,clientName:client?.name||'未知客户',accountLabel:'该客户全部账号',platform:'ALL'};const item=this.toolAccountOptionsForClient(b.clientId).find(x=>x.key===key);return{...b,clientName:client?.name||'未知客户',accountLabel:item?.label||'账号已删除 / 未找到',platform:item?.platform||String(key).split(':')[0]||'FB'}})},
+    toggleToolPassword(id){this.toolPasswordVisible={...this.toolPasswordVisible,[id]:!this.toolPasswordVisible[id]}},
+    toolCategoryText(category){re

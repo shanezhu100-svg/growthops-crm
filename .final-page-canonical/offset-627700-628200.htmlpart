@@ -1,0 +1,2 @@
+会同步移除。`,confirmText:'确认删除'},()=>{this.mediaTools=this.mediaTools.filter(t=>String(t.id)!==String(tool.id));delete this.toolPasswordVisible[tool.id];this.persist();this.logAudit('删除投放工具',`${tool.name} · ${bindingCount} 个绑定`);this.notify(`投放工具【${tool.name}】已删除`)})},
+    toolAccountOptionsForClient(clientId){const c=this.clients.find(c=>String(c.id)===String(clientId));if(!c)return[];return[...(c.fbAccounts||[]).map((a,idx)=>({key:`FB:${a.id}

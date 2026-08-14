@@ -1,0 +1,23 @@
+�阶段时会再次提醒。';if(item?.typeKey==='RECEIVABLE')return'将忽略当前账单最后阶段提醒；账单完成回款后会自动消失，后续月份的新账单仍会正常提醒。';return'将忽略当前到期周期的最后阶段提醒；如果后续完成续费或修改到期日期，新周期仍会重新提醒。'},
+    restoreDismissedAlerts(){const activeKeys=new Set();this.clients.filter(c=>!c.archived).forEach(c=>{const cs=this.autoDueReminderStage(c.endDate);if(c.endDate&&cs)activeKeys.add(`CONTRACT-${c.id}|${c.endDate}|${cs.reminderIndex}`);(c.networkEnvironments||[]).forEach(env=>{const s=this.autoDueReminderStage(env.ipDueDate);if(env.ipDueDate&&s)activeKeys.add(`IP-${c.id}-${env.id}|${env.ipDueDate}|${s.reminderIndex}`)})});this.financeReceivables.filter(r=>this.financeReceivableUnpaid(r)>0&&r.dueDate).forEach(r=>{const stage=this.autoDueReminderStage(r.dueDate);if(stage)activeKeys.add(`RECEIVABLE-${r.id}|${r.dueDate}|${stage.reminderIndex}`)});const count=(this.dismissedAlerts||[]).filter(x=>activeKeys.has(String(x.key))).length;if(!count)return;this.askConfirm({title:'恢复已忽略提醒',message:`将恢复当前阶段的 ${count} 条已忽略提醒，不会修改原始到期日期或应收账单。`,confirmText:'恢复提醒',tone:'warning'},()=>{this.dismissedAlerts=(this.dismissedAlerts||[]).filter(x=>!activeKeys.has(String(x.key)));this.persist();this.logAudit('恢复已忽略提醒',`${count} 条`);this.notify(`已恢复 ${count} 条提醒`)})},
+    deleteAlert(item){
+      if(!item)return;
+      if(item.typeKey==='AD_RECHARGE'){
+        this.notify('广告余额提醒由系统自动生成：余额 ≤ $100 首次提醒，≤ $30 二次提醒；充值后余额高于 $100 会自动消失');
+        return;
+      }
+      const clientName=item.clientName||'当前客户';
+      const typeName=item.type||this.alertTypeName(item.typeKey)||'到期提醒';
+      if(item.isStandalone){
+        this.askConfirm({title:'删除独立提醒',message:`确定删除【${clientName}】的【${typeName}】独立提醒吗？
+
+只删除这条独立提醒，不影响客户档案。`,confirmText:'确认删除',tone:'danger'},()=>{this.standaloneAlerts=this.standaloneAlerts.filter(a=>String(a.id)!==String(item.id));this.persist();this.logAudit('删除独立提醒',`${clientName} · ${typeName}`);this.notify('独立提醒已删除')});
+        return;
+      }
+      const followup=this.alertIgnoreFollowupText(item);this.askConfirm({title:'忽略本次到期提醒',message:`确定忽略【${clientName}】的【${typeName}】吗？
+
+不会修改原始到期日期、应收账单或客户资料。${followup}`,confirmText:'确认忽略',tone:'warning'},()=>{const key=this.alertDismissKey(item);if(!this.dismissedAlerts.some(x=>String(x.key)===String(key)))this.dismissedAlerts.unshift({key,id:item.id,dueDate:item.dueDate,typeKey:item.typeKey,clientId:item.clientId,networkId:item.networkId||'',clientName,ignoredAt:new Date().toISOString()});this.persist();this.logAudit('忽略到期提醒',`${clientName} · ${typeName} · ${item.dueDate}`);this.notify(Number(item?.reminderIndex||0)>=3?'当前到期周期提醒已忽略':'当前阶段提醒已忽略，后续阶段仍会再次提醒')});
+    },
+    normalizeStandaloneAlert(alert){const x={...(alert||{})};delete x.reminderDates;delete x.remindDays;delete x.remindPreset;delete x.customRemindDays;return x},
+    standaloneReminderRuleText(alert){return alert?.dueDate?'系统自动提醒：到期前 7 天、3 天、1 天':'请选择到期日期'},
+    saveStandaloneAlert(){if(!this.reminderTypeOptions.some(t=>String(t.key)===String(this.newAlertForm.typeKey))){this.notify('请选择有效的提醒类型');return}const dueDate=String(this.newAlertForm.dueDate||'');if(!dueDate){this.notify('请选择到期日期');return}const record={typeKey:this.newAlertForm.typeKey,clientName:this.newAlertForm.clientName,dueDate,cost:this.newAlertForm.cost,target:this.newAlertForm.target,id:'sa-'
