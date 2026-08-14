@@ -180,3 +180,4 @@
   window.__growthOpsCloud={rpc,saveNow,loadUsers};
   boot();
 })();
+// Production rebuild marker: cloud-v2 lifecycle verified.
