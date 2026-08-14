@@ -1,0 +1,87 @@
+col xl:flex-row xl:items-end justify-between gap-4">
+            <div>
+              <div class="text-[11px] font-bold tracking-[.16em] text-rose-500">FINANCE & PROFIT</div>
+              <h2 class="text-2xl font-extrabold tracking-tight mt-1">财务核算</h2>
+              <p class="text-xs text-slate-500 mt-1">以应收账单作为投放服务费财务凭证；广告消耗统一读取“广告数据记录”，预计返点按历史生效政策计算，实际返点只在代理商返点对账中确认。</p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button type="button" @click="exportFinanceExcel" class="h-10 px-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold shadow-sm hover:bg-emerald-100 transition"><i class="fa-solid fa-file-excel mr-1.5"></i>导出财务 Excel</button>
+            </div>
+          </div>
+
+          <div class="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 soft-shadow space-y-4">
+            <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+              <div><div class="font-extrabold text-sm">财务统计周期</div><div class="text-[10px] text-slate-400 mt-1">{{ financePeriodLabel }} · 正式客户的非手工计费账单会自动生成；账单金额保存后即成为历史财务凭证，后续修改客户月费不会追溯改变旧账单。</div></div>
+              <div class="inline-flex p-1 rounded-xl bg-slate-100 self-start">
+                <button v-for="p in [{k:'MONTH',l:'月'},{k:'QUARTER',l:'季'},{k:'YEAR',l:'年'}]" :key="p.k" @click="financePeriod=p.k" class="h-8 px-4 rounded-lg text-xs font-bold transition" :class="financePeriod===p.k?'bg-white text-rose-700 shadow-sm':'text-slate-500'">{{ p.l }}</button>
+              </div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+              <div v-if="financePeriod==='MONTH'"><label class="text-[10px] font-bold text-slate-500 block mb-1.5">选择月份</label><input v-model="financeMonthKey" type="month" class="field" /></div>
+              <template v-else-if="financePeriod==='QUARTER'">
+                <div><label class="text-[10px] font-bold text-slate-500 block mb-1.5">选择年份</label><select v-model.number="financeQuarterYear" class="field"><option v-for="y in financeAvailableYears" :key="y" :value="y">{{ y }} 年</option></select></div>
+                <div><label class="text-[10px] font-bold text-slate-500 block mb-1.5">选择季度</label><select v-model.number="financeQuarter" class="field"><option :value="1">第 1 季度</option><option :value="2">第 2 季度</option><option :value="3">第 3 季度</option><option :value="4">第 4 季度</option></select></div>
+              </template>
+              <div v-else><label class="text-[10px] font-bold text-slate-500 block mb-1.5">选择年份</label><select v-model.number="financeYear" class="field"><option v-for="y in financeAvailableYears" :key="y" :value="y">{{ y }} 年</option></select></div>
+              <div><label class="text-[10px] font-bold text-slate-500 block mb-1.5">客户</label><select v-model="financeClientFilter" class="field"><option value="ALL">全部客户</option><option v-for="c in clients" :key="c.id" :value="String(c.id)">{{ c.name }}</option></select></div>
+              <div class="rounded-xl border border-rose-100 bg-rose-50/50 px-3 py-2.5 flex items-center justify-between"><div><div class="text-[9px] text-rose-500">当前核算口径</div><div class="text-xs font-extrabold text-rose-800 mt-0.5">{{ financePeriodLabel }}</div></div><i class="fa-solid fa-calculator text-rose-300"></i></div>
+            </div>
+          </div>
+
+          <div v-if="financePeriod==='MONTH'" class="rounded-2xl border p-4 soft-shadow" :class="isMonthLocked(financeMonthKey)?'border-emerald-200 bg-emerald-50/60':'border-slate-200 bg-white'">
+            <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+              <div><div class="font-extrabold text-sm"><i class="fa-solid fa-list-check mr-2" :class="isMonthLocked(financeMonthKey)?'text-emerald-600':'text-slate-500'"></i>月结检查</div><div class="text-[10px] text-slate-400 mt-1">应收账单、渠道返点对账、未归属广告消耗、账号匹配和实际返点归集全部通过后才能完成月结。</div></div>
+              <div class="flex flex-wrap gap-2"><span class="h-8 px-3 rounded-lg flex items-center text-[10px] font-bold" :class="financeMonthCheck.missingBills?'bg-rose-50 text-rose-700':'bg-emerald-50 text-emerald-700'">应收 {{ financeMonthCheck.missingBills ? `缺 ${financeMonthCheck.missingBills}` : '完整' }}</span><span class="h-8 px-3 rounded-lg flex items-center text-[10px] font-bold" :class="financeMonthCheck.pendingReconciliations?'bg-amber-50 text-amber-700':'bg-emerald-50 text-emerald-700'">返点 {{ financeMonthCheck.pendingReconciliations ? `待对账 ${financeMonthCheck.pendingReconciliations}` : '已对账' }}</span><span class="h-8 px-3 rounded-lg flex items-center text-[10px] font-bold" :class="financeMonthCheck.unmatchedChannels?'bg-rose-50 text-rose-700':'bg-emerald-50 text-emerald-700'">渠道 {{ financeMonthCheck.unmatchedChannels ? `异常 ${financeMonthCheck.unmatchedChannels}` : '正常' }}</span><span class="h-8 px-3 rounded-lg flex items-center text-[10px] font-bold" :class="financeMonthCheck.unassignedSpendTotal>0.01?'bg-rose-50 text-rose-700':'bg-emerald-50 text-emerald-700'">未归属消耗 {{ financeMonthCheck.unassignedSpendTotal>0.01 ? financeMonthCheck.unassignedSpendText : '0' }}</span><span class="h-8 px-3 rounded-lg flex items-center text-[10px] font-bold" :class="financeMonthCheck.unallocatedTotal>0.01?'bg-rose-50 text-rose-700':'bg-emerald-50 text-emerald-700'">返点归集 {{ financeMonthCheck.unallocatedTotal>0.01 ? financeMonthCheck.unallocatedText : '完整' }}</span><button type="button" @click="toggleFinanceMonthLock(financeMonthKey)" class="h-8 px-3 rounded-lg text-[10px] font-black" :class="isMonthLocked(financeMonthKey)?'bg-white border border-emerald-200 text-emerald-700':'bg-slate-950 text-white'"><i :class="isMonthLocked(financeMonthKey)?'fa-solid fa-lock':'fa-solid fa-check-double'" class="mr-1.5"></i>{{ isMonthLocked(financeMonthKey)?'已完成月结':'完成月结' }}</button></div>
+            </div>
+          </div>
+
+          <div class="finance-kpi-layout">
+            <div class="finance-panel">
+              <div class="finance-panel-header">
+                <div>
+                  <div class="finance-panel-title">投放与返点</div>
+                  <div class="finance-panel-desc">“广告总消耗”与广告管理 / 投放数据分析读取同一套广告数据记录；渠道归属只影响预计返点，不再影响总消耗。</div>
+                </div>
+                <span class="finance-panel-tag"><i class="fa-solid fa-chart-column"></i>{{ financePeriodLabel }}</span>
+              </div>
+              <div class="finance-kpi-grid finance-kpi-grid-five">
+                <div class="finance-kpi-card is-amber"><div class="metric-label">本期广告总消耗</div><div class="metric-money-list"><div v-for="item in financeMoneyRows(financeTotalAdSpendGroups)" :key="'spend-'+item.currency" class="metric-money-row"><span class="metric-money-currency">{{ item.currency }}</span><span class="metric-money-amount">{{ item.text }}</span></div></div><div class="metric-note">直接汇总广告数据记录；无返点 / 客户自有账户按币种独立核算。</div></div>
+                <div class="finance-kpi-card is-emerald"><div class="metric-label">已归属渠道消耗</div><div class="metric-money-list"><div v-for="item in financeMoneyRows(financeAttributedSpendGroups)" :key="'attr-'+item.currency" class="metric-money-row"><span class="metric-money-currency">{{ item.currency }}</span><span class="metric-money-amount">{{ item.text }}</span></div></div><div class="metric-note">“有渠道返点”账户中已匹配有效已开户渠道的消耗</div></div>
+                <div class="finance-kpi-card is-rose"><div class="metric-label">未归属消耗</div><div class="metric-money-list"><div v-for="item in financeMoneyRows(financeUnassignedSpendGroups)" :key="'unassigned-'+item.currency" class="metric-money-row"><span class="metric-money-currency">{{ item.currency }}</span><span class="metric-money-amount">{{ item.text }}</span></div></div><div class="metric-note">应有渠道返点但尚未归属的消耗；存在时禁止月结</div></div>
+                <div class="finance-kpi-card is-violet"><div class="metric-label">预计返点</div><div class="metric-money-list"><div v-for="item in financeMoneyRows(financeTotals.expected)" :key="'expected-rebate-'+item.currency" class="metric-money-row"><span class="metric-money-currency">{{ item.currency }}</span><span class="metric-money-amount">{{ item.text }}</span></div></div><div class="metric-note">已归属消耗 × 广告发生日期当时有效返点政策</div></div>
+                <div class="finance-kpi-card is-blue"><div class="metric-label">实际返点</div><div class="metric-money-list"><div v-for="item in financeMoneyRows(financeConfirmedActualRebateGroups)" :key="'actual-rebate-'+item.currency" class="metric-money-row"><span class="metric-money-currency">{{ item.currency }}</span><span class="metric-money-amount">{{ item.text }}</span></div></div><div class="metric-note">代理商对账确认后的精确金额</div></div>
+              </div>
+            </div>
+
+            <div class="finance-panel">
+              <div class="finance-panel-header">
+                <div>
+                  <div class="finance-panel-title">收入、应收、回款与净利润</div>
+                  <div class="finance-panel-desc">利润按全部收入项目确认；收入可关联客户，也可作为公司收入独立记录。回款只反映现金是否到账，不改变利润确认口径。</div>
+                </div>
+                <span class="finance-panel-tag"><i class="fa-solid fa-money-bill-trend-up"></i>财务核心</span>
+              </div>
+              <div class="finance-kpi-grid finance-kpi-grid-five">
+                <div class="finance-kpi-card is-emerald finance-income-card">
+                  <div class="metric-label">{{ financeClientFilter==='ALL'?'本期收入':'客户关联收入' }}</div>
+                  <div class="metric-money-list"><div v-for="item in financeMoneyRows(financeReceivableTotals.expected)" :key="'recv-'+item.currency" class="metric-money-row"><span class="metric-money-currency">{{ item.currency }}</span><span class="metric-money-amount">{{ item.text }}</span></div></div>
+                  <div class="income-card-subline">{{ financeClientFilter==='ALL'?'客户关联收入 + 公司独立收入':'仅统计当前客户关联收入' }}</div>
+                  <div v-if="financeSummaryReceivables.length===0" class="metric-note">当前核算周期暂无收入项目。</div>
+                </div>
+                <div class="finance-kpi-card is-blue"><div class="metric-label">账单已收</div><div class="metric-money-list"><div v-for="item in financeMoneyRows(financeReceivableTotals.paid)" :key="'paid-'+item.currency" class="metric-money-row"><span class="metric-money-currency">{{ item.currency }}</span><span class="metric-money-amount">{{ item.text }}</span></div></div><div class="metric-note">当前周期账单截至现在累计已收；跨月回款也会回填到原账单。</div></div>
+                <div class="finance-kpi-card is-blue"><div class="metric-label">本期实际到账</div><div class="metric-money-list"><div v-for="item in financeMoneyRows(financeCashReceivedGroups)" :key="'cash-'+item.currency" class="metric-money-row"><span class="metric-money-currency">{{ item.currency }}</span><span class="metric-money-amount">{{ item.text }}</span></div></div><div class="metric-note">严格按回款流水的实际到账日期统计，用于查看本期现金回收。</div></div>
+                <div class="finance-kpi-card is-rose"><div class="metric-label">待收款</div><div class="metric-money-list"><div v-for="item in financeMoneyRows(financeReceivableTotals.unpaid)" :key="'unpaid-'+item.currency" class="metric-money-row"><span class="metric-money-currency">{{ item.currency }}</span><span class="metric-money-amount">{{ item.text }}</span></div></div><div class="metric-note">收入金额 − 账单已收；仅表示仍需收回的金额。</div></div>
+                <div class="finance-kpi-card is-amber"><div class="metric-label">{{ financeClientFilter==='ALL'?'本期总成本':'客户归属成本' }}</div><div class="metric-money-list"><div v-for="item in financeMoneyRows(financeCostGroups)" :key="'total-cost-'+item.currency" class="metric-money-row"><span class="metric-money-currency">{{ item.currency }}</span><span class="metric-money-amount">{{ item.text }}</span></div></div><div class="metric-note" v-if="financeClientFilter==='ALL'"><b>已包含客户专属成本 + 公司项目成本 + 公司公共成本</b>；详细构成在下方成本模块查看。</div><div class="metric-note" v-else><div><b>构成：</b>客户专属成本 {{ spendGroupsText(financeDirectClientCostGroups) }} · 公共成本分摊 {{ spendGroupsText(financePublicCostDisplayGroups) }}</div><div class="mt-1">净利润只扣减本卡金额一次。</div></div></div>
+              </div>
+              <div class="finance-kpi-grid mt-3">
+                <div class="finance-kpi-card is-slate"><div class="metric-label">预计净利润</div><div class="metric-money-list"><div v-for="item in financeMoneyRows(financeExpectedNetProfitGroups)" :key="'expected-profit-'+item.currency" class="metric-money-row"><span class="metric-money-currency">{{ item.currency }}</span><span class="metric-money-amount">{{ item.text }}</span></div></div><div class="profit-breakdown"><div v-for="item in financeProfitBreakdownRows('EXPECTED')" :key="'expected-breakdown-'+item.currency" class="profit-breakdown-row"><span class="profit-breakdown-currency">{{ item.currency }}</span><div class="profit-breakdown-formula">收入 {{ item.receivableText }} + 预计返点 {{ item.rebateText }} − 成本 {{ item.costText }} = <b>{{ item.netText }}</b></div></div></div></div>
+                <div class="finance-kpi-card" :class="financeProfitConfirmation.complete?'is-emerald':'is-amber'"><div class="metric-label">{{ financeActualProfitLabel }}</div><div class="metric-money-list"><div v-for="item in financeMoneyRows(financeActualNetProfitGroups)" :key="'actual-profit-'+item.currency" class="metric-money-row"><span class="metric-money-currency">{{ item.currency }}</span><span class="metric-money-amount">{{ item.text }}</span></div></div><div class="profit-breakdown"><div v-for="item in financeProfitBreakdownRows('ACTUAL')" :key="'actual-breakdown-'+item.currency" class="profit-breakdown-row"><span class="profit-breakdown-currency">{{ item.currency }}</span><div class="profit-breakdown-formula">收入 {{ item.receivableText }} + 实际返点 {{ item.rebateText }} − 成本 {{ item.costText }} = <b>{{ item.netText }}</b></div></div></div><div class="metric-note">{{ financeActualProfitNote }}</div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ① Accounts Receivable -->
+          <div class="bg-white border border-slate-200 rounded-2xl soft-shadow overflow-visible">
+            <div class="p-4 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+              <div><div class="font-extrabold text-sm"><span class="text-emerald-600 mr-1">①</span>收入 / 应收 / 回款</div><div class="text-[10px] text-slate-400 mt-1">收入项目可以关联客户，也可以不关联客户。关联客户的直接成本进入客户专属成本；公司独立收入的直接成本进入公司项目成本。</div></div>
+              <div cla
