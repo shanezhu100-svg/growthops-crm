@@ -45,6 +45,19 @@ if html.count('createApp({') != 1:
     raise SystemExit('Unexpected Vue app bootstrap count')
 html = html.replace('createApp({', 'window.__growthOpsVm=createApp({', 1)
 
+# Remove the small pointer icons from the four lead summary cards while
+# preserving the cards' click/filter behavior and all other layout/content.
+lead_pointer_icons = (
+    '<i class="fa-solid fa-arrow-pointer text-[9px] text-slate-300"></i>',
+    '<i class="fa-solid fa-arrow-pointer text-[9px] text-amber-300"></i>',
+    '<i class="fa-solid fa-arrow-pointer text-[9px] text-cyan-300"></i>',
+    '<i class="fa-solid fa-arrow-pointer text-[9px] text-emerald-300"></i>',
+)
+for icon in lead_pointer_icons:
+    if html.count(icon) != 1:
+        raise SystemExit(f'Unexpected lead pointer icon count: {icon}')
+    html = html.replace(icon, '', 1)
+
 start = html.index('\n  mounted(){')
 end = html.index("\n}).mount('#app');", start)
 html = html[:start] + '\n  mounted(){}' + html[end:]
