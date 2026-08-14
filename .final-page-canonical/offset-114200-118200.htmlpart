@@ -1,0 +1,23 @@
+ass="text-[11px] text-slate-400 mt-1">切换广告账户后，只查看当前账户的消耗、累计充值与实时余额；USD 余额 ≤ $100 时自动生成广告费充值提醒。</p></div>
+                <div class="text-[10px] text-indigo-600 bg-indigo-50 border border-indigo-100 px-3 py-1.5 rounded-full font-bold"><i class="fa-solid fa-arrows-rotate mr-1"></i>支持按广告账户切换费用数据</div>
+              </div>
+              <div class="p-5 grid grid-cols-1 xl:grid-cols-2 gap-5">
+                <div>
+                  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                    <div class="text-xs font-extrabold text-blue-900"><i class="fa-brands fa-facebook text-blue-600 mr-1.5"></i>Facebook 广告账户</div>
+                    <span class="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-1 rounded-full">累计消耗 {{ selectedAnalyticsFbAccount ? accountSpendText(selectedAnalyticsFbAccount) : '—' }}</span>
+                  </div>
+                  <div v-if="selectedAnalyticsClient.fbAccounts && selectedAnalyticsClient.fbAccounts.length" class="space-y-3">
+                    <div class="rounded-xl border border-blue-100 bg-blue-50/40 p-3">
+                      <div class="text-[10px] font-bold text-blue-700 mb-1.5">更换 Facebook 广告账户</div>
+                      <select v-model="selectedAnalyticsFbAccountId" class="field bg-white font-bold text-blue-900">
+                        <option v-for="(a,idx) in selectedAnalyticsClient.fbAccounts" :key="a.id || idx" :value="a.id">{{ a.accountName || `Facebook 账号 ${idx+1}` }} · {{ a.adAccountId || '未录入广告账号 ID' }}</option>
+                      </select>
+                    </div>
+                    <div v-for="account in [selectedAnalyticsFbAccount]" :key="account.id" class="rounded-2xl border border-blue-100 bg-blue-50/25 p-4">
+                      <div class="flex items-start justify-between gap-3"><div class="min-w-0"><div class="text-xs font-extrabold text-blue-900 truncate">{{ account.accountName || 'Facebook 广告账户' }}</div><div class="text-[10px] text-slate-400 font-mono mt-1 truncate">{{ account.adAccountId || '未录入广告账号 ID' }}</div></div><span class="shrink-0 text-[10px] font-bold text-blue-600 bg-white border border-blue-100 px-2 py-1 rounded-full">FB</span></div>
+                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+                        <div v-if="account.adDataRecords && account.adDataRecords.length" class="sm:col-span-2 rounded-xl bg-cyan-50 border border-cyan-100 p-3"><div class="flex items-center justify-between gap-3"><div><div class="text-[10px] font-semibold text-cyan-700">账户累计消耗 · 广告数据自动同步</div><div class="text-lg font-black text-slate-900 mt-1">{{ accountSpendText(account) }}</div></div><span class="text-[10px] font-bold text-cyan-700 bg-white border border-cyan-100 px-2 py-1 rounded-full">{{ account.adDataRecords.length }} 条数据</span></div></div>
+                        <div v-else class="sm:col-span-2 rounded-xl border border-dashed border-cyan-200 bg-cyan-50/30 p-3"><div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3"><div><div class="text-[10px] font-extrabold text-cyan-700">暂无广告数据</div><div class="text-[10px] text-slate-400 mt-1">无需单独填写消耗，录入一次广告数据后会自动计算并同步两处。</div></div><button @click="openAdDataFromAnalytics('FB',account)" class="h-9 px-3 rounded-xl bg-cyan-600 text-white text-[11px] font-bold shrink-0"><i class="fa-solid fa-plus mr-1"></i>录入广告数据</button></div></div>
+                        <div class="rounded-xl bg-white border border-emerald-100 p-3"><div class="text-[10px] text-slate-400">累计充值</div><div class="text-sm font-extrabold text-emerald-600 mt-1">{{ accountRechargeText(account) }}</div></div>
+                        <div class="rounded-xl bg-whit
