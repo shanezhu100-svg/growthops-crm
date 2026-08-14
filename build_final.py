@@ -41,12 +41,18 @@ key = re.search(r"const API_KEY='([^']+)'", legacy)
 if not url or not key:
     raise SystemExit('Existing browser-safe Supabase config not found')
 
+def replace_once(old, new, label):
+    global html
+    count = html.count(old)
+    if count != 1:
+        raise SystemExit(f'Unexpected {label} count: {count}')
+    html = html.replace(old, new, 1)
+
 if html.count('createApp({') != 1:
     raise SystemExit('Unexpected Vue app bootstrap count')
 html = html.replace('createApp({', 'window.__growthOpsVm=createApp({', 1)
 
-# Remove the small pointer icons from the four lead summary cards while
-# preserving the cards' click/filter behavior and all other layout/content.
+# Preserve the user's approved UI while removing only the four pointer glyphs.
 lead_pointer_icons = (
     '<i class="fa-solid fa-arrow-pointer text-[9px] text-slate-300"></i>',
     '<i class="fa-solid fa-arrow-pointer text-[9px] text-amber-300"></i>',
@@ -58,9 +64,60 @@ for icon in lead_pointer_icons:
         raise SystemExit(f'Unexpected lead pointer icon count: {icon}')
     html = html.replace(icon, '', 1)
 
+# Server user editing keeps the password when the field is left blank.
+replace_once(
+    '<input v-model="userForm.password" required type="password" autocomplete="new-password" class="field" />',
+    '<input v-model="userForm.password" :required="!userForm.id" type="password" autocomplete="new-password" class="field" :placeholder="userForm.id?\'留空表示保留原密码\':\'至少 10 位\'" />',
+    'user password field'
+)
+replace_once(
+    '当前为单文件演示版，密码保存在浏览器本地。正式上线必须改用服务器认证、哈希密码与数据库。',
+    '账号与权限由服务器管理，密码仅以哈希形式保存；编辑用户时密码留空表示保留原密码。',
+    'user security notice'
+)
+
+# Correct production-only explanatory copy; layout/classes are untouched.
+copy_replacements = (
+    ('④ 登录角色、页面权限、操作审计和全量数据备份。当前单文件版仍是本地数据仓库，正式上线可无缝替换为服务器数据库。',
+     '④ 登录角色、页面权限、操作审计和全量数据备份。正式版业务数据同步至 Supabase 云端数据库。', 'system intro'),
+    ('会话仅保存在当前浏览器', '登录令牌保存在当前浏览器，业务数据同步云端', 'session note'),
+    ('最多保留最近 5 个本地快照', '最多保留最近 5 个云端快照', 'snapshot count note'),
+    ('当前仍是单机 HTML 版本。系统已做页面权限、敏感凭证隐藏、审计日志、月结锁定和备份容量保护；真正多人协作时仍应迁移到后端数据库与服务端登录认证，避免浏览器本地数据被直接读取。',
+     '正式版已连接 Supabase 云端数据库与服务端登录认证，并保留页面权限、敏感凭证隐藏、审计日志、月结锁定和数据备份保护。', 'security production note'),
+    ('本地数据快照', '云端数据快照', 'snapshot heading'),
+)
+for old, new, label in copy_replacements:
+    replace_once(old, new, label)
+
+# The canonical page's original mounted() loads seed/localStorage data. In production
+# it must initialize only UI state/listeners; cloud-adapter.js owns auth and business data.
 start = html.index('\n  mounted(){')
 end = html.index("\n}).mount('#app');", start)
-html = html[:start] + '\n  mounted(){}' + html[end:]
+safe_mounted = r'''
+  mounted(){
+    this.form=this.defaultForm();
+    this.leadForm=this.defaultLeadForm();
+    this.openingForm=this.defaultOpeningForm();
+    this.providerForm=this.defaultProviderForm();
+    this.toolForm=this.defaultToolForm();
+    this.receivableForm=this.defaultReceivableForm();
+    this.costForm=this.defaultCostForm();
+    this.reconciliationForm=this.defaultReconciliationForm();
+    this.userForm={id:null,name:'',username:'',password:'',role:'OPS',enabled:true};
+    this.updateStorageUsage();
+    const allowed=['dashboard','leads','clients','account-opening','alerts','assets','sop','ads','analytics','finance','tools','system','client-detail','client-form'];
+    window.addEventListener('hashchange',()=>{
+      const h=window.location.hash.slice(1);
+      if(this.currentUser&&allowed.includes(h)&&this.canViewPage(h)){
+        this.currentPage=h;
+        if(h==='analytics')this.syncAnalyticsAccountSelection();
+        if(h==='ads')this.syncAdsAccountSelection();
+        if(h==='sop')this.syncSopAccountSelection();
+      }
+    });
+    window.addEventListener('beforeunload',(e)=>{if(this.formDirty){e.preventDefault();e.returnValue=''}});
+  }'''
+html = html[:start] + safe_mounted + html[end:]
 
 config = (
     '<script>'
