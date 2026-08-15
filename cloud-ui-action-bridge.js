@@ -30,14 +30,14 @@
       });
     });
   };
-  function findModalBySubmit(method){
-    const form=[...document.querySelectorAll('form')].find(f=>f.getAttribute('@submit.prevent')===method||f.getAttribute('v-on:submit.prevent')===method);
-    return form?.closest('.fixed.inset-0.modal-backdrop')||null;
+  function modalByButton(match){
+    const button=[...document.querySelectorAll('button')].find(b=>match(text(b)));
+    return button?.closest('.fixed.inset-0.modal-backdrop')||null;
   }
   function install(){
-    bindModal(findModalBySubmit('saveOpeningDeal'),'showOpeningModal',label=>label==='保存客户开户渠道','saveOpeningDeal');
-    bindModal(findModalBySubmit('saveOpeningProvider'),'showProviderModal',label=>label==='保存开户商','saveOpeningProvider');
-    bindModal(findModalBySubmit('saveAdDataRecord'),'showAdDataModal',label=>label.includes('保存并同步数据')||label.includes('更新并同步数据'),'saveAdDataRecord');
+    bindModal(modalByButton(label=>label==='保存客户开户渠道'),'showOpeningModal',label=>label==='保存客户开户渠道','saveOpeningDeal');
+    bindModal(modalByButton(label=>label==='保存开户商'),'showProviderModal',label=>label==='保存开户商','saveOpeningProvider');
+    bindModal(modalByButton(label=>label.includes('保存并同步数据')||label.includes('更新并同步数据')),'showAdDataModal',label=>label.includes('保存并同步数据')||label.includes('更新并同步数据'),'saveAdDataRecord');
     if(vm.currentPage==='client-form'){
       document.querySelectorAll('button').forEach(button=>{
         const label=text(button),icon=button.querySelector('i.fa-arrow-left');
@@ -49,5 +49,5 @@
   observer.observe(document.documentElement,{subtree:true,childList:true});
   setInterval(install,250);
   install();
-  window.__GROWTHOPS_UI_ACTION_BRIDGE__={installed:true,version:'native-action-bridge-v1'};
+  window.__GROWTHOPS_UI_ACTION_BRIDGE__={installed:true,version:'native-action-bridge-v2'};
 })();
