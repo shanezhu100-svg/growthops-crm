@@ -11,7 +11,7 @@ security='<script src="/cloud-security-hotfix.js"></script>'
 tag='<script src="/cloud-ui-action-bridge.js"></script>'
 require(html.count(tag)==1,'UI action bridge tag missing or duplicated')
 require(security+tag in html,'UI action bridge must load immediately after security hotfix')
-for marker in ('saveOpeningDeal','saveOpeningProvider','saveAdDataRecord','showOpeningModal','showProviderModal','showAdDataModal','client-form-back','stopImmediatePropagation','modalByButton','native-action-bridge-v2'):
+for marker in ('saveOpeningDeal','saveOpeningProvider','saveAdDataRecord','showOpeningModal','showProviderModal','showAdDataModal','client-form-back','stopImmediatePropagation','modalByButton','native-action-bridge-v3','reportValidity'):
     require(marker in bridge,f'UI action bridge marker missing: {marker}')
 require("label==='取消'||button.title==='关闭'" in bridge,'modal cancel/close bridge missing')
 require("label==='保存客户开户渠道'" in bridge,'opening save bridge missing')
