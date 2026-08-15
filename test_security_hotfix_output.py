@@ -40,6 +40,31 @@ require(
     '请先点击“导出本地脱敏副本”，导出成功后再重新载入云端最新版本' in p1_overrides,
     'P1 conflict recovery inline export guidance missing'
 )
+require(
+    "sessionStorage.setItem('growthops_p1_conflict_backup_exported_at'" in p1_overrides,
+    'P1 conflict recovery durable backup marker missing'
+)
+require(
+    "sessionStorage.getItem('growthops_p1_conflict_backup_exported_at')" in p1_overrides,
+    'P1 conflict recovery does not reuse durable backup marker'
+)
+require(
+    "nextUrl.searchParams.set('_cloudReload',Date.now().toString())" in p1_overrides,
+    'P1 conflict recovery cache-busting navigation marker missing'
+)
+require(
+    'window.location.replace(nextUrl.toString())' in p1_overrides,
+    'P1 conflict recovery must use hard navigation'
+)
+require(
+    'window.location.reload()' not in p1_overrides,
+    'P1 conflict recovery must not use reload() self-lock path'
+)
+require(
+    "recoveryUrl.searchParams.has('_cloudReload')" in p1_overrides and
+    "sessionStorage.removeItem('growthops_p1_conflict_backup_exported_at')" in p1_overrides,
+    'P1 conflict recovery one-shot marker cleanup missing'
+)
 
 for key in (
     'fbloginpassword','tkloginpassword','twofactorsecret','recoverycodes','backupcodes','totpsecret'
