@@ -1,0 +1,65 @@
+from pathlib import Path
+import hashlib
+
+root = Path(__file__).resolve().parent
+dist = root / 'dist'
+html = (dist / 'index.html').read_text(encoding='utf-8')
+adapter = (dist / 'cloud-adapter.js').read_text(encoding='utf-8')
+security = (dist / 'cloud-security-hotfix.js').read_text(encoding='utf-8')
+stage = (root / 'supabase/migrations/20260815_security_vault_stage.sql').read_text(encoding='utf-8')
+enforce = (root / 'supabase/migrations/20260815_security_vault_enforce.sql').read_text(encoding='utf-8')
+
+def require(condition, message):
+    if not condition:
+        raise SystemExit(message)
+
+security_tag = '<script src="/cloud-security-hotfix.js"></script>'
+require(html.count(security_tag) == 1, 'security hotfix script tag missing or duplicated')
+require(
+    '<script src="/cloud-p0-overrides.js"></script>' + security_tag in html,
+    'security hotfix must load after P0 without disturbing P0/P1 order'
+)
+
+require(adapter.count("rpc('crm_login_v3'") == 1, 'v3 login endpoint missing or duplicated')
+require(adapter.count("rpc('crm_load_state_v3'") == 1, 'v3 load endpoint missing or duplicated')
+require("rpc('crm_login'" not in adapter, 'legacy crm_login endpoint remains in final adapter')
+require("rpc('crm_load_state'" not in adapter, 'legacy crm_load_state endpoint remains in final adapter')
+require("if(d?.error==='INVALID_CREDENTIALS'){vm.notify('账号或密码错误');return}" in adapter, 'P2 login guard lost')
+require("finally{vm.loginForm.password=''}" in adapter, 'P2 login password cleanup lost')
+
+for key in (
+    'fbloginpassword','tkloginpassword','twofactorsecret','recoverycodes','backupcodes','totpsecret'
+):
+    require(key in security, f'security redaction key missing: {key}')
+require("vm.createBackupSnapshot=(notifyUser=false)=>" in security, 'redacted cloud snapshot override missing')
+require("crm_reveal_client_secrets" in security, 'ADMIN on-demand reveal RPC missing')
+require("setTimeout(clearReveal,60000)" in security, '60-second reveal auto-clear missing')
+require('navigator.clipboard' not in security, 'security reveal must not copy secrets to clipboard automatically')
+require('console.log' not in security and 'console.error' not in security, 'security hotfix must not log secret-bearing objects')
+
+for marker in (
+    'crm_workspace_secret_vault',
+    'vault.create_secret',
+    'vault.update_secret',
+    'crm_extract_live_secrets',
+    'crm_merge_secret_updates',
+    'crm_login_v3',
+    'crm_load_state_v3',
+    'crm_reveal_client_secrets',
+    "p_role in ('FINANCE','SALES','OPS')",
+):
+    require(marker in stage, f'stage migration marker missing: {marker}')
+
+require("p_state ? 'clients'" in stage and "p_state ? 'mediaTools'" in stage, 'Vault extraction scope must be live clients/mediaTools only')
+extract_live = stage.split('create or replace function public.crm_extract_live_secrets',1)[1].split('$$;',1)[0]
+require("'backupSnapshots'" not in extract_live, 'backupSnapshots must not be copied into Vault live secret extraction')
+require("set data=v_public_saved" in enforce, 'enforce migration must persist redacted public state only')
+require("crm_redact_secrets(coalesce(data,'{}'::jsonb))" in enforce, 'enforce migration must purge residual workspace secrets')
+require("declare s jsonb:=public.crm_redact_secrets" in enforce, 'enforce role view must redact ADMIN too')
+
+print(
+    'SECURITY_OUTPUT_TESTS_OK: '
+    f'index={hashlib.sha256((dist / "index.html").read_bytes()).hexdigest()}; '
+    f'adapter={hashlib.sha256((dist / "cloud-adapter.js").read_bytes()).hexdigest()}; '
+    f'security={hashlib.sha256((dist / "cloud-security-hotfix.js").read_bytes()).hexdigest()}'
+)
