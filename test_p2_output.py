@@ -28,15 +28,25 @@ script_order = (
 )
 require(html.count(script_order) == 1, 'P2 changed P1/archive/adapter/P0 script order')
 
-# P2 must not silently decide the unresolved first-month invoice business rule.
+# P2 billing rule A: only the first contract month may be clamped to startDate.
+safe_auto_due = "dueDate:(()=>{const scheduled=this.monthDueDate(month,client.renewalAlertDay),start=String(client.startDate||'').slice(0,10);return start&&month===start.slice(0,7)&&scheduled<start?start:scheduled})(),"
+require(html.count(safe_auto_due) == 1, 'P2 option-A automatic receivable due-date clamp missing or duplicated')
 require(
-    'dueDate:this.monthDueDate(month,client.renewalAlertDay)' in html,
-    'P2 unexpectedly changed automatic receivable due-date rule'
+    'dueDate:this.monthDueDate(month,client.renewalAlertDay),' not in html,
+    'P2 legacy automatic receivable due-date rule remains'
 )
 require(
     "return this.createReceivableForClientMonth(client,firstMonth,{allowFuture:true})" in html,
     'P2 unexpectedly changed first-receivable generation rule'
 )
+
+def option_a_due(scheduled, start_date, month):
+    start = str(start_date or '')[:10]
+    return start if start and month == start[:7] and scheduled < start else scheduled
+
+require(option_a_due('2026-08-25', '2026-08-28', '2026-08') == '2026-08-28', 'P2 option-A clamp example failed')
+require(option_a_due('2026-08-25', '2026-08-20', '2026-08') == '2026-08-25', 'P2 option-A non-clamp example failed')
+require(option_a_due('2026-09-25', '2026-08-28', '2026-09') == '2026-09-25', 'P2 option-A later-month due day changed')
 
 require("if(d?.error==='INVALID_CREDENTIALS'){vm.notify('账号或密码错误');return}" in adapter, 'P2 login JSON-error compatibility guard missing')
 require("finally{vm.loginForm.password=''}" in adapter, 'P2 login password cleanup missing')

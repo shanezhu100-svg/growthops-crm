@@ -64,6 +64,16 @@ html = replace_once(
     'browser cache normal copy'
 )
 
+# P2 billing rule A: in the contract's first month, an automatic service-fee
+# invoice cannot be due before the contract start date. Later months keep the
+# configured monthly due day unchanged.
+html = replace_once(
+    html,
+    'dueDate:this.monthDueDate(month,client.renewalAlertDay),',
+    "dueDate:(()=>{const scheduled=this.monthDueDate(month,client.renewalAlertDay),start=String(client.startDate||'').slice(0,10);return start&&month===start.slice(0,7)&&scheduled<start?start:scheduled})(),",
+    'first-month automatic receivable due-date clamp'
+)
+
 script_order = (
     '<script src="/cloud-p1-overrides.js"></script>'
     '<script src="/cloud-p1-archive.js"></script>'
