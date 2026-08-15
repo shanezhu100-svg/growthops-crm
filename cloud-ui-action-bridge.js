@@ -24,6 +24,8 @@
       const label=text(button);
       if(label==='取消'||button.title==='关闭')bind(button,`${stateKey}-close`,()=>closeState(stateKey,root));
       if(saveLabel(label))bind(button,`${stateKey}-save`,()=>{
+        const form=button.closest('form');
+        if(form&&typeof form.reportValidity==='function'&&!form.reportValidity())return;
         if(typeof vm[saveMethod]!=='function'){vm.notify?.('保存功能未加载，请刷新页面');return}
         vm[saveMethod]();
         requestAnimationFrame(()=>{if(vm[stateKey]===false&&root.isConnected)root.remove()});
@@ -49,5 +51,5 @@
   observer.observe(document.documentElement,{subtree:true,childList:true});
   setInterval(install,250);
   install();
-  window.__GROWTHOPS_UI_ACTION_BRIDGE__={installed:true,version:'native-action-bridge-v2'};
+  window.__GROWTHOPS_UI_ACTION_BRIDGE__={installed:true,version:'native-action-bridge-v3'};
 })();
