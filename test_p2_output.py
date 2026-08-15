@@ -1,0 +1,49 @@
+from pathlib import Path
+import hashlib
+
+root = Path(__file__).resolve().parent
+dist = root / 'dist'
+html = (dist / 'index.html').read_text(encoding='utf-8')
+adapter = (dist / 'cloud-adapter.js').read_text(encoding='utf-8')
+
+def require(condition, message):
+    if not condition:
+        raise SystemExit(message)
+
+dynamic_status = """<span class="inline-flex px-2.5 py-1 rounded-full text-xs font-bold" :class="selectedClient.archived?'bg-slate-100 text-slate-600':statusStyle(selectedClient.status)">{{ selectedClient.archived?'已归档':statusText(selectedClient.status) }}</span>"""
+old_status = """<span class="inline-flex px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700">合作中</span>"""
+require(html.count(dynamic_status) == 1, 'P2 client-detail status binding missing or duplicated')
+require(old_status not in html, 'P2 old hard-coded client-detail status still present')
+
+require(html.count('浏览器本地缓存占用 {{ storageUsageText }}') == 1, 'P2 browser-cache usage heading missing')
+require('本地存储容量 {{ storageUsageText }}' not in html, 'P2 misleading local storage heading remains')
+require('尽快迁移到数据库' not in html, 'P2 misleading migration warning remains')
+require('这里只统计此浏览器的 localStorage，不代表 Supabase 数据库或存储配额。' in html, 'P2 localStorage/Supabase scope note missing')
+
+script_order = (
+    '<script src="/cloud-p1-overrides.js"></script>'
+    '<script src="/cloud-p1-archive.js"></script>'
+    '<script src="/cloud-adapter.js"></script>'
+    '<script src="/cloud-p0-overrides.js"></script>'
+)
+require(html.count(script_order) == 1, 'P2 changed P1/archive/adapter/P0 script order')
+
+# P2 must not silently decide the unresolved first-month invoice business rule.
+require(
+    'dueDate:this.monthDueDate(month,client.renewalAlertDay)' in html,
+    'P2 unexpectedly changed automatic receivable due-date rule'
+)
+require(
+    "return this.createReceivableForClientMonth(client,firstMonth,{allowFuture:true})" in html,
+    'P2 unexpectedly changed first-receivable generation rule'
+)
+
+require("if(d?.error==='INVALID_CREDENTIALS'){vm.notify('账号或密码错误');return}" in adapter, 'P2 login JSON-error compatibility guard missing')
+require("finally{vm.loginForm.password=''}" in adapter, 'P2 login password cleanup missing')
+require(adapter.count("rpc('crm_login'") == 1, 'P2 unexpected crm_login call count')
+
+print(
+    'P2_OUTPUT_TESTS_OK: '
+    f'index={hashlib.sha256((dist / "index.html").read_bytes()).hexdigest()}; '
+    f'adapter={hashlib.sha256((dist / "cloud-adapter.js").read_bytes()).hexdigest()}'
+)
