@@ -5,6 +5,7 @@ root = Path(__file__).resolve().parent
 dist = root / 'dist'
 html = (dist / 'index.html').read_text(encoding='utf-8')
 adapter = (dist / 'cloud-adapter.js').read_text(encoding='utf-8')
+p1_overrides = (dist / 'cloud-p1-overrides.js').read_text(encoding='utf-8')
 security = (dist / 'cloud-security-hotfix.js').read_text(encoding='utf-8')
 stage = (root / 'supabase/migrations/20260815_security_vault_stage.sql').read_text(encoding='utf-8')
 enforce = (root / 'supabase/migrations/20260815_security_vault_enforce.sql').read_text(encoding='utf-8')
@@ -26,6 +27,19 @@ require("rpc('crm_login'" not in adapter, 'legacy crm_login endpoint remains in 
 require("rpc('crm_load_state'" not in adapter, 'legacy crm_load_state endpoint remains in final adapter')
 require("if(d?.error==='INVALID_CREDENTIALS'){vm.notify('账号或密码错误');return}" in adapter, 'P2 login guard lost')
 require("finally{vm.loginForm.password=''}" in adapter, 'P2 login password cleanup lost')
+
+require(
+    p1_overrides.count("cloud.rpc('crm_load_state_v3',{p_token:token})") == 1,
+    'P1 conflict recovery must use v3 redacted load endpoint exactly once'
+)
+require(
+    "cloud.rpc('crm_load_state',{p_token:token})" not in p1_overrides,
+    'P1 conflict recovery still calls legacy secret-bearing load endpoint'
+)
+require(
+    '请先点击“导出本地脱敏副本”，导出成功后再重新载入云端最新版本' in p1_overrides,
+    'P1 conflict recovery inline export guidance missing'
+)
 
 for key in (
     'fbloginpassword','tkloginpassword','twofactorsecret','recoverycodes','backupcodes','totpsecret'
@@ -61,5 +75,6 @@ print(
     'SECURITY_OUTPUT_TESTS_OK: '
     f'index={hashlib.sha256((dist / "index.html").read_bytes()).hexdigest()}; '
     f'adapter={hashlib.sha256((dist / "cloud-adapter.js").read_bytes()).hexdigest()}; '
+    f'p1={hashlib.sha256((dist / "cloud-p1-overrides.js").read_bytes()).hexdigest()}; '
     f'security={hashlib.sha256((dist / "cloud-security-hotfix.js").read_bytes()).hexdigest()}'
 )
