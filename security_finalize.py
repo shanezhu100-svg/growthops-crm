@@ -60,13 +60,61 @@ p1_overrides = replace_once(
       notify(vm,'请先导出本地脱敏副本，确认保存后再重新载入云端最新版本');
       return false;
     }""",
-    """if(state.active&&!state.localBackupExportedAt){
+    """const persistedBackupAt=(()=>{try{return sessionStorage.getItem('growthops_p1_conflict_backup_exported_at')||null}catch{return null}})();
+    if(!state.localBackupExportedAt&&persistedBackupAt)state.localBackupExportedAt=persistedBackupAt;
+    if(state.active&&!state.localBackupExportedAt){
       const status=overlay?.querySelector?.('[data-p1-status]');
       if(status)status.textContent='请先点击“导出本地脱敏副本”，导出成功后再重新载入云端最新版本';
       notify(vm,'请先导出本地脱敏副本，确认保存后再重新载入云端最新版本');
       return false;
     }""",
-    'P1 conflict recovery inline export guidance'
+    'P1 conflict recovery durable export guidance'
+)
+p1_overrides = replace_once(
+    p1_overrides,
+    """state.localBackupExportedAt=nowIso();
+    // Conflict recovery export must remain local-only""",
+    """state.localBackupExportedAt=nowIso();
+    try{sessionStorage.setItem('growthops_p1_conflict_backup_exported_at',state.localBackupExportedAt)}catch{}
+    // Conflict recovery export must remain local-only""",
+    'P1 conflict recovery durable export marker'
+)
+p1_overrides = replace_once(
+    p1_overrides,
+    """state.remoteRevision=Number(d.revision||state.remoteRevision||0);
+      state.allowReload=true;
+      window.location.reload();
+      return true;""",
+    """state.remoteRevision=Number(d.revision||state.remoteRevision||0);
+      state.allowReload=true;
+      try{sessionStorage.setItem('growthops_p1_conflict_recovery_revision',String(state.remoteRevision||0))}catch{}
+      const nextUrl=new URL(window.location.href);
+      nextUrl.searchParams.set('_cloudReload',Date.now().toString());
+      removeDialog();
+      hideConflictBanner();
+      window.location.replace(nextUrl.toString());
+      return true;""",
+    'P1 conflict recovery hard navigation'
+)
+p1_overrides = replace_once(
+    p1_overrides,
+    """Object.defineProperty(vm,INSTALLED,{value:true,configurable:false});
+
+    const originalNotify""",
+    """Object.defineProperty(vm,INSTALLED,{value:true,configurable:false});
+
+    try{
+      const recoveryUrl=new URL(window.location.href);
+      if(recoveryUrl.searchParams.has('_cloudReload')){
+        sessionStorage.removeItem('growthops_p1_conflict_backup_exported_at');
+        sessionStorage.removeItem('growthops_p1_conflict_recovery_revision');
+        recoveryUrl.searchParams.delete('_cloudReload');
+        history.replaceState(null,'',recoveryUrl.pathname+recoveryUrl.search+recoveryUrl.hash);
+      }
+    }catch{}
+
+    const originalNotify""",
+    'P1 conflict recovery one-shot marker cleanup'
 )
 
 index_path.write_text(html, encoding='utf-8')
