@@ -48,6 +48,63 @@ adapter = replace_once(
     'security v3 load endpoint'
 )
 
+# Hydration must be read-only. Several legacy normalization/migration helpers can call
+# vm.persist() while state is still being loaded. Suppress those writes so a page open
+# cannot advance the cloud revision and immediately conflict with itself.
+adapter = replace_once(
+    adapter,
+    """let saveTimer=null;
+  let saveChain=Promise.resolve();""",
+    """let saveTimer=null;
+  let saveChain=Promise.resolve();
+  let hydrating=false;
+  let suppressPersist=false;""",
+    'cloud hydration guards'
+)
+adapter = replace_once(
+    adapter,
+    """  async function enter(d){
+    token=d?.token||token;revision=Number(d?.revision||0);if(token)localStorage.setItem(TOKEN_KEY,token);
+    applyState(d?.state||{});vm.currentUser=d?.user||null;await loadUsers();syncSelections();routeFromHash();
+    const before=vm.backupSnapshots.length;
+    vm.ensureDailyBackup();
+    if(vm.backupSnapshots.length!==before)vm.persist();
+    vm.updateStorageUsage();
+  }""",
+    """  async function enter(d){
+    hydrating=true;
+    try{
+      token=d?.token||token;revision=Number(d?.revision||0);if(token)localStorage.setItem(TOKEN_KEY,token);
+      applyState(d?.state||{});vm.currentUser=d?.user||null;await loadUsers();syncSelections();routeFromHash();
+      vm.updateStorageUsage();
+    }finally{
+      hydrating=false;
+    }
+  }""",
+    'read-only cloud enter'
+)
+adapter = replace_once(
+    adapter,
+    """  async function saveNow(){
+    if(!token||!vm.currentUser)return true;
+    const state=payload();""",
+    """  async function saveNow(){
+    if(!token||!vm.currentUser)return true;
+    // Preserve the ADMIN daily snapshot feature, but create it only as part of an
+    // already-requested save. Its internal persist() calls are suppressed so one
+    // user action still maps to one revision update.
+    suppressPersist=true;
+    try{if(vm.currentUser?.role==='ADMIN')vm.ensureDailyBackup()}finally{suppressPersist=false}
+    const state=payload();""",
+    'daily snapshot folded into explicit save'
+)
+adapter = replace_once(
+    adapter,
+    """  vm.persist=()=>{clearTimeout(saveTimer);saveTimer=setTimeout(()=>{saveChain=saveChain.then(saveNow).catch(e=>{console.error(e);vm.notify(`云端保存失败：${e.message}`);});},180);return true;};""",
+    """  vm.persist=()=>{if(hydrating||suppressPersist)return true;clearTimeout(saveTimer);saveTimer=setTimeout(()=>{saveChain=saveChain.then(saveNow).catch(e=>{console.error(e);vm.notify(`云端保存失败：${e.message}`);});},180);return true;};""",
+    'persist hydration guard'
+)
+
 p1_overrides = replace_once(
     p1_overrides,
     "const d=await cloud.rpc('crm_load_state',{p_token:token});",
