@@ -1,0 +1,42 @@
+本…':'';
+  }
+
+  async function reloadLatestCloud(vm,overlay){
+    const state=getConflictState();
+    if(state.active&&!state.localBackupExportedAt){
+      notify(vm,'请先导出本地脱敏副本，确认保存后再重新载入云端最新版本');
+      return false;
+    }
+    const token=localStorage.getItem(TOKEN_KEY)||'';
+    const cloud=window.__growthOpsCloud;
+    if(!token||typeof cloud?.rpc!=='function'){
+      notify(vm,'无法读取当前云端会话，请重新登录后加载最新版本');
+      return false;
+    }
+    setBusy(overlay,true);
+    try{
+      const d=await cloud.rpc('crm_load_state',{p_token:token});
+      if(!d||typeof d!=='object'||!d.state)throw new Error('云端返回内容无效');
+      state.remoteRevision=Number(d.revision||state.remoteRevision||0);
+      state.allowReload=true;
+      window.location.reload();
+      return true;
+    }catch(e){
+      setBusy(overlay,false);
+      notify(vm,`加载云端最新版本失败：${e?.message||e}`);
+      return false;
+    }
+  }
+
+  function removeDialog(){
+    try{document.getElementById(DIALOG_ID)?.remove()}catch{}
+  }
+
+  function showConflictBanner(vm){
+    if(!document?.body)return;
+    let banner=document.getElementById(BANNER_ID);
+    if(!banner){
+      banner=document.createElement('button');
+      banner.id=BANNER_ID;
+      banner.type='button';
+      banner.style.cssText='position:fixed;right:18px;bottom:18px;z-index:2147483000;border:0;border-radius:999px;background:#b91c1c;color:white;padding:10px 14px;font:600 13px/1.2 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-seri

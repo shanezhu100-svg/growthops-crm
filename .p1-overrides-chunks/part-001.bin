@@ -1,0 +1,46 @@
+ots;
+    p.version='growth-ops-cloud-backup-v2';
+    if(typeof p.exportedAt!=='string'||!p.exportedAt)p.exportedAt=nowIso();
+    const redacted=redactSecrets(p);
+    redacted.redacted=true;
+    redacted.redaction={
+      version:'crm-secret-keys-v1',
+      appliedAt:nowIso(),
+      behavior:'secret keys removed recursively',
+      source:'mirrors public.crm_redact_secrets key policy'
+    };
+    Object.assign(redacted,extra||{});
+    return redacted;
+  }
+
+  function filenameStamp(){
+    return nowIso().replace(/[-:]/g,'').replace(/\.\d{3}Z$/,'Z').replace('T','-');
+  }
+
+  function downloadJson(payload,filename){
+    const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;
+    a.download=filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    return filename;
+  }
+
+  function exportDefaultBackup(vm){
+    const payload=buildRedactedBackup(vm,{backupKind:'DEFAULT_REDACTED'});
+    const filename=`growth-ops-backup-redacted-${localDate(vm)}.json`;
+    downloadJson(payload,filename);
+    try{vm.logAudit?.('导出脱敏业务备份',filename)}catch{}
+    try{vm.persist?.()}catch{}
+    notify(vm,'已导出默认脱敏业务备份；登录账号、密码、2FA/恢复密钥等敏感字段已移除，该文件不能恢复这些凭证');
+    return {payload,filename};
+  }
+
+  function getConflictState(){
+    let s=window.__GROWTHOPS_P1_CONFLICT_STATE__;
+    if(!s||typeof s!=='object'){
+      s={active:false,count:0,fi

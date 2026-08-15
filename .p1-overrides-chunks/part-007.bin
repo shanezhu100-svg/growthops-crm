@@ -1,0 +1,38 @@
+ function install(){
+    const vm=window.__growthOpsVm||window.CRM?.state||window.CRM?.methods;
+    if(!vm||vm[INSTALLED])return false;
+    Object.defineProperty(vm,INSTALLED,{value:true,configurable:false});
+
+    const originalNotify=typeof vm.notify==='function'?vm.notify.bind(vm):()=>{};
+    vm.notify=function(message,...args){
+      const result=originalNotify(message,...args);
+      if(isRevisionConflictMessage(message))queueMicrotask(()=>recordRevisionConflict(vm,message));
+      return result;
+    };
+
+    window.addEventListener('beforeunload',e=>{
+      const state=getConflictState();
+      if(state.active&&!state.allowReload){
+        e.preventDefault();
+        e.returnValue='';
+        return '';
+      }
+    });
+
+    window.__GROWTHOPS_P1_STATUS__={
+      installed:true,
+      installedAt:nowIso(),
+      cloudReady:false,
+      features:['revision-conflict-recovery-ui','default-redacted-download-backup'],
+      secretKeyCount:SECRET_KEYS.size
+    };
+
+    if(window.__GROWTHOPS_P1_TEST_MODE__){
+      window.__GROWTHOPS_P1_TEST__={redactSecrets,buildRedactedBackup,isRevisionConflictMessage,parseRevision,recordRevisionConflict,exportConflictBackup,reloadLatestCloud,getConflictState,finalizeCloudOverrides};
+    }
+    scheduleCloudFinalize(vm);
+    return true;
+  }
+
+  if(!install())window.addEventListener('crm-ready',install,{once:false});
+})();

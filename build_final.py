@@ -136,7 +136,7 @@ if html.count('</body>') != 1:
     raise SystemExit('Unexpected HTML body ending')
 html = html.replace(
     '</body>',
-    config + '<script src="/cloud-adapter.js"></script><script src="/cloud-p0-overrides.js"></script></body>',
+    config + '<script src="/cloud-p1-overrides.js"></script><script src="/cloud-adapter.js"></script><script src="/cloud-p0-overrides.js"></script></body>',
     1
 )
 
@@ -153,11 +153,25 @@ p0digest = hashlib.sha256(p0raw).hexdigest()
 if p0digest != P0_SHA256:
     raise SystemExit(f'P0 override SHA mismatch: {p0digest} != {P0_SHA256}')
 
+p1dir = root / '.p1-overrides-chunks'
+p1parts = sorted(p1dir.glob('part-*.bin'))
+if not p1parts:
+    raise SystemExit('P1 override chunks not found')
+p1raw = b''.join(p.read_bytes() for p in p1parts)
+P1_BYTES = 12573
+P1_SHA256 = '66ec55dd0571b8f13cbb57dc4841433253e5659c4834dbce693d28dbea88f7d2'
+if len(p1raw) != P1_BYTES:
+    raise SystemExit(f'P1 override size mismatch: {len(p1raw)} != {P1_BYTES}')
+p1digest = hashlib.sha256(p1raw).hexdigest()
+if p1digest != P1_SHA256:
+    raise SystemExit(f'P1 override SHA mismatch: {p1digest} != {P1_SHA256}')
+
 out = root / 'dist'
 if out.exists():
     shutil.rmtree(out)
 out.mkdir()
 (out / 'index.html').write_text(html, encoding='utf-8')
+(out / 'cloud-p1-overrides.js').write_bytes(p1raw)
 (out / 'cloud-adapter.js').write_bytes((root / 'cloud-adapter.js').read_bytes())
 (out / 'cloud-p0-overrides.js').write_bytes(p0raw)
-print(f'Built verified CRM source: {TARGET_BYTES} bytes / {digest}; P0 override {P0_BYTES} bytes / {p0digest}')
+print(f'Built verified CRM source: {TARGET_BYTES} bytes / {digest}; P0 override {P0_BYTES} bytes / {p0digest}; P1 override {P1_BYTES} bytes / {p1digest}')

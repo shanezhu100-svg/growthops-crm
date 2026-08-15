@@ -1,0 +1,29 @@
+f;box-shadow:0 8px 24px rgba(0,0,0,.24);cursor:pointer';
+      banner.textContent='云端版本冲突待处理';
+      banner.addEventListener('click',()=>openConflictDialog(vm));
+      document.body.appendChild(banner);
+    }
+    banner.style.display='block';
+  }
+
+  function hideConflictBanner(){
+    try{const b=document.getElementById(BANNER_ID);if(b)b.style.display='none'}catch{}
+  }
+
+  function openConflictDialog(vm){
+    if(!document?.body)return false;
+    hideConflictBanner();
+    let overlay=document.getElementById(DIALOG_ID);
+    if(overlay)return true;
+    const state=getConflictState();
+    overlay=document.createElement('div');
+    overlay.id=DIALOG_ID;
+    overlay.style.cssText='position:fixed;inset:0;z-index:2147483640;background:rgba(15,23,42,.58);display:flex;align-items:center;justify-content:center;padding:20px';
+    const card=document.createElement('div');
+    card.setAttribute('role','dialog');
+    card.setAttribute('aria-modal','true');
+    card.setAttribute('aria-labelledby','growthops-p1-conflict-title');
+    card.style.cssText='width:min(620px,100%);background:white;color:#0f172a;border-radius:16px;box-shadow:0 24px 80px rgba(0,0,0,.32);padding:24px;font:14px/1.55 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
+    card.innerHTML=`
+      <div id="growthops-p1-conflict-title" style="font-size:20px;font-weight:800;margin-bottom:10px">检测到云端版本冲突</div>
+      <div style="color:#475569;margin-bottom:14px">其他成员已经保存了更新。当前页面仍基于旧版本，继续保存会失败。系统不会自动合�

@@ -1,0 +1,41 @@
+ictBackup(vm);
+      const status=card.querySelector('[data-p1-status]');
+      if(status)status.textContent=`已导出：${out.filename}`;
+    });
+    card.querySelector('[data-p1-reload]')?.addEventListener('click',()=>reloadLatestCloud(vm,overlay));
+    card.querySelector('[data-p1-later]')?.addEventListener('click',()=>{removeDialog();showConflictBanner(vm)});
+    return true;
+  }
+
+  function recordRevisionConflict(vm,message){
+    const state=getConflictState();
+    const ts=nowIso();
+    const previousMs=state.lastSeenAt?Date.parse(state.lastSeenAt):0;
+    const sameBurst=state.active&&previousMs&&Date.now()-previousMs<1500;
+    state.active=true;
+    if(!sameBurst)state.count=Number(state.count||0)+1;
+    state.firstSeenAt=state.firstSeenAt||ts;
+    state.lastSeenAt=ts;
+    state.lastMessage=String(message||'');
+    const rev=parseRevision(message);
+    if(rev!=null)state.remoteRevision=rev;
+    state.allowReload=false;
+    if(!sameBurst)state.localBackupExportedAt=null;
+    openConflictDialog(vm);
+    return state;
+  }
+
+  function finalizeCloudOverrides(vm){
+    if(typeof window.__growthOpsCloud?.rpc!=='function')return false;
+    vm.downloadFullBackup=function(){return exportDefaultBackup(this)};
+    if(window.__GROWTHOPS_P1_STATUS__)window.__GROWTHOPS_P1_STATUS__.cloudReady=true;
+    return true;
+  }
+
+  function scheduleCloudFinalize(vm,attempt=0){
+    if(finalizeCloudOverrides(vm))return;
+    if(attempt>=100){if(window.__GROWTHOPS_P1_STATUS__)window.__GROWTHOPS_P1_STATUS__.cloudReady=false;return}
+    setTimeout(()=>scheduleCloudFinalize(vm,attempt+1),20);
+  }
+
+ 

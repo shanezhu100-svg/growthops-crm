@@ -1,0 +1,40 @@
+rstSeenAt:null,lastSeenAt:null,remoteRevision:null,lastMessage:'',allowReload:false,localBackupExportedAt:null};
+      window.__GROWTHOPS_P1_CONFLICT_STATE__=s;
+    }
+    return s;
+  }
+
+  function parseRevision(message){
+    const m=String(message||'').match(/CLOUD_REVISION_CONFLICT\s*:?\s*(\d+)/i);
+    return m?Number(m[1]):null;
+  }
+
+  function isRevisionConflictMessage(message){
+    const s=String(message||'');
+    return /CLOUD_REVISION_CONFLICT/i.test(s)||s.includes('云端数据已被其他成员更新');
+  }
+
+  function exportConflictBackup(vm){
+    const state=getConflictState();
+    const payload=buildRedactedBackup(vm,{
+      backupKind:'REVISION_CONFLICT_LOCAL_COPY',
+      conflict:{
+        detectedAt:state.firstSeenAt||nowIso(),
+        lastSeenAt:state.lastSeenAt||nowIso(),
+        remoteRevision:state.remoteRevision,
+        note:'Local browser state captured after a cloud revision conflict. Secrets are redacted.'
+      }
+    });
+    const filename=`growth-ops-conflict-local-redacted-${filenameStamp()}.json`;
+    downloadJson(payload,filename);
+    state.localBackupExportedAt=nowIso();
+    // Conflict recovery export must remain local-only: audit/persist would immediately retry
+    // the stale revision and create another conflict while the user is trying to recover.
+    return {payload,filename};
+  }
+
+  function setBusy(overlay,busy){
+    if(!overlay)return;
+    for(const btn of overlay.querySelectorAll('button'))btn.disabled=!!busy;
+    const status=overlay.querySelector('[data-p1-status]');
+    if(status)status.textContent=busy?'正在验证云端最新版

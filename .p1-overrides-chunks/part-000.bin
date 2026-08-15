@@ -1,0 +1,39 @@
+(()=>{
+  'use strict';
+
+  const INSTALLED='__GROWTHOPS_P1_OVERRIDES_INSTALLED__';
+  const TOKEN_KEY='growthops_crm_token_v2';
+  const DIALOG_ID='growthops-p1-revision-conflict';
+  const BANNER_ID='growthops-p1-revision-conflict-banner';
+  const SECRET_KEYS=new Set([
+    'password','loginpassword','login_password','passwd','pwd',
+    'loginaccount','login_account',
+    'fbloginaccount','fbloginpassword','tkloginaccount','tkloginpassword',
+    'twofactor','two_factor','twofactorsecret','two_factor_secret','twofakey','two_fa_key',
+    '2fa','2fakey','2fa_key','backupcodes','backup_codes','recoverycodes','recovery_codes',
+    'totpsecret','totp_secret','secretkey','secret_key'
+  ]);
+
+  const nowIso=()=>new Date().toISOString();
+  const localDate=vm=>{try{return String(vm?.localDateKey?.()||'').slice(0,10)||nowIso().slice(0,10)}catch{return nowIso().slice(0,10)}};
+  const clone=v=>JSON.parse(JSON.stringify(v));
+  const notify=(vm,msg)=>{try{vm?.notify?.(msg)}catch{}};
+
+  function redactSecrets(value){
+    if(Array.isArray(value))return value.map(redactSecrets);
+    if(value&&typeof value==='object'){
+      const out={};
+      for(const [key,val] of Object.entries(value)){
+        if(SECRET_KEYS.has(String(key).toLowerCase()))continue;
+        out[key]=redactSecrets(val);
+      }
+      return out;
+    }
+    return value;
+  }
+
+  function buildRedactedBackup(vm,extra={}){
+    const raw=typeof vm?.collectBackupPayload==='function'?vm.collectBackupPayload():{};
+    const p=raw&&typeof raw==='object'&&!Array.isArray(raw)?clone(raw):{};
+    delete p.authUsers;
+    delete p.backupSnapsh
