@@ -28,6 +28,24 @@ require("rpc('crm_load_state'" not in adapter, 'legacy crm_load_state endpoint r
 require("if(d?.error==='INVALID_CREDENTIALS'){vm.notify('账号或密码错误');return}" in adapter, 'P2 login guard lost')
 require("finally{vm.loginForm.password=''}" in adapter, 'P2 login password cleanup lost')
 
+# Opening/reloading cloud state must be read-only. Legacy normalization helpers can
+# invoke persist() during applyState(), so the adapter needs an explicit hydration guard.
+require('let hydrating=false;' in adapter, 'cloud hydration guard missing')
+require('let suppressPersist=false;' in adapter, 'nested persist suppression guard missing')
+require('hydrating=true;' in adapter and 'finally{\n      hydrating=false;' in adapter, 'enter() does not bracket hydration')
+require(
+    'vm.persist=()=>{if(hydrating||suppressPersist)return true;' in adapter,
+    'persist() is not suppressed during hydration/internal snapshot creation'
+)
+enter_block = adapter.split('async function enter(d){',1)[1].split('async function saveNow(){',1)[0]
+require('vm.ensureDailyBackup()' not in enter_block, 'page load must not create/save a daily backup')
+require('vm.persist()' not in enter_block, 'page load must not persist cloud state')
+save_block = adapter.split('async function saveNow(){',1)[1].split('vm.persist=()=>',1)[0]
+require(
+    "suppressPersist=true;" in save_block and "if(vm.currentUser?.role==='ADMIN')vm.ensureDailyBackup()" in save_block,
+    'ADMIN daily backup must be folded into an already-requested save'
+)
+
 require(
     p1_overrides.count("cloud.rpc('crm_load_state_v3',{p_token:token})") == 1,
     'P1 conflict recovery must use v3 redacted load endpoint exactly once'
