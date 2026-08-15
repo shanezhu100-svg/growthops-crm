@@ -1,0 +1,41 @@
+ents 包含无效客户');
+      for(const k of ['fbAccounts','tkAccounts','googleAccounts','instagramAccounts','networkEnvironments','adCampaigns'])if(k in c&&!Array.isArray(c[k]))throw new Error(`客户 ${c.name||c.id||''} 的 ${k} 必须是数组`);
+      for(const a of [...arr(c.fbAccounts),...arr(c.tkAccounts)]){
+        if(a&&'adDataRecords'in a&&!Array.isArray(a.adDataRecords))throw new Error('广告账户 adDataRecords 必须是数组');
+        if(a&&'rechargeHistory'in a&&!Array.isArray(a.rechargeHistory))throw new Error('广告账户 rechargeHistory 必须是数组');
+      }
+    }
+    for(const r of p.financeReceivables)if(r&&'payments'in r&&!Array.isArray(r.payments))throw new Error('financeReceivables.payments 必须是数组');
+    for(const provider of p.openingProviders)if(provider&&'contacts'in provider&&!Array.isArray(provider.contacts))throw new Error('openingProviders.contacts 必须是数组');
+    for(const tool of p.mediaTools)if(tool&&'bindings'in tool&&!Array.isArray(tool.bindings))throw new Error('mediaTools.bindings 必须是数组');
+    return true;
+  }
+  function syncSelectionsAfterBackup(vm){
+    const active=arr(vm.activeClients).length?arr(vm.activeClients):arr(vm.clients).filter(c=>!c.archived);
+    const first=active[0]||null;
+    vm.selectedClientId=first?.id||null;vm.selectedAssetsClientId=first?.id||null;vm.selectedSopClientId=first?.id||null;vm.selectedAnalyticsClientId=first?.id||0;vm.selectedAdsClientId=first?.id||0;
+    vm.syncAnalyticsAccountSelection?.();vm.syncAdsAccountSelection?.();vm.syncSopAccountSelection?.(true);
+  }
+  function routeAfterBackup(vm){
+    try{const h=String(window.location?.hash||'').slice(1),allowed=['dashboard','leads','clients','account-opening','alerts','assets','sop','ads','analytics','finance','tools','system','client-detail','client-form'];if(h&&allowed.includes(h)&&vm.canViewPage?.(h))vm.currentPage=h;else if(vm.currentUser&&vm.canViewPage&&!vm.canViewPage(vm.currentPage))vm.currentPage='dashboard'}catch{}
+  }
+  function applyBusinessBackupP0(vm,p){
+    vm.clients=arr(p.clients).map(c=>vm.normalizeClient?vm.normalizeClient(c):clone(c));
+    vm.migrateLegacyAccountSpendRecords?.();
+    vm.standaloneAlerts=arr(p.standaloneAlerts).map(a=>vm.normalizeStandaloneAlert?vm.normalizeStandaloneAlert(a):clone(a));
+    vm.reminderTypes=vm.normalizeReminderTypes?vm.normalizeReminderTypes(p.reminderTypes):clone(p.reminderTypes);
+    vm.dismissedAlerts=clone(p.dismissedAlerts);vm.leads=clone(p.leads);
+    vm.openingProviders=arr(p.openingProviders).map(x=>vm.normalizeOpeningProvider?vm.normalizeOpeningProvider(x):clone(x));vm.openingDeals=clone(p.openingDeals);vm.migrateOpeningDeals?.();
+    vm.financeActualRebates=vm.normalizeFinanceActualRebates?vm.normalizeFinanceActualRebates(p.financeActualRebates):clone(p.financeActualRebates);
+    vm.financeReceivables=arr(p.financeReceivables).map(r=>vm.normalizeReceivable?vm.normalizeReceivable(r):clone(r));
+    vm.financeCosts=arr(p.financeCosts).map(c=>vm.normalizeFinanceCost?vm.normalizeFinanceCost(c):clone(c));
+    vm.financeReconciliations=arr(p.financeReconciliations).map(r=>({...clone(r),status:r.status||'CONFIRMED'}));
+    vm.financeMonthLocks=clone(p.financeMonthLocks);vm.financeMonthSnapshots=clone(p.financeMonthSnapshots);
+    vm.restoreSopProgress?.(p.sopProgress);vm.mediaTools=arr(p.mediaTools).map(t=>vm.normalizeMediaTool?vm.normalizeMediaTool(t):clone(t));vm.auditLogs=clone(p.auditLogs);
+    vm.migrateLegacyActualRebatesToReconciliations?.();vm.ensureAutomaticReceivables?.({silent:true});vm.ensureAutomaticAssetCosts?.({month:(vm.localDateKey?.()||nowDate()).slice(0,7),silent:true});vm.ensureAutomaticOpeningFeeCosts?.();vm.ensureReceivableLinkedCosts?.();vm.ensureFinanceSnapshotsForLocks?.();
+    syncSelectionsAfterBackup(vm);routeAfterBackup(vm);vm.persist?.();
+  }
+
+  function backupSummary(vm,p){
+    const before={clients:arr(vm.clients).length,leads:arr(vm.leads).length,opening:arr(vm.openingDeals).length,receivables:arr(vm.financeReceivables).length,costs:arr(vm.financeCosts).length};
+    const after={

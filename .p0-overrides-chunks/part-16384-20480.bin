@@ -1,0 +1,29 @@
+clicks','revenue','reach','conversions'])if(s[k]===null)n[k]=null;for(const k of ['legacyCtr','legacyRoas'])if(k in s)n[k]=s[k];}return out;
+    });
+
+    // P0-04: ad record identity collision + original/target month locks + legacy edit without campaign.
+    wrap(vm,'saveAdDataRecord',function(old){
+      const client=this.selectedAdsClient,account=this.selectedAdsAccount;if(!client||!account)return old();
+      const editing=arr(account.adDataRecords).find(r=>sid(r.id)===sid(this.editingAdDataRecordId));
+      const targetMonth=monthOf(this.adDataForm?.date||this.localDateKey?.());
+      const originalMonth=monthOf(editing?.date);
+      if(originalMonth&&locked(this,originalMonth)){notify(this,`${originalMonth} 已月结锁定，不能修改该历史广告数据`);return}
+      if(targetMonth&&locked(this,targetMonth)){notify(this,`${targetMonth} 已月结锁定，不能保存广告数据`);return}
+      const identity=[this.adDataForm?.date||'',this.adDataForm?.campaignId||'',this.adDataForm?.adSetId||'',this.adDataForm?.adId||''].join('|');
+      const collision=arr(account.adDataRecords).find(r=>sid(r.id)!==sid(editing?.id)&&[r.date||'',r.campaignId||'',r.adSetId||'',r.adId||''].join('|')===identity);
+      if(collision){notify(this,'该日期 / 广告系列 / 广告组 / 广告组合已存在记录，请编辑现有记录，已阻止覆盖其他历史数据');return}
+      const targetFinance={date:this.adDataForm?.date||this.localDateKey?.()||localToday(this),currency:this.adDataForm?.currency||account.adSpendCurrency||'USD',spend:num(this.adDataForm?.spend)};
+      const financeChanged=!editing||sid(editing.date)!==sid(targetFinance.date)||sid(editing.currency||account.adSpendCurrency||'USD')!==sid(targetFinance.currency)||num(editing.spend)!==num(targetFinance.spend);
+      if(financeChanged&&(confirmedReconciliationForRecord(this,client,account,editing)||confirmedReconciliationForRecord(this,client,account,targetFinance))){notify(this,'该广告消耗已进入已确认返点对账，不能新增、移动或修改消耗金额/币种；如需调整请先处理对应返点对账');return}
+      if(editing?.legacySpendMigration&&!this.adDataForm?.campaignId){
+        const now=new Date().toISOString(),f=this.adDataForm||{};
+        Object.assign(editing,{date:f.date||editing.date,currency:f.currency||editing.currency,spend:num(f.spend),impressions:f.impressions===''?editing.impressions:num(f.impressions),reach:f.reach===''?editing.reach:num(f.reach),clicks:f.clicks===''?null:num(f.clicks),leads:f.leads===''?editing.leads:num(f.leads),conversions:f.conversions===''?null:num(f.conversions),revenue:f.revenue===''?null:num(f.revenue),note:f.note||editing.note,updatedAt:now,legacySpendMigration:true});
+        this.syncAccountAnalyticsFromRecords?.(account);this.syncClientPlatformAnalytics?.(client,this.selectedAdsPlatform);this.persist?.();this.showAdDataModal=false;this.editingAdDataRecordId=null;this.logAudit?.('修改迁移广告数据',`${client.name} · ${editing.date}`);notify(this,'迁移广告数据已更新；无需补建历史广告方案');return;
+      }
+      return old();
+    });
+    wrap(vm,'deleteAdDataRecord',function(old,record){if(locked(this,monthOf(record?.date))){notify(this,`${monthOf(record?.date)} 已月结锁定，不能删除历史广告数据`);return}const found=recordById(this,record?.id),client=found?.client||this.selectedAdsClient,account=found?.account||this.selectedAdsAccount;if(confirmedReconciliationForRecord(this,client,account,record)){notify(this,'该广告消耗已进入已确认返点对账，不能删除；如需调整请先处理对应返点对账');return}return old(record)});
+
+    // P0-05: campaign/adset/ad objects referenced by historical data cannot be deleted.
+    wrap(vm,'removeAdCampaign',function(old,campaign){const refs=adRecordReferences(this,campaign?.id);if(refs.length){notify(this,`删除受保护：该广告系列已被 ${refs.length} 条历史广告数据引用`);return}return old(campaign)});
+    wrap(vm,'removeAdSet',function(old,campaign,adset){const refs=adR

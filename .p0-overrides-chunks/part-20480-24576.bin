@@ -1,0 +1,24 @@
+ecordReferences(this,campaign?.id,adset?.id);if(refs.length){notify(this,`删除受保护：该广告组已被 ${refs.length} 条历史广告数据引用`);return}return old(campaign,adset)});
+    wrap(vm,'removeCreative',function(old,adset,ad){const refs=adRecordReferences(this,'',adset?.id,ad?.id);if(refs.length){notify(this,`删除受保护：该广告已被 ${refs.length} 条历史广告数据引用`);return}return old(adset,ad)});
+
+    // P0-06: ad-account deletion/final-save guards, including recharge/SOP/ALL bindings/openings.
+    wrap(vm,'removePlatformAccount',function(old,platform,index){const list=platform==='TK'?arr(this.form?.tkAccounts):arr(this.form?.fbAccounts),account=list[index],client=findClient(this,this.form?.id);if(client&&account){const persisted=clientAccounts(client,platform).find(a=>sid(a.id)===sid(account.id))||account,reasons=accountProtectedReasons(this,client,platform,persisted);if(reasons.length){notify(this,`删除受保护：【${persisted.accountName||persisted.adAccountId||'广告账户'}】仍关联 ${reasons.join('、')}。请先迁移关联历史。`);return}}return old(platform,index)});
+    wrap(vm,'saveClient',function(old){
+      const persisted=findClient(this,this.form?.id);if(persisted){for(const platform of ['FB','TK']){
+        const key=platform==='TK'?'tkAccounts':'fbAccounts',draft=arr(this.form?.[key]);for(const pa of clientAccounts(persisted,platform)){
+          const reasons=accountProtectedReasons(this,persisted,platform,pa);if(!reasons.length)continue;let da=draft.find(a=>sid(a.id)===sid(pa.id));if(!da){draft.push(clone(pa));continue}
+          if(sid(da.rebateMode||'CHANNEL')!==sid(pa.rebateMode||'CHANNEL')&&accountRebateModeHistoryProtected(this,persisted,pa)){notify(this,`返点归属模式受保护：【${pa.accountName||pa.adAccountId||'广告账户'}】已有历史/已确认消耗，不能把 ${pa.rebateMode||'CHANNEL'} 改为 ${da.rebateMode||'CHANNEL'}`);return}
+          if(specificOpeningUsesAccount(this,persisted,platform,pa)&&String(pa.adAccountId||'').trim()&&sid(da.adAccountId)!==sid(pa.adAccountId))da.adAccountId=pa.adAccountId;
+          else if(!String(da.adAccountId||'').trim()&&String(pa.adAccountId||'').trim())da.adAccountId=pa.adAccountId;
+          if(platform==='FB'&&!String(da.bmId||'').trim()&&String(pa.bmId||'').trim())da.bmId=pa.bmId;
+          if(platform==='TK'&&!String(da.bcId||'').trim()&&String(pa.bcId||'').trim())da.bcId=pa.bcId;
+          da.rechargeHistory=arr(pa.rechargeHistory);da.adDataRecords=arr(pa.adDataRecords);
+        }this.form[key]=draft;
+      }}return old();
+    });
+
+    // P0-07: opening/channel/rebate historical attribution is append-only once used.
+    const originalOwner=typeof vm.openingDealOwnerForRecord==='function'?vm.openingDealOwnerForRecord.bind(vm):null;
+    if(originalOwner){Object.defineProperty(vm,'__p0OriginalOpeningDealOwner',{value:originalOwner,configurable:false});vm.openingDealOwnerForRecord=function(clientId,platform,account,date){const deal=originalOwner(clientId,platform,account,date);if(!deal)return null;const p=arr(this.openingProviders).find(x=>sid(x.id)===sid(deal.providerId));const c=arr(p?.contacts).find(x=>sid(x.id)===sid(deal.contactId));if(!p||!c)return null;const pol=policyForDate(c.rebatePolicies,date);if(!pol||!pol.effectiveDate)return null;return deal};}
+    wrap(vm,'deleteOpeningDeal',function(old,deal){const dates=dealSpendDates(this,deal);if(dates.length||arr(this.financeReconciliations).some(r=>r.status!=='VOID'&&sid(r.providerId)===sid(deal?.providerId)&&sid(r.contactId)===sid(deal?.contactId))){notify(this,'该开户渠道已有历史消耗/返点归属，不能硬删除；请设置结束日期保留历史');return}return old(deal)});
+    wrap(vm,'saveOpeningDeal',function(old){const f=this.openingForm||{},prev=arr(this.openingDeals).find(d=>sid(d.id)===sid(f.id));if(prev){const dates=dealSpendDates(this,prev);if(dates.length){const immutable=['clientId','providerId','contactId','platform','accountScope','adAccountIds','effectiveStartDate','status'];for(const k of immutable)if

@@ -1,0 +1,14 @@
+'只有管理员可以导入备份');if(event?.target)event.target.value='';return}
+      const file=event?.target?.files?.[0];if(event?.target)event.target.value='';if(!file)return;
+      const reader=new FileReader();reader.onload=()=>{try{const p=JSON.parse(String(reader.result||''));validateBackupShape(p);const summary=backupSummary(this,p);this.askConfirm?.({title:'导入全量备份',message:summary,confirmText:'确认导入',tone:'warning'},()=>{try{this.createBackupSnapshot?.(false);applyBusinessBackupP0(this,p);this.logAudit?.('导入全量备份',file.name);this.persist?.();notify(this,'备份已导入并同步云端')}catch(e){notify(this,e?.message||'备份导入失败')}})}catch(e){notify(this,e?.message||'无法读取备份文件')}};reader.readAsText(file,'utf-8');
+    };
+
+    // P1-low-risk included in the old P0 candidate: daily backup action is ADMIN-only in frontend.
+    wrap(vm,'ensureDailyBackup',function(old,...args){if(this.currentUser?.role!=='ADMIN')return false;return old(...args)});
+
+    window.__GROWTHOPS_P0_STATUS__={installed:true,installedAt:new Date().toISOString(),guards:14};
+    return true;
+  }
+
+  if(!install())window.addEventListener('crm-ready',install,{once:false});
+})();

@@ -89,6 +89,13 @@ copy_replacements = (
 for old, new, label in copy_replacements:
     replace_once(old, new, label)
 
+# P0 production hardening: remove the reset-demo UI control from production output.
+# Runtime access is independently disabled by cloud-p0-overrides.js.
+reset_button = re.compile(r'<button\b(?=[^>]*@click=["\']resetDemoData\(\)["\'])[^>]*>.*?</button>', re.S)
+html, reset_count = reset_button.subn('', html)
+if reset_count != 1:
+    raise SystemExit(f'Unexpected reset-demo UI count: {reset_count}')
+
 # The canonical page's original mounted() loads seed/localStorage data. In production
 # it must initialize only UI state/listeners; cloud-adapter.js owns auth and business data.
 start = html.index('\n  mounted(){')
@@ -129,9 +136,22 @@ if html.count('</body>') != 1:
     raise SystemExit('Unexpected HTML body ending')
 html = html.replace(
     '</body>',
-    config + '<script src="/cloud-adapter.js"></script></body>',
+    config + '<script src="/cloud-adapter.js"></script><script src="/cloud-p0-overrides.js"></script></body>',
     1
 )
+
+p0dir = root / '.p0-overrides-chunks'
+p0parts = sorted(p0dir.glob('part-*.bin'))
+if not p0parts:
+    raise SystemExit('P0 override chunks not found')
+p0raw = b''.join(p.read_bytes() for p in p0parts)
+P0_BYTES = 33997
+P0_SHA256 = '96aebe67255397475092b794281d55375f709e74b549955ea57741600f90442f'
+if len(p0raw) != P0_BYTES:
+    raise SystemExit(f'P0 override size mismatch: {len(p0raw)} != {P0_BYTES}')
+p0digest = hashlib.sha256(p0raw).hexdigest()
+if p0digest != P0_SHA256:
+    raise SystemExit(f'P0 override SHA mismatch: {p0digest} != {P0_SHA256}')
 
 out = root / 'dist'
 if out.exists():
@@ -139,4 +159,5 @@ if out.exists():
 out.mkdir()
 (out / 'index.html').write_text(html, encoding='utf-8')
 (out / 'cloud-adapter.js').write_bytes((root / 'cloud-adapter.js').read_bytes())
-print(f'Built verified CRM source: {TARGET_BYTES} bytes / {digest}')
+(out / 'cloud-p0-overrides.js').write_bytes(p0raw)
+print(f'Built verified CRM source: {TARGET_BYTES} bytes / {digest}; P0 override {P0_BYTES} bytes / {p0digest}')

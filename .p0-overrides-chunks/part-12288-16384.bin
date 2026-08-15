@@ -1,0 +1,41 @@
+clients:arr(p.clients).length,leads:arr(p.leads).length,opening:arr(p.openingDeals).length,receivables:arr(p.financeReceivables).length,costs:arr(p.financeCosts).length};
+    return `导入会覆盖当前业务数据。\n客户 ${before.clients} → ${after.clients}\n线索 ${before.leads} → ${after.leads}\n开户记录 ${before.opening} → ${after.opening}\n收入/应收 ${before.receivables} → ${after.receivables}\n成本 ${before.costs} → ${after.costs}\n系统会先创建保护快照；服务器登录账号与权限不会被备份覆盖。`;
+  }
+
+  function wrap(vm,name,fn){const old=vm[name];if(typeof old!=='function'||old.__p0)return false;const w=function(...args){return fn.call(this,old.bind(this),...args)};w.__p0=true;w.__p0Original=old;vm[name]=w;return true}
+
+  function install(){
+    const vm=window.__growthOpsVm||window.CRM?.state||window.CRM?.methods;
+    if(!vm||vm[INSTALLED])return false;
+    Object.defineProperty(vm,INSTALLED,{value:true,configurable:false});
+
+    // P0-01: production reset is impossible even if a hidden/runtime call survives the build.
+    vm.resetDemoData=()=>notify(vm,'生产环境已禁用“恢复演示数据”');
+
+    // P0-02: overdue system reminders stay visible until the underlying item is resolved/renewed/paid.
+    wrap(vm,'deleteAlert',function(old,item){
+      const overdue=['RECEIVABLE','CONTRACT','IP'].includes(item?.typeKey)&&(Number(item?.daysLeft)<0||(item?.dueDate&&String(item.dueDate)<localToday(this)));
+      if(overdue&&!item?.isStandalone){notify(this,'逾期提醒不能永久忽略；请完成回款、续费或更新到期日期后由系统自动关闭');return}
+      return old(item);
+    });
+    wrap(vm,'isAlertDismissed',function(old,item){
+      const overdue=['RECEIVABLE','CONTRACT','IP'].includes(item?.typeKey)&&(Number(item?.daysLeft)<0||(item?.dueDate&&String(item.dueDate)<localToday(this)));
+      if(overdue&&!item?.isStandalone)return false;
+      return old(item);
+    });
+
+    // P0-03: legacy ad migration preserves source metrics and explicit unknowns.
+    vm.migrateLegacyAccountSpendRecords=function(){
+      let migrated=0;
+      for(const client of arr(this.clients))for(const [platform,accounts,source] of [['FB',arr(client.fbAccounts),client.fbData||{}],['TK',arr(client.tkAccounts),client.tkData||{}]])for(const account of accounts){
+        account.adDataRecords=arr(account.adDataRecords);if(account.adDataRecords.length||num(account.adSpend)<=0)continue;
+        const date=this.localDateKey?.()||nowDate(),currency=account.adSpendCurrency||'USD';
+        const impressions=source.impressions==null?null:num(String(source.impressions).replace(/,/g,''));
+        const leads=source.leads==null?null:num(source.leads);
+        account.adDataRecords.push({id:this.accountUid?.('data-legacy')||`data-legacy-${Date.now()}-${migrated}`,date,campaignId:'',campaignName:'',planName:'旧版累计消耗迁移',adSetId:'',adSetName:'',adId:'',adName:'',currency,spend:num(account.adSpend),impressions,reach:null,clicks:null,leads,conversions:null,revenue:null,video3sRate:null,video25Rate:null,video50Rate:null,video75Rate:null,video95Rate:null,videoCompleteRate:null,legacyCtr:source.ctr??null,legacyRoas:source.roas??null,legacySourceMetrics:{impressions,leads,ctr:source.ctr??null,roas:source.roas??null},note:`系统迁移：旧版${platform}累计消耗无日期，已归入 ${date}；源指标已保留，未知点击/收入保持未知。`,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),legacySpendMigration:true});migrated++;
+      }
+      if(migrated)this.logAudit?.('迁移旧版广告消耗',`${migrated} 个广告账户旧版累计消耗已转换为统一广告数据记录`);
+      return migrated;
+    };
+    wrap(vm,'normalizeAdDataRecords',function(old,records){
+      const source=arr(records),out=old(records);for(const n of arr(out)){const s=source.find(x=>sid(x.id)===sid(n.id));if(!s)continue;if(s.legacySpendMigration)n.legacySpendMigration=true;if(s.legacySourceMetrics)n.legacySourceMetrics=clone(s.legacySourceMetrics);for(const k of ['

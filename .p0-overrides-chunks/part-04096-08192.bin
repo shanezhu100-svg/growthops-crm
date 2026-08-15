@@ -1,0 +1,65 @@
+rotected(vm,client,account){
+    const current=monthOf(localToday(vm));
+    return arr(account?.adDataRecords).some(r=>{const m=monthOf(r.date);return !!(m&&(m<current||locked(vm,m)||confirmedReconciliationForRecord(vm,client,account,r)))});
+  }
+  function adRecordReferences(vm,campaignId,adSetId='',adId=''){
+    const refs=[];
+    for(const c of arr(vm.clients))for(const a of [...arr(c.fbAccounts),...arr(c.tkAccounts)])for(const r of arr(a.adDataRecords)){
+      if(campaignId&&sid(r.campaignId)!==sid(campaignId))continue;
+      if(adSetId&&sid(r.adSetId)!==sid(adSetId))continue;
+      if(adId&&sid(r.adId)!==sid(adId))continue;
+      refs.push(r);
+    }
+    return refs;
+  }
+  function dealSpendDates(vm,deal){
+    if(!deal)return [];
+    const dates=[];
+    let accounts=[];
+    try{accounts=vm.openingDealMatchedAccounts?vm.openingDealMatchedAccounts(deal):[]}catch{}
+    for(const account of arr(accounts))for(const r of arr(account.adDataRecords)){
+      const date=String(r.date||'').slice(0,10);if(!date)continue;
+      let owns=false;try{
+        if(typeof vm.__p0OriginalOpeningDealOwner==='function'){const owner=vm.__p0OriginalOpeningDealOwner(deal.clientId,deal.platform,account,date);owns=sid(owner?.id)===sid(deal.id)}
+        else owns=vm.openingDealOwnsRecord?vm.openingDealOwnsRecord(deal,account,date):vm.openingDealAppliesToDate?.(deal,date);
+      }catch{}
+      if(owns)dates.push(date);
+    }
+    return dates.sort();
+  }
+  function providerUsedDates(vm,providerId,contactId=null){
+    const dates=[];
+    for(const d of arr(vm.openingDeals)){
+      if(sid(d.providerId)!==sid(providerId))continue;
+      if(contactId!==null&&sid(d.contactId)!==sid(contactId))continue;
+      dates.push(...dealSpendDates(vm,d));
+    }
+    for(const r of arr(vm.financeReconciliations)){
+      if(r.status==='VOID'||sid(r.providerId)!==sid(providerId))continue;
+      if(contactId!==null&&sid(r.contactId)!==sid(contactId))continue;
+      if(r.settlementMonth)dates.push(`${r.settlementMonth}-28`);
+    }
+    for(const [month,snap] of Object.entries(vm.financeMonthSnapshots||{}))for(const row of arr(snap?.reconciliations)){
+      if(sid(row?.providerId)!==sid(providerId))continue;
+      if(contactId!==null&&sid(row?.contactId)!==sid(contactId))continue;
+      dates.push(`${String(row?.month||month).slice(0,7)}-28`);
+    }
+    return dates.sort();
+  }
+  function policyForDate(policies,date){
+    return [...arr(policies)].sort((a,b)=>String(a.effectiveDate||'').localeCompare(String(b.effectiveDate||''))).filter(p=>String(p.effectiveDate||'1900-01-01')<=date).pop()||null;
+  }
+  function samePolicy(a,b){return sid(a?.id)===sid(b?.id)&&String(a?.effectiveDate||'')===String(b?.effectiveDate||'')&&num(a?.rebateRate)===num(b?.rebateRate)&&String(a?.rebatePolicy||'')===String(b?.rebatePolicy||'')}
+  function validateBackupShape(p){
+    if(!p||typeof p!=='object'||Array.isArray(p))throw new Error('备份顶层必须是对象');
+    const allowedVersions=['growth-ops-cloud-backup-v2','growth-ops-backup-v2'];
+    if(!p.version||!allowedVersions.includes(p.version))throw new Error(`不支持或缺少备份版本：${p.version||'未提供'}`);
+    const arrayKeys=['clients','standaloneAlerts','reminderTypes','dismissedAlerts','leads','openingProviders','openingDeals','financeActualRebates','financeReceivables','financeCosts','financeReconciliations','mediaTools','auditLogs'];
+    const objectKeys=['financeMonthLocks','financeMonthSnapshots','sopProgress'];
+    const required=[...arrayKeys,...objectKeys,'exportedAt'];
+    const missing=required.filter(k=>!(k in p));if(missing.length)throw new Error(`备份缺少顶层字段：${missing.join('、')}`);
+    for(const k of arrayKeys)if(!Array.isArray(p[k]))throw new Error(`${k} 必须是数组`);
+    for(const k of objectKeys)if(p[k]===null||typeof p[k]!=='object'||Array.isArray(p[k]))throw new Error(`${k} 必须是对象`);
+    if(typeof p.exportedAt!=='string')throw new Error('exportedAt 必须是字符串');
+    for(const c of p.clients){
+      if(!c||typeof c!=='object'||Array.isArray(c))throw new Error('cli

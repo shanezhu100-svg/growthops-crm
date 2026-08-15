@@ -1,0 +1,62 @@
+(()=>{
+  'use strict';
+  const INSTALLED='__GROWTHOPS_P0_OVERRIDES_INSTALLED__';
+  const nowDate=()=>new Date().toISOString().slice(0,10);
+  const localToday=vm=>{try{const d=vm?.localDateKey?.();if(d)return String(d).slice(0,10)}catch{}return nowDate()};
+  const monthOf=v=>String(v||'').slice(0,7);
+  const sid=v=>String(v??'');
+  const clone=v=>JSON.parse(JSON.stringify(v));
+  const arr=v=>Array.isArray(v)?v:[];
+  const num=v=>{const n=Number(v);return Number.isFinite(n)?n:0};
+  const notify=(vm,msg)=>{try{vm.notify?.(msg)}catch{}};
+  const locked=(vm,m)=>!!(m&&vm.isMonthLocked?.(m));
+  const accountKey=(platform,id)=>`${platform}:${id}`;
+
+  function findClient(vm,id){return arr(vm.clients).find(c=>sid(c.id)===sid(id))||null}
+  function clientAccounts(client,platform){return platform==='TK'?arr(client?.tkAccounts):arr(client?.fbAccounts)}
+  function allAdRecords(client){return [...arr(client?.fbAccounts),...arr(client?.tkAccounts)].flatMap(a=>arr(a.adDataRecords))}
+  function accountProtectedReasons(vm,client,platform,account){
+    if(!client||!account)return [];
+    const reasons=[];
+    const records=arr(account.adDataRecords).length;
+    if(records)reasons.push(`广告数据 ${records} 条`);
+    const campaigns=arr(client.adCampaigns).filter(c=>sid(c.accountId)===sid(account.id)).length;
+    if(campaigns)reasons.push(`广告方案 ${campaigns} 个`);
+    const recharge=arr(account.rechargeHistory).length;
+    if(recharge)reasons.push(`充值记录 ${recharge} 条`);
+    const sopKey=accountKey(platform,account.id);
+    const sop=client.sopAccountConfigs&&client.sopAccountConfigs[sopKey];
+    if(sop&&(arr(sop.steps).length||Object.keys(sop.dailyTasks||{}).length||String(sop.dailyPlan||sop.notes||'').trim()))reasons.push('SOP 历史');
+    const tools=arr(vm.mediaTools).filter(t=>arr(t.bindings).some(b=>sid(b.clientId)===sid(client.id)&&(sid(b.accountKey)===sopKey||sid(b.accountKey)==='ALL'))).length;
+    if(tools)reasons.push(`工具绑定 ${tools} 个`);
+    const adId=sid(account.adAccountId).trim();
+    const openings=arr(vm.openingDeals).filter(d=>sid(d.clientId)===sid(client.id)&&String(d.platform||'FB')===platform&&(
+      d.accountScope==='ALL'||(adId&&String(d.adAccountIds||'').split(/[\s,，;；]+/).map(x=>x.trim()).includes(adId))
+    )).length;
+    if(openings)reasons.push(`开户记录 ${openings} 条`);
+    return reasons;
+  }
+  function specificOpeningUsesAccount(vm,client,platform,account){
+    const adId=sid(account?.adAccountId).trim();if(!client||!account||!adId)return false;
+    return arr(vm.openingDeals).some(d=>sid(d.clientId)===sid(client.id)&&String(d.platform||'FB')===platform&&d.accountScope!=='ALL'&&String(d.adAccountIds||'').split(/[\s,，;；]+/).map(x=>x.trim()).includes(adId));
+  }
+  function recordById(vm,id){
+    for(const c of arr(vm.clients))for(const a of [...arr(c.fbAccounts),...arr(c.tkAccounts)]){
+      const r=arr(a.adDataRecords).find(x=>sid(x.id)===sid(id));if(r)return{client:c,account:a,record:r};
+    }
+    return null;
+  }
+  function platformOfAccount(client,account){
+    if(arr(client?.fbAccounts).some(a=>sid(a.id)===sid(account?.id)))return 'FB';
+    if(arr(client?.tkAccounts).some(a=>sid(a.id)===sid(account?.id)))return 'TK';
+    return '';
+  }
+  function confirmedReconciliationForRecord(vm,client,account,record){
+    if(!client||!account||!record?.date)return null;
+    const platform=platformOfAccount(client,account);if(!platform)return null;
+    let owner=null;try{owner=typeof vm.__p0OriginalOpeningDealOwner==='function'?vm.__p0OriginalOpeningDealOwner(client.id,platform,account,record.date):vm.openingDealOwnerForRecord?.(client.id,platform,account,record.date)}catch{}
+    if(!owner)return null;
+    const month=monthOf(record.date),currency=record.currency||account.adSpendCurrency||'USD';
+    return arr(vm.financeReconciliations).find(r=>r.status!=='VOID'&&sid(r.settlementMonth)===sid(month)&&sid(r.providerId)===sid(owner.providerId)&&sid(r.contactId||'')===sid(owner.contactId||'')&&sid(r.currency||'USD')===sid(currency))||null;
+  }
+  function accountRebateModeHistoryP
