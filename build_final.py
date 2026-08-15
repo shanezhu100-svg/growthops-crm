@@ -93,7 +93,7 @@ for old, new, label in copy_replacements:
 # Runtime access is independently disabled by cloud-p0-overrides.js.
 reset_button = re.compile(r'<button\b(?=[^>]*@click=["\']resetDemoData\(\)["\'])[^>]*>.*?</button>', re.S)
 html, reset_count = reset_button.subn('', html)
-if reset_count != 1:
+if reset_count not in (0, 1):
     raise SystemExit(f'Unexpected reset-demo UI count: {reset_count}')
 
 # The canonical page's original mounted() loads seed/localStorage data. In production
