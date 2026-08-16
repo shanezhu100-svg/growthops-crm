@@ -13,7 +13,7 @@ require(html.count(tag)==1,'UI action bridge tag missing or duplicated')
 require(security+tag in html,'UI action bridge must load immediately after security hotfix')
 for marker in ('growthops-session-restore-style','growthops-session-restore-guard','growthops-session-restoring','正在恢复登录会话','growthops_crm_token_v2'):
     require(marker in html,f'session restore guard missing: {marker}')
-for marker in ('saveOpeningDeal','saveOpeningProvider','saveAdDataRecord','showOpeningModal','showProviderModal','showAdDataModal','client-form-back','client-form-save','saveClient','stopImmediatePropagation','modalByButton','native-action-bridge-v15-page-scroll-memory','reportValidity','validateButtonForm','finalizeClientListNavigation','PAGE_SCROLL_PAGES','pageScrollPositions','readScrollTop','writeScrollTop','rememberPageScroll','getPageScroll','restorePageScrollInstant','navigateWithPageScroll','observePageScroll','routeSwitching','scrollingElement','clients','client-form','client-detail','saveNow','window.history.replaceState','clearSessionRestoreCover','pendingClientCloudSaves','trackClientCloudSave','beforeunload','正在同步云端','已同步云端','originalNavigate'):
+for marker in ('saveOpeningDeal','saveOpeningProvider','saveAdDataRecord','showOpeningModal','showProviderModal','showAdDataModal','client-form-back','client-form-save','client-detail-back','saveClient','stopImmediatePropagation','modalByButton','native-action-bridge-v16-detail-scroll-memory','reportValidity','validateButtonForm','finalizeClientListNavigation','PAGE_SCROLL_PAGES','pageScrollPositions','readScrollTop','writeScrollTop','rememberPageScroll','getPageScroll','restorePageScrollInstant','navigateWithPageScroll','observePageScroll','routeSwitching','scrollingElement','clients','client-form','client-detail','isClientDetailOpenButton','pointerdown','saveNow','window.history.replaceState','clearSessionRestoreCover','pendingClientCloudSaves','trackClientCloudSave','beforeunload','正在同步云端','已同步云端','originalNavigate'):
     require(marker in bridge,f'UI action bridge marker missing: {marker}')
 require("label==='取消'||button.title==='关闭'" in bridge,'modal cancel/close bridge missing')
 require("label==='保存客户开户渠道'" in bridge,'opening save bridge missing')
@@ -27,6 +27,12 @@ require("const targetTop=getPageScroll(page);" in bridge,'destination page must 
 require("if(sourcePage)rememberPageScroll(sourcePage);" in bridge,'source page scroll must be captured before switching views')
 require("finalizeClientListNavigation=()=>navigateWithPageScroll('clients')" in bridge,'client save must return using client-list scroll memory')
 require("navigateWithPageScroll(vm.form?.id?'client-detail':'clients')" in bridge,'client cancel/back must restore destination scroll memory')
+require("bind(button,'client-detail-back',()=>navigateWithPageScroll('clients'))" in bridge,'client detail back must restore client-list scroll memory')
+require("if(vm.currentPage!=='clients')return;" in bridge,'detail entry scroll capture must only run from client management')
+require("rememberPageScroll('clients');" in bridge,'client management scroll must be captured immediately before opening detail')
+require("pageScrollPositions['client-detail']=0;" in bridge,'new client detail view must start from its own top position')
+require("label==='详情'||label==='查看客户详情'" in bridge,'detail buttons must be recognized for scroll capture')
+require("button===row.querySelector('td:first-child button')" in bridge,'client-name detail entry must be recognized for scroll capture')
 require("root.style.scrollBehavior='auto'" in bridge,'client navigation must disable smooth scroll during view switch')
 nav_block=bridge.split('const navigateWithPageScroll=page=>',1)[1].split('const finalizeClientListNavigation',1)[0]
 require(nav_block.index('vm.currentPage=page;') < nav_block.index('writeScrollTop(targetTop);'),'destination page must be selected before destination scroll is applied')
