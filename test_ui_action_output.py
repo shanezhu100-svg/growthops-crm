@@ -13,7 +13,7 @@ require(html.count(tag)==1,'UI action bridge tag missing or duplicated')
 require(security+tag in html,'UI action bridge must load immediately after security hotfix')
 for marker in ('growthops-session-restore-style','growthops-session-restore-guard','growthops-session-restoring','正在恢复登录会话','growthops_crm_token_v2'):
     require(marker in html,f'session restore guard missing: {marker}')
-for marker in ('saveOpeningDeal','saveOpeningProvider','saveAdDataRecord','showOpeningModal','showProviderModal','showAdDataModal','client-form-back','client-form-save','saveClient','stopImmediatePropagation','modalByButton','native-action-bridge-v9','reportValidity','validateButtonForm','finalizeClientListNavigation','quietNavigate','settleScrollTop','scrollingElement','clients','client-detail','saveNow','window.history.replaceState','clearSessionRestoreCover'):
+for marker in ('saveOpeningDeal','saveOpeningProvider','saveAdDataRecord','showOpeningModal','showProviderModal','showAdDataModal','client-form-back','client-form-save','saveClient','stopImmediatePropagation','modalByButton','native-action-bridge-v10','reportValidity','validateButtonForm','finalizeClientListNavigation','quietNavigate','settleScrollTop','scrollingElement','clients','client-detail','saveNow','window.history.replaceState','clearSessionRestoreCover','beginSaving','endSaving','保存中…','originalNavigate'):
     require(marker in bridge,f'UI action bridge marker missing: {marker}')
 require("label==='取消'||button.title==='关闭'" in bridge,'modal cancel/close bridge missing')
 require("label==='保存客户开户渠道'" in bridge,'opening save bridge missing')
@@ -23,7 +23,10 @@ require("label==='保存修改'||label==='确认合作并创建客户'" in bridg
 require("typeof vm.saveClient!=='function'" in bridge,'client save method guard missing')
 require("finalizeClientListNavigation=()=>quietNavigate('clients')" in bridge,'client save must return quietly to client list')
 require("quietNavigate(vm.form?.id?'client-detail':'clients')" in bridge,'client cancel/back must use quiet navigation')
-require("vm.navigateTo?.(" not in bridge,'client bridge must not use animated/shared navigateTo path')
+require("const originalNavigate=vm.navigateTo;" in bridge,'client save must capture original internal navigation')
+require("vm.navigateTo=()=>true;" in bridge,'client save must suppress its legacy internal navigation')
+require("vm.navigateTo=originalNavigate" in bridge,'client save must restore navigation after business mutation')
+require("button.innerHTML='<i class=\"fas fa-spinner fa-spin mr-2\"></i>保存中…'" in bridge,'client save must show explicit saving state while cloud commit is pending')
 require('requestAnimationFrame(()=>requestAnimationFrame' not in bridge,'client navigation must not double-render through nested animation frames')
 require('window.scrollTo' not in bridge,'client navigation must not call window.scrollTo')
 require("vm.$forceUpdate" not in bridge.split('const quietNavigate=page=>',1)[1].split('const finalizeClientListNavigation',1)[0],'quiet navigation must not force a Vue redraw')
