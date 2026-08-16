@@ -42,7 +42,11 @@ for name, size, digest in (
 html = index_path.read_text(encoding='utf-8')
 
 old_status = '<div class="bg-white border border-slate-200 rounded-2xl p-4"><div class="text-[11px] text-slate-400">合作状态</div><div class="mt-2"><span class="inline-flex px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700">合作中</span></div></div>'
-new_status = '<div class="bg-white border border-slate-200 rounded-2xl p-4"><div class="text-[11px] text-slate-400">合作状态</div><div class="mt-2"><span class="inline-flex px-2.5 py-1 rounded-full text-xs font-bold" :class="selectedClient.archived?\'bg-slate-100 text-slate-600\':statusStyle(selectedClient.status)">{{ selectedClient.archived?\'已归档\':statusText(selectedClient.status) }}</span></div></div>'
+# Keep the client-detail status self-contained. The canonical CRM has no
+# callable statusStyle()/statusText() methods; using them here breaks the Vue
+# render function as soon as client-detail is opened. Reuse the same inline
+# ACTIVE/PAUSED/archived mapping already used by the clients list instead.
+new_status = '<div class="bg-white border border-slate-200 rounded-2xl p-4"><div class="text-[11px] text-slate-400">合作状态</div><div class="mt-2"><span class="inline-flex px-2.5 py-1 rounded-full text-xs font-bold" :class="selectedClient.archived?\'bg-slate-200 text-slate-600\':selectedClient.status===\'ACTIVE\'?\'bg-emerald-50 text-emerald-700\':\'bg-slate-100 text-slate-600\'">{{ selectedClient.archived?\'已归档\':(selectedClient.status===\'ACTIVE\'?\'合作中\':\'暂停\') }}</span></div></div>'
 html = replace_once(html, old_status, new_status, 'client detail hard-coded status')
 
 html = replace_once(
