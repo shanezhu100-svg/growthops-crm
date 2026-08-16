@@ -120,7 +120,7 @@ helpers=r'''  const assetClientForProtectedField=()=>vm.selectedAssetsClient||vm
     return true;
   };
   const installProtectedFieldControls=()=>{
-    if(!isAccountAssetPage()||!accountSafeSummaryData)return;
+    if(vm.currentUser?.role!=='ADMIN'||!isAccountAssetPage()||!accountSafeSummaryData)return;
     const clientId=resolveCredentialClientId();
     if(!clientId||clientId!==accountSafeSummaryClientId)return;
     for(const row of locateCredentialRows()){
