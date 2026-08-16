@@ -13,4 +13,9 @@ compat_new="      const accountLabel=exactLeaf(card,accountLabelText);\n      //
 if source.count(compat_old)!=1:
     raise SystemExit(f'Unexpected legacy account-label marker count: {source.count(compat_old)}')
 source=source.replace(compat_old,compat_new,1)
+summary_old="        row.accountCell.setAttribute(LOGIN_IDENTIFIER_ATTR,'1');\n"
+summary_new="        row.accountCell.setAttribute(LOGIN_IDENTIFIER_ATTR,'1');\n        row.accountCell.setAttribute(STATUS_ATTR,'summary');\n"
+if source.count(summary_old)!=1:
+    raise SystemExit(f'Unexpected account summary status marker count: {source.count(summary_old)}')
+source=source.replace(summary_old,summary_new,1)
 exec(compile(source,str(source_path),"exec"))
