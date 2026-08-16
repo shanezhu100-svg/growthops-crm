@@ -9,26 +9,35 @@ def require(condition,message):
         raise SystemExit(message)
 
 for marker in (
-    'native-action-bridge-v16-client-native-navigation',
-    'directClientNavigate',
-    'clientIdForDetailButton',
+    'native-action-bridge-v17-legacy-method-navigation',
+    'invokeLegacyClientNavigate',
+    'clientIdForTableRow',
+    'clientIdForMobileDetailButton',
     'openClientDetailNative',
+    'client-detail-name-open',
     'client-detail-open',
-    "label==='详情'||label==='查看客户详情'",
+    'client-detail-mobile-open',
     "vm.filteredClients?.[index]?.id",
     "typeof vm.openClientDetail==='function'",
-    "directClientNavigate('client-detail')",
+    "typeof vm.navigateTo==='function'",
     'client-form-back',
     'vm.formDirty=false',
-    "directClientNavigate(vm.form?.id?'client-detail':'clients')",
+    "invokeLegacyClientNavigate(vm.form?.id?'client-detail':'clients')",
+    "pageScrollPositions['client-detail']=0",
+    'restorePageScrollInstant',
 ):
     require(marker in bridge,f'client navigation marker missing: {marker}')
 
 require("navigateWithPageScroll(vm.form?.id?'client-detail':'clients')" not in bridge,'client back/cancel still uses complex scroll-memory navigation')
 require("if(vm.currentPage==='clients')" in bridge,'client list detail binding scope missing')
-require("const originalNavigate=vm.navigateTo;" in bridge,'detail open must suppress legacy smooth navigation while initializing selected client')
-require("vm.navigateTo=()=>true;" in bridge,'detail open must suppress legacy smooth navigation')
-require("vm.navigateTo=originalNavigate" in bridge,'detail open must restore legacy navigation method')
+require("document.querySelectorAll('tbody tr').forEach" in bridge,'desktop client detail/name buttons are not bridged by table row')
+require("text(button)==='查看客户详情'" in bridge,'mobile client detail bridge missing')
+require("window.scrollTo=()=>writeScrollTop(targetTop)" in bridge,'legacy back/cancel smooth scroll is not intercepted')
+require("window.scrollTo=()=>writeScrollTop(0)" in bridge,'legacy detail smooth scroll is not intercepted')
+require("window.scrollTo=originalScrollTo" in bridge,'window.scrollTo is not restored after client navigation')
+require("try{vm.$forceUpdate?.()}catch{}" in bridge,'client navigation must force Vue render after native bridge invocation')
+require("if(vm.currentPage!=='client-detail')vm.currentPage='client-detail'" in bridge,'client detail fallback render state missing')
+require("setPageUrl('client-detail')" in bridge,'client detail URL synchronization missing')
 
 # Save behavior is already user-accepted and must stay untouched by this patch.
 client_save=bridge.split("if(label==='保存修改'||label==='确认合作并创建客户')",1)[1]
