@@ -25,6 +25,7 @@ for marker in (
     require(marker in diag,f'runtime diagnostic marker missing: {marker}')
 require('preventDefault()' not in diag,'diagnostic must not prevent user events')
 require('stopImmediatePropagation()' not in diag,'diagnostic must not stop user events')
-require('selectedClientId=' not in diag,'diagnostic must not print actual selected client id')
-require('client.name' not in diag,'diagnostic must not print client names')
+# The diagnostic may inspect null/type of selectedClientId, but must never stringify or render its actual value.
+for forbidden in ('String(vm.selectedClientId)', '${vm.selectedClientId}', 'JSON.stringify(vm.selectedClientId)', 'client.name'):
+    require(forbidden not in diag,f'diagnostic may expose customer-identifying data: {forbidden}')
 print('UI_RUNTIME_DIAGNOSTIC_OUTPUT_TESTS_OK')
