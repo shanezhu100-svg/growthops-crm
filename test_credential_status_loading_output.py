@@ -18,6 +18,11 @@ for marker in (
     "cell.style.fontSize='0.875rem'",
     "cell.style.lineHeight='1.25rem'",
     "cell.style.fontWeight='600'",
+    "normalizeOtherAccountAssetTypography",
+    "['Google 资产',['账号名称','Google Ads 客户 ID','MCC ID','登录邮箱','密码 / 2FA']]",
+    "['Instagram 资产',['账号名称','Instagram 用户名','Instagram ID','登录邮箱 / 手机号','密码 / 2FA']]",
+    "assetSectionForHeading",
+    "exactLeaves",
     "applyCredentialLoadingToCards",
     "cell.textContent='读取中…'",
     "cell.setAttribute(STATUS_ATTR,'loading')",
@@ -34,6 +39,7 @@ for marker in (
 ):
     require(marker in security,f'credential loading/cache marker missing: {marker}')
 
+require(security.count('normalizeOtherAccountAssetTypography();')>=4,'Google/Instagram typography must refresh across initial, loading, success and error states')
 require("if(cached){\n      credentialStatusData=cached.data;" in security,'refresh must render cached safe credential status immediately')
 require("else{\n      credentialStatusData=null;\n      credentialStatusFetchedAt=0;\n      applyCredentialLoadingToCards();" in security,'first entry must use neutral loading state before the RPC returns')
 require(".catch(()=>{\n        if(!credentialStatusData)applyCredentialStatusUnavailable();" in security,'RPC failure must not fall back to a false unrecorded state')
