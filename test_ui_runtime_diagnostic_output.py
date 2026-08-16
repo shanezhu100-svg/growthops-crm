@@ -9,13 +9,16 @@ def require(cond,msg):
 
 require(index.count('<script src="/ui-runtime-diagnostic.js"></script>')==1,'runtime diagnostic script tag missing/duplicated')
 for marker in (
-    'client-nav-diag-v1',
+    'client-nav-diag-v2',
     'growthops-ui-runtime-diag',
     "window.addEventListener('pointerdown'",
     "window.addEventListener('click'",
     'document.elementsFromPoint',
     'CALL openClientDetail',
     'CALL navigateTo(',
+    'SOURCE detail→clients',
+    'safeCallerStack',
+    'DETAIL_BACK',
     'VUE ERROR',
     'WINDOW ERROR',
     'PROMISE ERROR',
@@ -25,7 +28,6 @@ for marker in (
     require(marker in diag,f'runtime diagnostic marker missing: {marker}')
 require('preventDefault()' not in diag,'diagnostic must not prevent user events')
 require('stopImmediatePropagation()' not in diag,'diagnostic must not stop user events')
-# The diagnostic may inspect null/type of selectedClientId, but must never stringify or render its actual value.
 for forbidden in ('String(vm.selectedClientId)', '${vm.selectedClientId}', 'JSON.stringify(vm.selectedClientId)', 'client.name'):
     require(forbidden not in diag,f'diagnostic may expose customer-identifying data: {forbidden}')
 print('UI_RUNTIME_DIAGNOSTIC_OUTPUT_TESTS_OK')
