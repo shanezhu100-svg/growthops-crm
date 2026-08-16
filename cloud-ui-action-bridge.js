@@ -4,6 +4,7 @@
   if(!vm)return;
   const BOUND='data-growthops-native-action';
   const TOKEN_KEY='growthops_crm_token_v2';
+  let pendingClientCloudSaves=0;
   const text=el=>String(el?.textContent||'').replace(/\s+/g,' ').trim();
   const bind=(el,key,handler)=>{
     if(!el||el.getAttribute(BOUND)===key)return;
@@ -64,6 +65,26 @@
     settleScrollTop();
   };
   const finalizeClientListNavigation=()=>quietNavigate('clients');
+  const protectPendingSave=event=>{
+    if(pendingClientCloudSaves<=0)return;
+    event.preventDefault();
+    event.returnValue='';
+  };
+  const trackClientCloudSave=promise=>{
+    pendingClientCloudSaves+=1;
+    window.addEventListener('beforeunload',protectPendingSave);
+    return Promise.resolve(promise)
+      .then(result=>{vm.notify?.('客户资料已同步云端');return result})
+      .catch(error=>{
+        console.error(error);
+        vm.notify?.('客户资料云端同步失败，请勿刷新页面，处理提示后重试');
+        throw error;
+      })
+      .finally(()=>{
+        pendingClientCloudSaves=Math.max(0,pendingClientCloudSaves-1);
+        if(pendingClientCloudSaves===0)window.removeEventListener('beforeunload',protectPendingSave);
+      });
+  };
   function modalByButton(match){
     const button=[...document.querySelectorAll('button')].find(b=>match(text(b)));
     return button?.closest('.fixed.inset-0.modal-backdrop')||null;
@@ -87,16 +108,16 @@
           let result;
           try{result=vm.saveClient()}
           finally{if(vm.persist!==originalPersist)vm.persist=originalPersist}
-          const complete=async()=>{
+          const complete=()=>{
             if(vm.formDirty!==false||!vm.selectedClientId)return;
-            if(persistRequested&&typeof cloud?.saveNow==='function'){
-              try{await cloud.saveNow()}
-              catch(error){console.error(error);vm.notify?.('客户资料未完成云端保存，请处理提示后重试');return}
-            }
             finalizeClientListNavigation();
+            if(persistRequested&&typeof cloud?.saveNow==='function'){
+              vm.notify?.('客户已更新，正在同步云端…');
+              trackClientCloudSave(cloud.saveNow()).catch(()=>{});
+            }
           };
           if(result&&typeof result.then==='function')result.then(()=>complete()).catch(error=>{console.error(error);vm.notify?.('客户保存失败，请稍后重试')});
-          else complete().catch(error=>{console.error(error);vm.notify?.('客户保存后的页面切换失败，请重试')});
+          else complete();
         });
       });
     }
@@ -105,5 +126,5 @@
   observer.observe(document.documentElement,{subtree:true,childList:true});
   setInterval(install,250);
   install();
-  window.__GROWTHOPS_UI_ACTION_BRIDGE__={installed:true,version:'native-action-bridge-v9'};
+  window.__GROWTHOPS_UI_ACTION_BRIDGE__={installed:true,version:'native-action-bridge-v11-fast-save'};
 })();
