@@ -30,17 +30,24 @@ old_button='''  function ensureRevealButton(){
   }
 '''
 new_button='''  function ensureRevealButton(){
-    const visible=vm.currentUser?.role==='ADMIN'&&vm.currentPage==='client-detail'&&vm.selectedClientId!=null;
-    const button=document.getElementById(BUTTON_ID);
+    const clientId=resolveCredentialClientId();
+    const inCredentialContext=vm.currentPage==='client-detail'||isAccountAssetPage();
+    const visible=vm.currentUser?.role==='ADMIN'&&inCredentialContext&&clientId!=='';
+    const buttons=secureRevealButtons();
     if(!visible){
       if(revealData)clearReveal();
       return;
     }
-    if(!button)return;
-    if(!button.__growthOpsRevealBound){
-      button.addEventListener('click',revealSelectedClient);
+    buttons.forEach(button=>{
+      if(button.__growthOpsRevealBound)return;
+      button.addEventListener('click',event=>{
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        revealSelectedClient();
+      },true);
       button.__growthOpsRevealBound=true;
-    }
+    });
+    if(revealData)setRevealButtonState(true);
   }
 '''
 if security.count(old_button)!=1:
@@ -56,11 +63,47 @@ clear_start=security.find('  function clearReveal(){')
 clear_end=security.find('  function make(',clear_start)
 if clear_start<0 or clear_end<0:
     raise SystemExit('Unable to locate secure reveal cleanup block')
-new_clear='''  function setRevealButtonState(visible){
-    const button=document.getElementById(BUTTON_ID);
-    if(!button)return;
-    button.innerHTML=visible?'<i class="fa-regular fa-eye-slash mr-1"></i>隐藏登录资料':'<i class="fa-regular fa-eye mr-1"></i>查看登录资料';
-    button.title=visible?'隐藏当前临时显示的 Vault 登录资料':'从 Vault 临时读取登录资料并原位显示，60 秒后自动清除';
+new_clear='''  const cleanText=value=>String(value?.textContent??value??'').replace(/\\s+/g,' ').trim();
+  const isAccountAssetPage=()=>{
+    const bodyText=cleanText(document.body);
+    return (bodyText.includes('Facebook 资产')||bodyText.includes('TikTok 资产'))&&bodyText.includes('登录账号')&&bodyText.includes('密码 / 2FA');
+  };
+  const accountAssetRevealButtons=()=>{
+    if(!isAccountAssetPage())return [];
+    return [...document.querySelectorAll('button')].filter(button=>{
+      const label=cleanText(button);
+      return label==='查看登录资料'||label==='隐藏登录资料';
+    });
+  };
+  const secureRevealButtons=()=>{
+    const buttons=[];
+    const primary=document.getElementById(BUTTON_ID);
+    if(primary)buttons.push(primary);
+    for(const button of accountAssetRevealButtons())if(!buttons.includes(button))buttons.push(button);
+    return buttons;
+  };
+  const resolveCredentialClientId=()=>{
+    for(const key of ['selectedClientId','selectedAssetClientId','assetClientId','clientAssetClientId']){
+      const value=vm[key];
+      if(value!==undefined&&value!==null&&String(value)!=='')return String(value);
+    }
+    for(const key of ['selectedClient','currentClient','assetClient']){
+      const value=vm[key];
+      if(value&&value.id!==undefined&&value.id!==null&&String(value.id)!=='')return String(value.id);
+    }
+    const clients=Array.isArray(vm.clients)?vm.clients:[];
+    const headings=[...document.querySelectorAll('h1,h2,h3')].map(cleanText).filter(Boolean);
+    const matches=clients.filter(client=>{
+      const name=String(client?.name||'').trim();
+      return client?.id!=null&&name&&headings.some(text=>text===name||text.includes(name));
+    });
+    return matches.length===1?String(matches[0].id):'';
+  };
+  function setRevealButtonState(visible){
+    secureRevealButtons().forEach(button=>{
+      button.innerHTML=visible?'<i class="fa-regular fa-eye-slash mr-1"></i>隐藏登录资料':'<i class="fa-regular fa-eye mr-1"></i>查看登录资料';
+      button.title=visible?'隐藏当前临时显示的 Vault 登录资料':'从 Vault 临时读取登录资料并原位显示，60 秒后自动清除';
+    });
   }
 
   function clearReveal(){
@@ -205,14 +248,10 @@ new_render='''  const normalizedFieldLabel=field=>String(field?.label||'').toLow
 '''
 security=security[:render_start]+new_render+security[render_end:]
 
-toggle_marker="  async function revealSelectedClient(){\n    if(vm.currentUser?.role!=='ADMIN'){"
-if security.count(toggle_marker)!=1:
-    raise SystemExit(f'Unexpected reveal handler count: {security.count(toggle_marker)}')
-security=security.replace(toggle_marker,"  async function revealSelectedClient(){\n    if(vm.currentUser?.role!=='ADMIN'){",1)
-insert_after="      return;\n    }\n    const clientId=vm.selectedClientId;"
-if security.count(insert_after)!=1:
-    raise SystemExit(f'Unexpected reveal authorization block count: {security.count(insert_after)}')
-security=security.replace(insert_after,"      return;\n    }\n    if(revealData){clearReveal();return;}\n    const clientId=vm.selectedClientId;",1)
+auth_block="      return;\n    }\n    const clientId=vm.selectedClientId;"
+if security.count(auth_block)!=1:
+    raise SystemExit(f'Unexpected reveal authorization block count: {security.count(auth_block)}')
+security=security.replace(auth_block,"      return;\n    }\n    if(revealData){clearReveal();return;}\n    const clientId=resolveCredentialClientId();",1)
 
 index_path.write_text(html,encoding='utf-8')
 security_path.write_text(security,encoding='utf-8')
