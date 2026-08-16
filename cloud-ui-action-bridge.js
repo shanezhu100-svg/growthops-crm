@@ -140,6 +140,20 @@
         if(pendingClientCloudSaves===0)window.removeEventListener('beforeunload',protectPendingSave);
       });
   };
+  const isClientDetailOpenButton=button=>{
+    if(!button)return false;
+    const label=text(button);
+    if(label==='详情'||label==='查看客户详情')return true;
+    const row=button.closest('tbody tr');
+    return !!row&&button===row.querySelector('td:first-child button');
+  };
+  window.addEventListener('pointerdown',event=>{
+    if(vm.currentPage!=='clients')return;
+    const button=event.target?.closest?.('button');
+    if(!isClientDetailOpenButton(button))return;
+    rememberPageScroll('clients');
+    pageScrollPositions['client-detail']=0;
+  },true);
   function modalByButton(match){
     const button=[...document.querySelectorAll('button')].find(b=>match(text(b)));
     return button?.closest('.fixed.inset-0.modal-backdrop')||null;
@@ -164,6 +178,11 @@
     bindModal(modalByButton(label=>label==='保存客户开户渠道'),'showOpeningModal',label=>label==='保存客户开户渠道','saveOpeningDeal');
     bindModal(modalByButton(label=>label==='保存开户商'),'showProviderModal',label=>label==='保存开户商','saveOpeningProvider');
     bindModal(modalByButton(label=>label.includes('保存并同步数据')||label.includes('更新并同步数据')),'showAdDataModal',label=>label.includes('保存并同步数据')||label.includes('更新并同步数据'),'saveAdDataRecord');
+    if(vm.currentPage==='client-detail'){
+      document.querySelectorAll('button').forEach(button=>{
+        if(button.querySelector('i.fa-arrow-left'))bind(button,'client-detail-back',()=>navigateWithPageScroll('clients'));
+      });
+    }
     if(vm.currentPage==='client-form'){
       document.querySelectorAll('button').forEach(button=>{
         const label=text(button),icon=button.querySelector('i.fa-arrow-left');
@@ -218,5 +237,5 @@
   observer.observe(document.documentElement,{subtree:true,childList:true});
   setInterval(install,250);
   install();
-  window.__GROWTHOPS_UI_ACTION_BRIDGE__={installed:true,version:'native-action-bridge-v15-page-scroll-memory'};
+  window.__GROWTHOPS_UI_ACTION_BRIDGE__={installed:true,version:'native-action-bridge-v16-detail-scroll-memory'};
 })();
