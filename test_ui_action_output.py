@@ -13,7 +13,7 @@ require(html.count(tag)==1,'UI action bridge tag missing or duplicated')
 require(security+tag in html,'UI action bridge must load immediately after security hotfix')
 for marker in ('growthops-session-restore-style','growthops-session-restore-guard','growthops-session-restoring','正在恢复登录会话','growthops_crm_token_v2'):
     require(marker in html,f'session restore guard missing: {marker}')
-for marker in ('saveOpeningDeal','saveOpeningProvider','saveAdDataRecord','showOpeningModal','showProviderModal','showAdDataModal','client-form-back','client-form-save','saveClient','stopImmediatePropagation','modalByButton','native-action-bridge-v13-scroll-isolated','reportValidity','validateButtonForm','finalizeClientListNavigation','navigateNoCarry','resetScrollNow','scrollingElement','SAVE_RETURN_DELAY_MS=180','clients','client-detail','saveNow','window.history.replaceState','clearSessionRestoreCover','pendingClientCloudSaves','trackClientCloudSave','beforeunload','正在同步云端','已同步云端','originalNavigate'):
+for marker in ('saveOpeningDeal','saveOpeningProvider','saveAdDataRecord','showOpeningModal','showProviderModal','showAdDataModal','client-form-back','client-form-save','saveClient','stopImmediatePropagation','modalByButton','native-action-bridge-v14-save-transition','reportValidity','validateButtonForm','finalizeClientListNavigation','navigateNoCarry','resetScrollNow','scrollingElement','SAVE_TRANSITION_MS=180','SAVE_TRANSITION_ID','showClientSaveTransition','hideClientSaveTransition','正在保存客户','clients','client-detail','saveNow','window.history.replaceState','clearSessionRestoreCover','pendingClientCloudSaves','trackClientCloudSave','beforeunload','正在同步云端','已同步云端','originalNavigate'):
     require(marker in bridge,f'UI action bridge marker missing: {marker}')
 require("label==='取消'||button.title==='关闭'" in bridge,'modal cancel/close bridge missing')
 require("label==='保存客户开户渠道'" in bridge,'opening save bridge missing')
@@ -36,11 +36,16 @@ require("vm.persist=()=>{persistRequested=true;return true}" in bridge,'client s
 require("const originalNavigate=vm.navigateTo;" in bridge,'client save must capture legacy internal navigation')
 require("vm.navigateTo=()=>true;" in bridge,'client save must suppress legacy internal navigation before final return')
 require("vm.navigateTo=originalNavigate" in bridge,'client save must restore original navigation immediately after business mutation')
+require("position:fixed;inset:0;z-index:460" in bridge,'client save transition must fully mask the outgoing form')
+require("cover.setAttribute('role','status')" in bridge,'client save transition accessibility status missing')
 client_block=bridge.split("if(label==='保存修改'||label==='确认合作并创建客户')",1)[1].split('    });\n      });',1)[0]
+require('showClientSaveTransition();' in client_block,'client save must mask the old form before returning')
+require('finalizeClientListNavigation();' in client_block,'client save must switch to client list immediately under the transition cover')
 require('trackClientCloudSave(cloud.saveNow()).catch(()=>{});' in client_block,'client save must continue cloud sync asynchronously')
 require('await cloud.saveNow()' not in client_block,'client save must not block UI on cloud RPC')
-require("setTimeout(()=>{" in client_block and 'SAVE_RETURN_DELAY_MS' in client_block,'client save must use a short return delay')
-require(client_block.index('trackClientCloudSave(cloud.saveNow())') < client_block.index('setTimeout(()=>{'),'cloud sync must start before delayed client-list return')
+require('hideClientSaveTransition();' in client_block and 'SAVE_TRANSITION_MS' in client_block,'client save transition must clear after a short fixed interval')
+require(client_block.index('showClientSaveTransition();') < client_block.index('finalizeClientListNavigation();'),'outgoing client form must be masked before page switch')
+require(client_block.index('finalizeClientListNavigation();') < client_block.index('trackClientCloudSave(cloud.saveNow())'),'client list switch must not wait for cloud sync startup')
 require("window.addEventListener('beforeunload',protectPendingSave)" in bridge,'pending cloud save unload protection missing')
 require("window.removeEventListener('beforeunload',protectPendingSave)" in bridge,'pending cloud save unload protection cleanup missing')
 require('window.location.replace' not in bridge,'client save must not hard-refresh the page')
