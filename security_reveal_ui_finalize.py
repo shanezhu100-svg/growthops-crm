@@ -8,7 +8,7 @@ html=index_path.read_text(encoding='utf-8')
 security=security_path.read_text(encoding='utf-8')
 
 old_header='''<div class="p-5 border-b border-slate-100 flex items-center justify-between"><div><h3 class="font-extrabold text-sm">平台资产与账号</h3><p class="text-[11px] text-slate-400 mt-1">BM / BC / 广告账号 / 登录资料集中归档；费用数据在投放分析维护</p></div><button v-if="canViewCredentials()" @click="credentialsVisible=!credentialsVisible" class="text-xs font-semibold text-indigo-600"><i :class="credentialsVisible?'fa-regular fa-eye-slash':'fa-regular fa-eye'" class="mr-1"></i>{{ credentialsVisible?'隐藏登录资料':'查看登录资料' }}</button><span v-else class="text-[10px] font-bold text-slate-400"><i class="fa-solid fa-lock mr-1"></i>登录凭证仅管理员 / 运营可见</span></div>'''
-new_header='''<div class="p-5 border-b border-slate-100 flex items-center justify-between gap-3 flex-wrap"><div><h3 class="font-extrabold text-sm">平台资产与账号</h3><p class="text-[11px] text-slate-400 mt-1">BM / BC / 广告账号 / 登录资料集中归档；费用数据在投放分析维护</p></div><div class="flex items-center gap-2 flex-wrap justify-end"><button v-if="currentUser?.role==='ADMIN'" id="growthops-secure-credential-button" type="button" title="从 Vault 临时读取登录资料并原位显示，60 秒后自动清除" class="text-xs font-semibold text-indigo-600"><i class="fa-regular fa-eye mr-1"></i>查看登录资料</button><button v-else-if="canViewCredentials()" @click="credentialsVisible=!credentialsVisible" class="text-xs font-semibold text-indigo-600"><i :class="credentialsVisible?'fa-regular fa-eye-slash':'fa-regular fa-eye'" class="mr-1"></i>{{ credentialsVisible?'隐藏登录资料':'查看登录资料' }}</button><span v-else class="text-[10px] font-bold text-slate-400"><i class="fa-solid fa-lock mr-1"></i>登录凭证仅管理员 / 运营可见</span></div></div>'''
+new_header='''<div class="p-5 border-b border-slate-100 flex items-center justify-between gap-3 flex-wrap"><div><h3 class="font-extrabold text-sm">平台资产与账号</h3><p class="text-[11px] text-slate-400 mt-1">BM / BC / 广告账号 / 登录资料集中归档；费用数据在投放分析维护</p></div><div class="flex items-center gap-2 flex-wrap justify-end"><button v-if="currentUser?.role==='ADMIN'" id="growthops-secure-credential-button" type="button" title="从 Vault 临时读取登录资料，密码 / 2FA 需单独显示，30 秒后自动清除" class="text-xs font-semibold text-indigo-600"><i class="fa-regular fa-eye mr-1"></i>查看登录资料</button><button v-else-if="canViewCredentials()" @click="credentialsVisible=!credentialsVisible" class="text-xs font-semibold text-indigo-600"><i :class="credentialsVisible?'fa-regular fa-eye-slash':'fa-regular fa-eye'" class="mr-1"></i>{{ credentialsVisible?'隐藏登录资料':'查看登录资料' }}</button><span v-else class="text-[10px] font-bold text-slate-400"><i class="fa-solid fa-lock mr-1"></i>登录凭证仅管理员 / 运营可见</span></div></div>'''
 if html.count(old_header)!=1:
     raise SystemExit(f'Unexpected client detail asset header count: {html.count(old_header)}')
 html=html.replace(old_header,new_header,1)
@@ -102,7 +102,7 @@ new_clear='''  const cleanText=value=>String(value?.textContent??value??'').repl
   function setRevealButtonState(visible){
     secureRevealButtons().forEach(button=>{
       button.innerHTML=visible?'<i class="fa-regular fa-eye-slash mr-1"></i>隐藏登录资料':'<i class="fa-regular fa-eye mr-1"></i>查看登录资料';
-      button.title=visible?'隐藏当前临时显示的 Vault 登录资料':'从 Vault 临时读取登录资料并原位显示，60 秒后自动清除';
+      button.title=visible?'隐藏当前临时加载的 Vault 登录资料':'从 Vault 临时读取登录资料，密码 / 2FA 需单独显示，30 秒后自动清除';
     });
   }
 
@@ -111,6 +111,8 @@ new_clear='''  const cleanText=value=>String(value?.textContent??value??'').repl
     revealTimer=null;
     revealData=null;
     document.querySelectorAll(`[${INLINE_ATTR}="1"]`).forEach(el=>{
+      if(typeof el.__growthOpsVaultFieldClear==='function')el.__growthOpsVaultFieldClear();
+      delete el.__growthOpsVaultFieldClear;
       if(el.dataset.growthopsVaultPrevious!==undefined)el.textContent=el.dataset.growthopsVaultPrevious;
       delete el.dataset.growthopsVaultPrevious;
       el.removeAttribute(INLINE_ATTR);
@@ -208,13 +210,50 @@ new_render='''  const normalizedFieldLabel=field=>String(field?.label||'').toLow
     }
     return rows.filter(row=>row.platform&&(row.accountCell||row.passwordCell));
   };
-  const setInlineValue=(cell,value,kind)=>{
-    if(!cell||!value)return false;
+  const prepareInlineCell=(cell,kind)=>{
+    if(!cell)return false;
     if(cell.getAttribute(INLINE_ATTR)!=='1')cell.dataset.growthopsVaultPrevious=cell.textContent||'';
-    cell.textContent=value;
     cell.setAttribute(INLINE_ATTR,'1');
     cell.setAttribute('data-growthops-vault-kind',kind);
-    cell.title='Vault 临时显示 · 60 秒后自动隐藏';
+    return true;
+  };
+  const setInlineValue=(cell,value,kind)=>{
+    if(!cell||!value||!prepareInlineCell(cell,kind))return false;
+    cell.textContent=value;
+    cell.title='Vault 临时显示 · 30 秒后自动隐藏';
+    return true;
+  };
+  const setInlineSecretControl=(cell,value)=>{
+    if(!cell||!value||!prepareInlineCell(cell,'password-2fa'))return false;
+    cell.textContent='';
+    const wrap=make('span',{style:'display:inline-flex;align-items:center;gap:8px;max-width:100%;'});
+    const display=make('span',{style:'font:inherit;word-break:break-all;'},'••••••••');
+    const toggle=make('button',{type:'button','aria-label':'显示密码和 2FA',style:'border:0;background:transparent;color:#64748b;cursor:pointer;padding:2px 4px;font-size:12px;line-height:1;'},'👁');
+    let visible=false;
+    let fieldTimer=null;
+    const hide=()=>{
+      clearTimeout(fieldTimer);
+      fieldTimer=null;
+      visible=false;
+      display.textContent='••••••••';
+      toggle.textContent='👁';
+      toggle.setAttribute('aria-label','显示密码和 2FA');
+    };
+    toggle.addEventListener('click',event=>{
+      event.preventDefault();
+      event.stopPropagation();
+      if(visible){hide();return;}
+      visible=true;
+      display.textContent=value;
+      toggle.textContent='🙈';
+      toggle.setAttribute('aria-label','隐藏密码和 2FA');
+      fieldTimer=setTimeout(hide,10000);
+    });
+    wrap.appendChild(display);
+    wrap.appendChild(toggle);
+    cell.appendChild(wrap);
+    cell.title='Vault 已加载 · 点击眼睛显示 10 秒';
+    cell.__growthOpsVaultFieldClear=hide;
     return true;
   };
   function applyInlineSecrets(secretTree){
@@ -228,21 +267,22 @@ new_render='''  const normalizedFieldLabel=field=>String(field?.label||'').toLow
       const secureParts=[];
       if(password)secureParts.push(password);
       if(twofa)secureParts.push(`2FA: ${twofa}`);
-      if(setInlineValue(row.passwordCell,secureParts.join('  ·  '),'password-2fa'))applied+=1;
+      if(setInlineSecretControl(row.passwordCell,secureParts.join('  ·  ')))applied+=1;
     }
     return applied;
   }
   function renderRevealModal(clientId,secretTree){
     clearReveal();
-    revealData=secretTree;
     const applied=applyInlineSecrets(secretTree);
+    secretTree=null;
     if(!applied){
       revealData=null;
       vm.notify('该客户当前没有可在账号卡片中显示的登录账号、密码或 2FA');
       return;
     }
+    revealData={active:true,clientId:String(clientId)};
     setRevealButtonState(true);
-    revealTimer=setTimeout(clearReveal,60000);
+    revealTimer=setTimeout(clearReveal,30000);
   }
 
 '''
@@ -252,6 +292,37 @@ auth_block="      return;\n    }\n    const clientId=vm.selectedClientId;"
 if security.count(auth_block)!=1:
     raise SystemExit(f'Unexpected reveal authorization block count: {security.count(auth_block)}')
 security=security.replace(auth_block,"      return;\n    }\n    if(revealData){clearReveal();return;}\n    const clientId=resolveCredentialClientId();",1)
+
+catch_block="""    }catch(error){
+      vm.notify(error?.message||'读取客户凭证失败');
+    }finally{
+"""
+new_catch="""    }catch(error){
+      const message=String(error?.message||'');
+      if(message.includes('CREDENTIAL_REAUTH_REQUIRED'))vm.notify('为保护密码安全，请重新登录后再查看登录资料');
+      else if(message.includes('CREDENTIAL_REVEAL_THROTTLED'))vm.notify('查看登录资料过于频繁，请稍后再试');
+      else vm.notify(message||'读取客户凭证失败');
+    }finally{
+"""
+if security.count(catch_block)!=1:
+    raise SystemExit(f'Unexpected secure reveal catch block count: {security.count(catch_block)}')
+security=security.replace(catch_block,new_catch,1)
+
+visibility_block="""  document.addEventListener('visibilitychange',()=>{
+    if(document.hidden)clearReveal();
+  });
+  window.addEventListener('beforeunload',clearReveal);
+"""
+new_visibility="""  document.addEventListener('visibilitychange',()=>{
+    if(document.hidden)clearReveal();
+  });
+  window.addEventListener('blur',clearReveal);
+  window.addEventListener('pagehide',clearReveal);
+  window.addEventListener('beforeunload',clearReveal);
+"""
+if security.count(visibility_block)!=1:
+    raise SystemExit(f'Unexpected secure reveal visibility block count: {security.count(visibility_block)}')
+security=security.replace(visibility_block,new_visibility,1)
 
 index_path.write_text(html,encoding='utf-8')
 security_path.write_text(security,encoding='utf-8')
