@@ -13,7 +13,7 @@ require(html.count(tag)==1,'UI action bridge tag missing or duplicated')
 require(security+tag in html,'UI action bridge must load immediately after security hotfix')
 for marker in ('growthops-session-restore-style','growthops-session-restore-guard','growthops-session-restoring','正在恢复登录会话','growthops_crm_token_v2'):
     require(marker in html,f'session restore guard missing: {marker}')
-for marker in ('saveOpeningDeal','saveOpeningProvider','saveAdDataRecord','showOpeningModal','showProviderModal','showAdDataModal','client-form-back','client-form-save','client-detail-back','saveClient','stopImmediatePropagation','modalByButton','native-action-bridge-v16-detail-scroll-memory','reportValidity','validateButtonForm','finalizeClientListNavigation','PAGE_SCROLL_PAGES','pageScrollPositions','readScrollTop','writeScrollTop','rememberPageScroll','getPageScroll','restorePageScrollInstant','navigateWithPageScroll','observePageScroll','routeSwitching','scrollingElement','clients','client-form','client-detail','isClientDetailOpenButton','pointerdown','saveNow','window.history.replaceState','clearSessionRestoreCover','pendingClientCloudSaves','trackClientCloudSave','beforeunload','正在同步云端','已同步云端','originalNavigate'):
+for marker in ('saveOpeningDeal','saveOpeningProvider','saveAdDataRecord','showOpeningModal','showProviderModal','showAdDataModal','client-form-back','client-form-save','client-detail-back','saveClient','stopImmediatePropagation','modalByButton','native-action-bridge-v17-route-scroll-isolation','reportValidity','validateButtonForm','finalizeClientListNavigation','PAGE_SCROLL_PAGES','pageScrollPositions','readScrollTop','writeScrollTop','rememberPageScroll','getPageScroll','restorePageScrollInstant','navigateWithPageScroll','observePageScroll','routeSwitching','scrollingElement','clients','client-form','client-detail','isClientDetailOpenButton','pointerdown','saveNow','window.history.replaceState','clearSessionRestoreCover','pendingClientCloudSaves','trackClientCloudSave','beforeunload','正在同步云端','已同步云端','originalNavigate','previousPage','scrollRestoration'):
     require(marker in bridge,f'UI action bridge marker missing: {marker}')
 require("label==='取消'||button.title==='关闭'" in bridge,'modal cancel/close bridge missing')
 require("label==='保存客户开户渠道'" in bridge,'opening save bridge missing')
@@ -33,14 +33,27 @@ require("rememberPageScroll('clients');" in bridge,'client management scroll mus
 require("pageScrollPositions['client-detail']=0;" in bridge,'new client detail view must start from its own top position')
 require("label==='详情'||label==='查看客户详情'" in bridge,'detail buttons must be recognized for scroll capture')
 require("button===row.querySelector('td:first-child button')" in bridge,'client-name detail entry must be recognized for scroll capture')
+require("window.history.scrollRestoration='manual'" in bridge,'browser scroll restoration must not compete with SPA client-view restoration')
 require("root.style.scrollBehavior='auto'" in bridge,'client navigation must disable smooth scroll during view switch')
 nav_block=bridge.split('const navigateWithPageScroll=page=>',1)[1].split('const finalizeClientListNavigation',1)[0]
 require(nav_block.index('vm.currentPage=page;') < nav_block.index('writeScrollTop(targetTop);'),'destination page must be selected before destination scroll is applied')
 require("writeScrollTop(targetTop);" in nav_block,'destination page scroll restore missing')
 require("routeSwitching=true;" in nav_block and "routeSwitching=false;" in nav_block,'scroll events must be isolated while switching client views')
 require("window.addEventListener('scroll',()=>rememberPageScroll(vm.currentPage),{passive:true})" in bridge,'client scroll memory listener missing')
-require("page==='client-form'&&lastObservedPage!=='client-form'" in bridge,'new client edit view must get its own scroll context')
-require("pageScrollPositions['client-form']=0" in bridge,'new client edit view must start from its own default top position')
+require("const previousPage=lastObservedPage;" in bridge,'page observer must retain the source page before target restoration')
+require("if(page==='client-form'&&previousPage!=='client-form')pageScrollPositions['client-form']=0;" in bridge,'new client edit view must get its own scroll context')
+require("if(page==='client-detail'&&previousPage==='clients')pageScrollPositions['client-detail']=0;" in bridge,'client detail must reset its own scroll context when opened from the client list')
+observe_block=bridge.split('const observePageScroll=()=>',1)[1].split("window.addEventListener('scroll'",1)[0]
+require("if(page===lastObservedPage){\n      rememberPageScroll(page);\n      return;\n    }" in observe_block,'same-page observation must be the only observer path that records current physical scroll')
+require("if(routeSwitching)return;" in observe_block,'observer must not interfere with an explicit route restoration')
+require("restorePageScrollInstant(page);" in observe_block,'native client-view changes must restore the destination page before scroll capture resumes')
+changed_path=observe_block.split('const previousPage=lastObservedPage;',1)[1]
+require('rememberPageScroll(page);' not in changed_path,'page-change observer must not write inherited source scroll into the destination page')
+restore_block=bridge.split('const restorePageScrollInstant=page=>',1)[1].split('const navigateWithPageScroll=page=>',1)[0]
+require("const targetTop=getPageScroll(page);" in restore_block,'native route restore must freeze the destination top before rendering settles')
+require("routeSwitching=true;" in restore_block and "routeSwitching=false;" in restore_block,'native route restore must suppress scroll-memory writes while applying the target position')
+require("vm.$nextTick(settle)" in restore_block,'native route restore must wait for Vue DOM rendering')
+require("setTimeout(finish,80)" in restore_block,'native route restore must retry after layout settles')
 require('resetScrollNow' not in bridge,'legacy global scroll-to-top navigation must be removed')
 require('SAVE_TRANSITION_MS' not in bridge and 'SAVE_TRANSITION_ID' not in bridge,'fixed save-transition delay/cover must be removed')
 require('showClientSaveTransition' not in bridge and 'hideClientSaveTransition' not in bridge,'legacy client save masking must be removed')
