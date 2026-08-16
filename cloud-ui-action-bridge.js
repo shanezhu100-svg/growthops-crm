@@ -4,7 +4,8 @@
   if(!vm)return;
   const BOUND='data-growthops-native-action';
   const TOKEN_KEY='growthops_crm_token_v2';
-  const SAVE_RETURN_DELAY_MS=180;
+  const SAVE_TRANSITION_MS=180;
+  const SAVE_TRANSITION_ID='growthops-client-save-transition';
   let pendingClientCloudSaves=0;
   const text=el=>String(el?.textContent||'').replace(/\s+/g,' ').trim();
   const bind=(el,key,handler)=>{
@@ -84,6 +85,27 @@
     else queueMicrotask(settle);
   };
   const finalizeClientListNavigation=()=>navigateNoCarry('clients');
+  const showClientSaveTransition=()=>{
+    const old=document.getElementById(SAVE_TRANSITION_ID);
+    if(old)old.remove();
+    const cover=document.createElement('div');
+    cover.id=SAVE_TRANSITION_ID;
+    cover.setAttribute('role','status');
+    cover.setAttribute('aria-live','polite');
+    cover.style.cssText='position:fixed;inset:0;z-index:460;display:flex;align-items:center;justify-content:center;background:rgba(248,250,252,.97);opacity:1;transition:opacity 90ms ease;pointer-events:auto;';
+    const panel=document.createElement('div');
+    panel.textContent='正在保存客户…';
+    panel.style.cssText='padding:13px 20px;border-radius:12px;background:#fff;border:1px solid #e2e8f0;box-shadow:0 12px 32px rgba(15,23,42,.10);font-weight:700;color:#0f172a;';
+    cover.appendChild(panel);
+    document.body.appendChild(cover);
+    return cover;
+  };
+  const hideClientSaveTransition=()=>{
+    const cover=document.getElementById(SAVE_TRANSITION_ID);
+    if(!cover)return;
+    cover.style.opacity='0';
+    setTimeout(()=>cover.remove(),90);
+  };
   const protectPendingSave=event=>{
     if(pendingClientCloudSaves<=0)return;
     event.preventDefault();
@@ -144,14 +166,18 @@
               delete button.dataset.growthopsClientSaving;
               return;
             }
+            showClientSaveTransition();
+            finalizeClientListNavigation();
             if(persistRequested&&typeof cloud?.saveNow==='function'){
-              vm.notify?.('客户已更新，正在同步云端…');
-              trackClientCloudSave(cloud.saveNow()).catch(()=>{});
+              requestAnimationFrame(()=>{
+                vm.notify?.('客户已更新，正在同步云端…');
+                trackClientCloudSave(cloud.saveNow()).catch(()=>{});
+              });
             }
             setTimeout(()=>{
-              finalizeClientListNavigation();
+              hideClientSaveTransition();
               delete button.dataset.growthopsClientSaving;
-            },SAVE_RETURN_DELAY_MS);
+            },SAVE_TRANSITION_MS);
           };
           if(result&&typeof result.then==='function')result.then(()=>complete()).catch(error=>{
             delete button.dataset.growthopsClientSaving;
@@ -167,5 +193,5 @@
   observer.observe(document.documentElement,{subtree:true,childList:true});
   setInterval(install,250);
   install();
-  window.__GROWTHOPS_UI_ACTION_BRIDGE__={installed:true,version:'native-action-bridge-v13-scroll-isolated'};
+  window.__GROWTHOPS_UI_ACTION_BRIDGE__={installed:true,version:'native-action-bridge-v14-save-transition'};
 })();
