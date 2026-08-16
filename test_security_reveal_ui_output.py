@@ -16,7 +16,7 @@ for marker in (
     'id="growthops-secure-credential-button"',
     "v-if=\"currentUser?.role==='ADMIN'\"",
     'v-else-if="canViewCredentials()"',
-    '从 Vault 临时读取登录资料并原位显示，60 秒后自动清除',
+    '密码 / 2FA 需单独显示，30 秒后自动清除',
     '查看登录资料',
 ):
     require(marker in html,f'unified inline login credential control missing: {marker}')
@@ -30,27 +30,30 @@ require('document.body.appendChild(overlay)' not in security,'secure Vault revea
 require('button.remove()' not in security,'security script must not remove Vue-owned reveal control')
 require('host.header.appendChild(button)' not in security,'security script must not mutate client-detail child structure')
 require("crm_reveal_client_secrets" in security,'Vault reveal RPC missing')
-require('setTimeout(clearReveal,60000)' in security,'60-second reveal auto-clear missing')
+require('setTimeout(clearReveal,30000)' in security,'30-second Vault memory lifetime missing')
+require('setTimeout(hide,10000)' in security,'per-field 10-second clear missing')
 require('navigator.clipboard' not in security,'secure reveal must not auto-copy credentials')
 
 for marker in (
     "const INLINE_ATTR='data-growthops-vault-inline'",
     'setRevealButtonState','隐藏登录资料','locateCredentialRows','credentialCardForLabel','valueCellForLabel',
-    'platformForCard','scoreSecretField','bestSecretValue','applyInlineSecrets','setInlineValue',
-    "exactLeaf(card,'登录账号')","exactLeaf(card,'密码 / 2FA')",
-    "data-growthops-vault-kind",'Vault 临时显示 · 60 秒后自动隐藏',
+    'platformForCard','scoreSecretField','bestSecretValue','applyInlineSecrets','setInlineValue','setInlineSecretControl',
+    'prepareInlineCell',"exactLeaf(card,'登录账号')","exactLeaf(card,'密码 / 2FA')",
+    "data-growthops-vault-kind",'Vault 已加载 · 点击眼睛显示 10 秒',
     'isAccountAssetPage','accountAssetRevealButtons','secureRevealButtons','resolveCredentialClientId',
     "bodyText.includes('Facebook 资产')","bodyText.includes('TikTok 资产')",
     "['selectedClientId','selectedAssetClientId','assetClientId','clientAssetClientId']",
+    "window.addEventListener('blur',clearReveal)","window.addEventListener('pagehide',clearReveal)",
+    'CREDENTIAL_REAUTH_REQUIRED','CREDENTIAL_REVEAL_THROTTLED'
 ):
     require(marker in security,f'inline Vault reveal marker missing: {marker}')
 
 require("const inCredentialContext=vm.currentPage==='client-detail'||isAccountAssetPage();" in security,'Vault reveal must support both client detail and account asset views')
 require("const visible=vm.currentUser?.role==='ADMIN'&&inCredentialContext&&clientId!=='';" in security,'Vault reveal must remain ADMIN-only and require a resolved client')
 require("const label=cleanText(button);" in security and "label==='查看登录资料'||label==='隐藏登录资料'" in security,'existing account asset login-details button must be adopted')
-require("button.addEventListener('click',event=>" in security and "event.stopImmediatePropagation();" in security and "},true);" in security,'secure handler must intercept the legacy asset-page visibility toggle before it exposes stale state')
+require("button.addEventListener('click',event=>" in security and "event.stopImmediatePropagation();" in security and "},true);" in security,'secure handler must intercept the legacy asset-page visibility toggle')
 require("const clientId=resolveCredentialClientId();" in security,'Vault RPC must resolve the active client on account asset pages')
-require("if(revealData){clearReveal();return;}" in security,'clicking the unified control while revealed must hide inline credentials without another Vault fetch')
+require("if(revealData){clearReveal();return;}" in security,'clicking the unified control while loaded must clear credentials without another Vault fetch')
 require('if(revealData)clearReveal();' in security,'inline reveal must clear when leaving an authorized credential context')
 
 require("if(value.includes('facebook'))return 'facebook';" in security,'Facebook credential cards must be detected independently')
@@ -58,9 +61,14 @@ require("if(value.includes('tiktok'))return 'tiktok';" in security,'TikTok crede
 require("if(platform==='facebook')" in security and "if(key.includes('fblogin'))score+=45;" in security,'Facebook Vault fields must be platform-scored')
 require("else if(platform==='tiktok')" in security and "if(key.includes('tklogin'))score+=45;" in security,'TikTok Vault fields must be platform-scored')
 require("cell.dataset.growthopsVaultPrevious=cell.textContent||'';" in security,'inline reveal must preserve the previous masked or not-entered value')
-require("cell.textContent=value;" in security,'Vault values must render into the existing credential value cells')
+require("cell.textContent=value;" in security,'login account may render into the existing value cell')
+require("display.textContent='••••••••';" in security,'password / 2FA must remain masked after Vault load')
+require("display.textContent=value;" in security,'password / 2FA may reveal only after field eye activation')
+require("toggle.setAttribute('aria-label','显示密码和 2FA')" in security,'secret eye control must be accessible')
 require("el.textContent=el.dataset.growthopsVaultPrevious;" in security,'auto-clear must restore the previous value')
-require("secureParts.push(`2FA: ${twofa}`);" in security,'password / 2FA row must render 2FA inline when available')
+require("secureParts.push(`2FA: ${twofa}`);" in security,'password / 2FA row must support 2FA inline')
+require("revealData={active:true,clientId:String(clientId)};" in security,'full secret tree must not remain in the global reveal state')
+require('secretTree=null;' in security,'temporary secret tree reference must be released after rendering field controls')
 require('renderRevealModal(clientId,secretTree)' in security,'existing reveal call contract must remain stable while rendering inline')
 
 print('SECURITY_REVEAL_UI_OUTPUT_TESTS_OK: index='+hashlib.sha256(index_path.read_bytes()).hexdigest()+'; security='+hashlib.sha256(security_path.read_bytes()).hexdigest())
