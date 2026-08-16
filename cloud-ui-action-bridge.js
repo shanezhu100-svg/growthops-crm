@@ -4,9 +4,11 @@
   if(!vm)return;
   const BOUND='data-growthops-native-action';
   const TOKEN_KEY='growthops_crm_token_v2';
-  const SAVE_TRANSITION_MS=180;
-  const SAVE_TRANSITION_ID='growthops-client-save-transition';
+  const PAGE_SCROLL_PAGES=new Set(['clients','client-form','client-detail']);
+  const pageScrollPositions=Object.create(null);
   let pendingClientCloudSaves=0;
+  let routeSwitching=false;
+  let lastObservedPage=vm.currentPage||'';
   const text=el=>String(el?.textContent||'').replace(/\s+/g,' ').trim();
   const bind=(el,key,handler)=>{
     if(!el||el.getAttribute(BOUND)===key)return;
@@ -51,32 +53,65 @@
       window.history.replaceState(window.history.state,'',next.toString());
     }catch{}
   };
-  const resetScrollNow=()=>{
+  const readScrollTop=()=>{
     const scroller=document.scrollingElement||document.documentElement;
-    if(scroller)scroller.scrollTop=0;
-    if(document.documentElement)document.documentElement.scrollTop=0;
-    if(document.body)document.body.scrollTop=0;
+    return Math.max(0,Number(scroller?.scrollTop||document.documentElement?.scrollTop||document.body?.scrollTop||0));
   };
-  const navigateNoCarry=page=>{
+  const writeScrollTop=top=>{
+    const value=Math.max(0,Number(top)||0);
+    const scroller=document.scrollingElement||document.documentElement;
+    if(scroller)scroller.scrollTop=value;
+    if(document.documentElement&&document.documentElement!==scroller)document.documentElement.scrollTop=value;
+    if(document.body&&document.body!==scroller)document.body.scrollTop=value;
+  };
+  const rememberPageScroll=(page=vm.currentPage)=>{
+    if(routeSwitching||!PAGE_SCROLL_PAGES.has(page))return;
+    pageScrollPositions[page]=readScrollTop();
+  };
+  const getPageScroll=page=>{
+    const value=pageScrollPositions[page];
+    return Number.isFinite(value)?Math.max(0,value):0;
+  };
+  const restorePageScrollInstant=page=>{
     const root=document.documentElement;
     const body=document.body;
     const oldRootBehavior=root.style.scrollBehavior;
     const oldBodyBehavior=body?.style?.scrollBehavior||'';
     root.style.scrollBehavior='auto';
     if(body)body.style.scrollBehavior='auto';
-    resetScrollNow();
+    writeScrollTop(getPageScroll(page));
+    requestAnimationFrame(()=>{
+      writeScrollTop(getPageScroll(page));
+      root.style.scrollBehavior=oldRootBehavior;
+      if(body)body.style.scrollBehavior=oldBodyBehavior;
+    });
+  };
+  const navigateWithPageScroll=page=>{
+    const sourcePage=vm.currentPage;
+    if(sourcePage)rememberPageScroll(sourcePage);
+    const targetTop=getPageScroll(page);
+    const root=document.documentElement;
+    const body=document.body;
+    const oldRootBehavior=root.style.scrollBehavior;
+    const oldBodyBehavior=body?.style?.scrollBehavior||'';
+    routeSwitching=true;
+    root.style.scrollBehavior='auto';
+    if(body)body.style.scrollBehavior='auto';
     vm.currentPage=page;
     vm.mobileMenuOpen=false;
     setPageUrl(page);
+    writeScrollTop(targetTop);
     try{vm.$forceUpdate?.()}catch{}
     const settle=()=>{
       if(vm.currentPage!==page){
         vm.currentPage=page;
         try{vm.$forceUpdate?.()}catch{}
       }
-      resetScrollNow();
+      writeScrollTop(targetTop);
       requestAnimationFrame(()=>{
-        resetScrollNow();
+        writeScrollTop(targetTop);
+        routeSwitching=false;
+        lastObservedPage=page;
         root.style.scrollBehavior=oldRootBehavior;
         if(body)body.style.scrollBehavior=oldBodyBehavior;
       });
@@ -84,28 +119,7 @@
     if(typeof vm.$nextTick==='function')vm.$nextTick(settle);
     else queueMicrotask(settle);
   };
-  const finalizeClientListNavigation=()=>navigateNoCarry('clients');
-  const showClientSaveTransition=()=>{
-    const old=document.getElementById(SAVE_TRANSITION_ID);
-    if(old)old.remove();
-    const cover=document.createElement('div');
-    cover.id=SAVE_TRANSITION_ID;
-    cover.setAttribute('role','status');
-    cover.setAttribute('aria-live','polite');
-    cover.style.cssText='position:fixed;inset:0;z-index:460;display:flex;align-items:center;justify-content:center;background:rgba(248,250,252,.97);opacity:1;transition:opacity 90ms ease;pointer-events:auto;';
-    const panel=document.createElement('div');
-    panel.textContent='正在保存客户…';
-    panel.style.cssText='padding:13px 20px;border-radius:12px;background:#fff;border:1px solid #e2e8f0;box-shadow:0 12px 32px rgba(15,23,42,.10);font-weight:700;color:#0f172a;';
-    cover.appendChild(panel);
-    document.body.appendChild(cover);
-    return cover;
-  };
-  const hideClientSaveTransition=()=>{
-    const cover=document.getElementById(SAVE_TRANSITION_ID);
-    if(!cover)return;
-    cover.style.opacity='0';
-    setTimeout(()=>cover.remove(),90);
-  };
+  const finalizeClientListNavigation=()=>navigateWithPageScroll('clients');
   const protectPendingSave=event=>{
     if(pendingClientCloudSaves<=0)return;
     event.preventDefault();
@@ -130,15 +144,30 @@
     const button=[...document.querySelectorAll('button')].find(b=>match(text(b)));
     return button?.closest('.fixed.inset-0.modal-backdrop')||null;
   }
+  const observePageScroll=()=>{
+    const page=vm.currentPage||'';
+    if(page===lastObservedPage){
+      rememberPageScroll(page);
+      return;
+    }
+    if(page==='client-form'&&lastObservedPage!=='client-form'&&!routeSwitching){
+      pageScrollPositions['client-form']=0;
+      restorePageScrollInstant('client-form');
+    }
+    lastObservedPage=page;
+    rememberPageScroll(page);
+  };
+  window.addEventListener('scroll',()=>rememberPageScroll(vm.currentPage),{passive:true});
   function install(){
     clearSessionRestoreCover();
+    observePageScroll();
     bindModal(modalByButton(label=>label==='保存客户开户渠道'),'showOpeningModal',label=>label==='保存客户开户渠道','saveOpeningDeal');
     bindModal(modalByButton(label=>label==='保存开户商'),'showProviderModal',label=>label==='保存开户商','saveOpeningProvider');
     bindModal(modalByButton(label=>label.includes('保存并同步数据')||label.includes('更新并同步数据')),'showAdDataModal',label=>label.includes('保存并同步数据')||label.includes('更新并同步数据'),'saveAdDataRecord');
     if(vm.currentPage==='client-form'){
       document.querySelectorAll('button').forEach(button=>{
         const label=text(button),icon=button.querySelector('i.fa-arrow-left');
-        if(label==='取消'||icon)bind(button,'client-form-back',()=>navigateNoCarry(vm.form?.id?'client-detail':'clients'));
+        if(label==='取消'||icon)bind(button,'client-form-back',()=>navigateWithPageScroll(vm.form?.id?'client-detail':'clients'));
         if(label==='保存修改'||label==='确认合作并创建客户')bind(button,'client-form-save',()=>{
           if(button.dataset.growthopsClientSaving==='1')return;
           if(!validateButtonForm(button))return;
@@ -166,18 +195,14 @@
               delete button.dataset.growthopsClientSaving;
               return;
             }
-            showClientSaveTransition();
             finalizeClientListNavigation();
+            delete button.dataset.growthopsClientSaving;
             if(persistRequested&&typeof cloud?.saveNow==='function'){
               requestAnimationFrame(()=>{
                 vm.notify?.('客户已更新，正在同步云端…');
                 trackClientCloudSave(cloud.saveNow()).catch(()=>{});
               });
             }
-            setTimeout(()=>{
-              hideClientSaveTransition();
-              delete button.dataset.growthopsClientSaving;
-            },SAVE_TRANSITION_MS);
           };
           if(result&&typeof result.then==='function')result.then(()=>complete()).catch(error=>{
             delete button.dataset.growthopsClientSaving;
@@ -193,5 +218,5 @@
   observer.observe(document.documentElement,{subtree:true,childList:true});
   setInterval(install,250);
   install();
-  window.__GROWTHOPS_UI_ACTION_BRIDGE__={installed:true,version:'native-action-bridge-v14-save-transition'};
+  window.__GROWTHOPS_UI_ACTION_BRIDGE__={installed:true,version:'native-action-bridge-v15-page-scroll-memory'};
 })();
