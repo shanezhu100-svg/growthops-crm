@@ -19,8 +19,10 @@ required = {
     'legacy load browser access revoked': 'revoke execute on function public.crm_load_state(text) from anon, authenticated, public;',
     'legacy login service only': 'grant execute on function public.crm_login(text,text) to service_role;',
     'legacy load service only': 'grant execute on function public.crm_load_state(text) to service_role;',
-    'v3 login anon preserved': 'grant execute on function public.crm_login_v3(text,text) to anon, authenticated, service_role;',
-    'v3 load anon preserved': 'grant execute on function public.crm_load_state_v3(text) to anon, authenticated, service_role;',
+    'v3 login anon preserved': 'grant execute on function public.crm_login_v3(text,text) to anon, service_role;',
+    'v3 load anon preserved': 'grant execute on function public.crm_load_state_v3(text) to anon, service_role;',
+    'v3 restore explicitly removes authenticated login': 'revoke execute on function public.crm_login_v3(text,text) from authenticated;',
+    'v3 restore explicitly removes authenticated load': 'revoke execute on function public.crm_load_state_v3(text) from authenticated;',
     'authenticated removed from v3 login': 'revoke execute on function public.crm_login_v3(text,text) from authenticated;',
     'authenticated removed from v3 load': 'revoke execute on function public.crm_load_state_v3(text) from authenticated;',
     'authenticated removed from v4 reveal': 'revoke execute on function public.crm_reveal_client_secret_field_v4(text,text,text,text,text) from authenticated;',
@@ -41,6 +43,8 @@ sources = {
     'legacy load service only': legacy,
     'v3 login anon preserved': restore_v3,
     'v3 load anon preserved': restore_v3,
+    'v3 restore explicitly removes authenticated login': restore_v3,
+    'v3 restore explicitly removes authenticated load': restore_v3,
     'authenticated removed from v3 login': authn,
     'authenticated removed from v3 load': authn,
     'authenticated removed from v4 reveal': authn,
@@ -52,6 +56,10 @@ sources = {
 missing = [name for name, marker in required.items() if marker not in sources[name]]
 if missing:
     raise SystemExit('RPC_SURFACE_HARDENING_TESTS_FAILED missing: ' + ', '.join(missing))
+
+for source_name, text in (('bootstrap', bootstrap), ('restore_v3', restore_v3)):
+    if 'to anon, authenticated, service_role' in text:
+        raise SystemExit(f'RPC_SURFACE_HARDENING_TESTS_FAILED authenticated grant can reappear via {source_name}')
 
 # Final browser artifact must not regress to the secret-bearing base RPC names.
 if 'legacy crm_login endpoint remains in final adapter' not in security_gate:
