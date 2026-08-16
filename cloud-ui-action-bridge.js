@@ -48,27 +48,22 @@
       window.history.replaceState(window.history.state,'',next.toString());
     }catch{}
   };
-  const instantNavigate=page=>{
-    const root=document.documentElement;
-    const body=document.body;
-    const oldRoot=root.style.scrollBehavior;
-    const oldBody=body?.style?.scrollBehavior||'';
-    root.style.scrollBehavior='auto';
-    if(body)body.style.scrollBehavior='auto';
+  const settleScrollTop=()=>{
+    const apply=()=>{
+      const scroller=document.scrollingElement||document.documentElement;
+      if(scroller)scroller.scrollTop=0;
+      if(document.body)document.body.scrollTop=0;
+    };
+    if(typeof vm.$nextTick==='function')vm.$nextTick(apply);
+    else queueMicrotask(apply);
+  };
+  const quietNavigate=page=>{
     vm.currentPage=page;
     vm.mobileMenuOpen=false;
     setPageUrl(page);
-    try{vm.$forceUpdate?.()}catch{}
-    try{window.scrollTo({top:0,left:0,behavior:'auto'})}catch{window.scrollTo(0,0)}
-    requestAnimationFrame(()=>{
-      if(vm.currentPage!==page)vm.currentPage=page;
-      try{vm.$forceUpdate?.()}catch{}
-      try{window.scrollTo({top:0,left:0,behavior:'auto'})}catch{window.scrollTo(0,0)}
-      root.style.scrollBehavior=oldRoot;
-      if(body)body.style.scrollBehavior=oldBody;
-    });
+    settleScrollTop();
   };
-  const finalizeClientListNavigation=()=>instantNavigate('clients');
+  const finalizeClientListNavigation=()=>quietNavigate('clients');
   function modalByButton(match){
     const button=[...document.querySelectorAll('button')].find(b=>match(text(b)));
     return button?.closest('.fixed.inset-0.modal-backdrop')||null;
@@ -81,7 +76,7 @@
     if(vm.currentPage==='client-form'){
       document.querySelectorAll('button').forEach(button=>{
         const label=text(button),icon=button.querySelector('i.fa-arrow-left');
-        if(label==='取消'||icon)bind(button,'client-form-back',()=>instantNavigate(vm.form?.id?'client-detail':'clients'));
+        if(label==='取消'||icon)bind(button,'client-form-back',()=>quietNavigate(vm.form?.id?'client-detail':'clients'));
         if(label==='保存修改'||label==='确认合作并创建客户')bind(button,'client-form-save',()=>{
           if(!validateButtonForm(button))return;
           if(typeof vm.saveClient!=='function'){vm.notify?.('客户保存功能未加载，请刷新页面');return}
@@ -110,5 +105,5 @@
   observer.observe(document.documentElement,{subtree:true,childList:true});
   setInterval(install,250);
   install();
-  window.__GROWTHOPS_UI_ACTION_BRIDGE__={installed:true,version:'native-action-bridge-v8'};
+  window.__GROWTHOPS_UI_ACTION_BRIDGE__={installed:true,version:'native-action-bridge-v9'};
 })();
