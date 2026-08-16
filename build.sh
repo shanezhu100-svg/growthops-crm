@@ -10,6 +10,7 @@ python3 security_reveal_ui_finalize.py
 python3 credential_template_initial_finalize.py
 python3 credential_status_ui_finalize.py
 python3 account_asset_client_context_finalize.py
+python3 assets_all_clients_finalize.py
 python3 credential_status_loading_finalize.py
 python3 account_asset_value_typography_finalize.py
 python3 test_credential_status_ui_output.py
@@ -27,6 +28,7 @@ python3 credential_unlock_v4_finalize.py
 python3 test_credential_unlock_v4_output.py
 python3 credential_client_detail_v4_finalize.py
 python3 test_credential_client_detail_v4_output.py
+python3 test_assets_all_clients_output.py
 python3 test_workspace_state_secret_hard_guard.py
 python3 test_backup_security_output.py
 python3 test_vercel_security_headers.py
