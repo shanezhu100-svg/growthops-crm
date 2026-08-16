@@ -1,0 +1,19 @@
+name: Inspect current client selector
+
+on:
+  push:
+    branches:
+      - fix-security-reveal-native-20260816
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: sh build.sh
+      - name: Inspect selector
+        run: python3 inspect_current_client_selector.py
