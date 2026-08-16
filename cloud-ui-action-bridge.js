@@ -4,7 +4,7 @@
   if(!vm)return;
   const BOUND='data-growthops-native-action';
   const TOKEN_KEY='growthops_crm_token_v2';
-  const SAVE_RETURN_DELAY_MS=350;
+  const SAVE_RETURN_DELAY_MS=180;
   let pendingClientCloudSaves=0;
   const text=el=>String(el?.textContent||'').replace(/\s+/g,' ').trim();
   const bind=(el,key,handler)=>{
@@ -50,58 +50,40 @@
       window.history.replaceState(window.history.state,'',next.toString());
     }catch{}
   };
-  const settleScrollTop=()=>{
-    const apply=()=>{
-      const scroller=document.scrollingElement||document.documentElement;
-      if(scroller)scroller.scrollTop=0;
-      if(document.body)document.body.scrollTop=0;
-    };
-    if(typeof vm.$nextTick==='function')vm.$nextTick(apply);
-    else queueMicrotask(apply);
+  const resetScrollNow=()=>{
+    const scroller=document.scrollingElement||document.documentElement;
+    if(scroller)scroller.scrollTop=0;
+    if(document.documentElement)document.documentElement.scrollTop=0;
+    if(document.body)document.body.scrollTop=0;
   };
-  const quietNavigate=page=>{
-    vm.currentPage=page;
-    vm.mobileMenuOpen=false;
-    setPageUrl(page);
-    settleScrollTop();
-  };
-  const navigateWithoutSmooth=page=>{
+  const navigateNoCarry=page=>{
     const root=document.documentElement;
     const body=document.body;
     const oldRootBehavior=root.style.scrollBehavior;
     const oldBodyBehavior=body?.style?.scrollBehavior||'';
-    const originalScrollTo=window.scrollTo;
-    const originalScroll=window.scroll;
-    const originalScrollIntoView=Element.prototype.scrollIntoView;
     root.style.scrollBehavior='auto';
     if(body)body.style.scrollBehavior='auto';
-    try{
-      window.scrollTo=function(...args){
-        if(args.length===1&&args[0]&&typeof args[0]==='object')return originalScrollTo.call(window,{...args[0],behavior:'auto'});
-        return originalScrollTo.apply(window,args);
-      };
-      window.scroll=function(...args){
-        if(args.length===1&&args[0]&&typeof args[0]==='object')return originalScroll.call(window,{...args[0],behavior:'auto'});
-        return originalScroll.apply(window,args);
-      };
-      Element.prototype.scrollIntoView=function(arg){
-        if(arg&&typeof arg==='object')return originalScrollIntoView.call(this,{...arg,behavior:'auto'});
-        return originalScrollIntoView.call(this,arg);
-      };
-      if(typeof vm.navigateTo==='function')vm.navigateTo(page);
-      else quietNavigate(page);
-    }catch(error){
-      console.error(error);
-      quietNavigate(page);
-    }finally{
-      window.scrollTo=originalScrollTo;
-      window.scroll=originalScroll;
-      Element.prototype.scrollIntoView=originalScrollIntoView;
-      root.style.scrollBehavior=oldRootBehavior;
-      if(body)body.style.scrollBehavior=oldBodyBehavior;
-    }
+    resetScrollNow();
+    vm.currentPage=page;
+    vm.mobileMenuOpen=false;
+    setPageUrl(page);
+    try{vm.$forceUpdate?.()}catch{}
+    const settle=()=>{
+      if(vm.currentPage!==page){
+        vm.currentPage=page;
+        try{vm.$forceUpdate?.()}catch{}
+      }
+      resetScrollNow();
+      requestAnimationFrame(()=>{
+        resetScrollNow();
+        root.style.scrollBehavior=oldRootBehavior;
+        if(body)body.style.scrollBehavior=oldBodyBehavior;
+      });
+    };
+    if(typeof vm.$nextTick==='function')vm.$nextTick(settle);
+    else queueMicrotask(settle);
   };
-  const finalizeClientListNavigation=()=>quietNavigate('clients');
+  const finalizeClientListNavigation=()=>navigateNoCarry('clients');
   const protectPendingSave=event=>{
     if(pendingClientCloudSaves<=0)return;
     event.preventDefault();
@@ -134,7 +116,7 @@
     if(vm.currentPage==='client-form'){
       document.querySelectorAll('button').forEach(button=>{
         const label=text(button),icon=button.querySelector('i.fa-arrow-left');
-        if(label==='取消'||icon)bind(button,'client-form-back',()=>navigateWithoutSmooth(vm.form?.id?'client-detail':'clients'));
+        if(label==='取消'||icon)bind(button,'client-form-back',()=>navigateNoCarry(vm.form?.id?'client-detail':'clients'));
         if(label==='保存修改'||label==='确认合作并创建客户')bind(button,'client-form-save',()=>{
           if(button.dataset.growthopsClientSaving==='1')return;
           if(!validateButtonForm(button))return;
@@ -185,5 +167,5 @@
   observer.observe(document.documentElement,{subtree:true,childList:true});
   setInterval(install,250);
   install();
-  window.__GROWTHOPS_UI_ACTION_BRIDGE__={installed:true,version:'native-action-bridge-v12-balanced-save'};
+  window.__GROWTHOPS_UI_ACTION_BRIDGE__={installed:true,version:'native-action-bridge-v13-scroll-isolated'};
 })();
