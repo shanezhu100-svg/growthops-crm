@@ -9,6 +9,7 @@
   let pendingClientCloudSaves=0;
   let routeSwitching=false;
   let lastObservedPage=vm.currentPage||'';
+  try{if('scrollRestoration' in window.history)window.history.scrollRestoration='manual'}catch{}
   const text=el=>String(el?.textContent||'').replace(/\s+/g,' ').trim();
   const bind=(el,key,handler)=>{
     if(!el||el.getAttribute(BOUND)===key)return;
@@ -73,18 +74,32 @@
     return Number.isFinite(value)?Math.max(0,value):0;
   };
   const restorePageScrollInstant=page=>{
+    const targetTop=getPageScroll(page);
     const root=document.documentElement;
     const body=document.body;
     const oldRootBehavior=root.style.scrollBehavior;
     const oldBodyBehavior=body?.style?.scrollBehavior||'';
+    routeSwitching=true;
     root.style.scrollBehavior='auto';
     if(body)body.style.scrollBehavior='auto';
-    writeScrollTop(getPageScroll(page));
-    requestAnimationFrame(()=>{
-      writeScrollTop(getPageScroll(page));
+    const apply=()=>writeScrollTop(targetTop);
+    const finish=()=>{
+      apply();
+      routeSwitching=false;
+      lastObservedPage=page;
       root.style.scrollBehavior=oldRootBehavior;
       if(body)body.style.scrollBehavior=oldBodyBehavior;
-    });
+    };
+    apply();
+    const settle=()=>{
+      apply();
+      requestAnimationFrame(()=>{
+        apply();
+        setTimeout(finish,80);
+      });
+    };
+    if(typeof vm.$nextTick==='function')vm.$nextTick(settle);
+    else queueMicrotask(settle);
   };
   const navigateWithPageScroll=page=>{
     const sourcePage=vm.currentPage;
@@ -164,12 +179,13 @@
       rememberPageScroll(page);
       return;
     }
-    if(page==='client-form'&&lastObservedPage!=='client-form'&&!routeSwitching){
-      pageScrollPositions['client-form']=0;
-      restorePageScrollInstant('client-form');
-    }
+    const previousPage=lastObservedPage;
     lastObservedPage=page;
-    rememberPageScroll(page);
+    if(routeSwitching)return;
+    if(!PAGE_SCROLL_PAGES.has(page))return;
+    if(page==='client-form'&&previousPage!=='client-form')pageScrollPositions['client-form']=0;
+    if(page==='client-detail'&&previousPage==='clients')pageScrollPositions['client-detail']=0;
+    restorePageScrollInstant(page);
   };
   window.addEventListener('scroll',()=>rememberPageScroll(vm.currentPage),{passive:true});
   function install(){
@@ -237,5 +253,5 @@
   observer.observe(document.documentElement,{subtree:true,childList:true});
   setInterval(install,250);
   install();
-  window.__GROWTHOPS_UI_ACTION_BRIDGE__={installed:true,version:'native-action-bridge-v16-detail-scroll-memory'};
+  window.__GROWTHOPS_UI_ACTION_BRIDGE__={installed:true,version:'native-action-bridge-v17-route-scroll-isolation'};
 })();
