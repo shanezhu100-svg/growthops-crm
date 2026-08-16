@@ -4,7 +4,7 @@
   if(!vm||window.__GROWTHOPS_UI_RUNTIME_DIAG__)return;
 
   const BOUND='data-growthops-native-action';
-  const MAX_LINES=7;
+  const MAX_LINES=14;
   const lines=[];
   const state=()=>({
     page:String(vm.currentPage||''),
@@ -13,27 +13,37 @@
     formId:!!vm.form?.id,
     dirty:!!vm.formDirty
   });
-  const esc=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+  const esc=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[ch]));
   const safeError=error=>{
     const name=String(error?.name||'Error').replace(/[^A-Za-z0-9_$.-]/g,'').slice(0,40)||'Error';
     const raw=String(error?.message||'').replace(/https?:\/\/\S+/g,'[url]').replace(/[\r\n]+/g,' ').slice(0,140);
     return `${name}${raw?`: ${raw}`:''}`;
   };
   const snapshotText=s=>`page=${s.page||'—'} selected=${s.selectedClient?'yes':'no'} idType=${s.selectedIdType} form=${s.formId?'edit':'new/none'} dirty=${s.dirty?'yes':'no'}`;
+  const safeCallerStack=()=>{
+    const raw=String(new Error('trace').stack||'').split('\n').slice(2,9);
+    const cleaned=raw.map(line=>line.trim()
+      .replace(/https?:\/\/[^\s)]+/g,'[url]')
+      .replace(/\?[^\s)]+/g,'')
+      .replace(/^at\s+/,'')
+      .slice(0,150))
+      .filter(line=>line&&!line.includes('ui-runtime-diagnostic.js'));
+    return cleaned.slice(0,4).join(' <- ')||'unknown';
+  };
 
   let panel=null;
   function ensurePanel(){
     if(panel?.isConnected)return panel;
     panel=document.createElement('div');
     panel.id='growthops-ui-runtime-diag';
-    panel.style.cssText='position:fixed;left:12px;bottom:12px;z-index:2147483646;width:min(680px,calc(100vw - 24px));max-height:42vh;overflow:auto;pointer-events:none;background:rgba(15,23,42,.94);color:#e2e8f0;border:1px solid rgba(148,163,184,.45);border-radius:12px;padding:10px 12px;box-shadow:0 12px 40px rgba(15,23,42,.28);font:11px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:normal;';
+    panel.style.cssText='position:fixed;left:12px;bottom:12px;z-index:2147483646;width:min(820px,calc(100vw - 24px));max-height:58vh;overflow:auto;pointer-events:none;background:rgba(15,23,42,.95);color:#e2e8f0;border:1px solid rgba(148,163,184,.45);border-radius:12px;padding:10px 12px;box-shadow:0 12px 40px rgba(15,23,42,.28);font:11px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:normal;';
     document.body.appendChild(panel);
     render();
     return panel;
   }
   function render(){
     if(!panel?.isConnected)return;
-    panel.innerHTML=`<div style="font-weight:800;color:#fff;margin-bottom:5px">UI DIAG · 只读诊断</div>${lines.length?lines.map(line=>`<div style="border-top:1px solid rgba(148,163,184,.18);padding:3px 0">${esc(line)}</div>`).join(''):'<div>等待点击：详情 / 返回 / 取消</div>'}`;
+    panel.innerHTML=`<div style="font-weight:800;color:#fff;margin-bottom:5px">UI DIAG v2 · 只读诊断</div>${lines.length?lines.map(line=>`<div style="border-top:1px solid rgba(148,163,184,.18);padding:3px 0">${esc(line)}</div>`).join(''):'<div>等待点击：详情 / 返回 / 取消</div>'}`;
   }
   function log(message){
     lines.unshift(`${new Date().toLocaleTimeString('zh-CN',{hour12:false})} ${message}`);
@@ -54,6 +64,9 @@
       if(label==='详情'||label==='查看客户详情')return'DETAIL';
       const row=button.closest('tbody tr');
       if(row&&button===row.querySelector('td:first-child button'))return'DETAIL_NAME';
+    }
+    if(vm.currentPage==='client-detail'){
+      if(button.querySelector('i.fa-arrow-left'))return'DETAIL_BACK';
     }
     if(vm.currentPage==='client-form'){
       if(label==='取消')return'CANCEL';
@@ -104,7 +117,9 @@
   if(typeof originalNavigateTo==='function'){
     vm.navigateTo=function(page,...rest){
       const target=String(page||'');
-      if(['client-detail','clients','client-form'].includes(target))log(`CALL navigateTo(${target}) BEFORE · ${snapshotText(state())} canView=${typeof vm.canViewPage==='function'?String(!!vm.canViewPage(target)):'unknown'}`);
+      const before=state();
+      if(before.page==='client-detail'&&target==='clients')log(`SOURCE detail→clients · ${safeCallerStack()}`);
+      if(['client-detail','clients','client-form'].includes(target))log(`CALL navigateTo(${target}) BEFORE · ${snapshotText(before)} canView=${typeof vm.canViewPage==='function'?String(!!vm.canViewPage(target)):'unknown'}`);
       try{
         const result=originalNavigateTo.call(this,page,...rest);
         if(['client-detail','clients','client-form'].includes(target)){
@@ -134,5 +149,5 @@
 
   ensurePanel();
   log(`DIAG READY · ${snapshotText(state())}`);
-  window.__GROWTHOPS_UI_RUNTIME_DIAG__={installed:true,version:'client-nav-diag-v1',getLines:()=>[...lines]};
+  window.__GROWTHOPS_UI_RUNTIME_DIAG__={installed:true,version:'client-nav-diag-v2',getLines:()=>[...lines]};
 })();
