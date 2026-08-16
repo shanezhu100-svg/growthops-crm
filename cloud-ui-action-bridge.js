@@ -36,6 +36,17 @@
       });
     });
   };
+  const finalizeClientNavigation=originalId=>{
+    const targetId=originalId||vm.selectedClientId;
+    if(targetId!==null&&targetId!==undefined&&targetId!=='')vm.selectedClientId=targetId;
+    vm.currentPage='client-detail';
+    vm.mobileMenuOpen=false;
+    try{vm.$forceUpdate?.()}catch{}
+    requestAnimationFrame(()=>{
+      if(vm.currentPage!=='client-detail')vm.currentPage='client-detail';
+      try{vm.$forceUpdate?.()}catch{}
+    });
+  };
   function modalByButton(match){
     const button=[...document.querySelectorAll('button')].find(b=>match(text(b)));
     return button?.closest('.fixed.inset-0.modal-backdrop')||null;
@@ -51,8 +62,14 @@
         if(label==='保存修改'||label==='确认合作并创建客户')bind(button,'client-form-save',()=>{
           if(!validateButtonForm(button))return;
           if(typeof vm.saveClient!=='function'){vm.notify?.('客户保存功能未加载，请刷新页面');return}
+          const originalId=vm.form?.id||null;
           const result=vm.saveClient();
-          if(result&&typeof result.catch==='function')result.catch(error=>{console.error(error);vm.notify?.('客户保存失败，请稍后重试')});
+          const complete=()=>{
+            if(vm.formDirty!==false||!vm.selectedClientId)return;
+            finalizeClientNavigation(originalId);
+          };
+          if(result&&typeof result.then==='function')result.then(complete).catch(error=>{console.error(error);vm.notify?.('客户保存失败，请稍后重试')});
+          else queueMicrotask(complete);
         });
       });
     }
@@ -61,5 +78,5 @@
   observer.observe(document.documentElement,{subtree:true,childList:true});
   setInterval(install,250);
   install();
-  window.__GROWTHOPS_UI_ACTION_BRIDGE__={installed:true,version:'native-action-bridge-v4'};
+  window.__GROWTHOPS_UI_ACTION_BRIDGE__={installed:true,version:'native-action-bridge-v5'};
 })();
