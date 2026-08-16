@@ -29,56 +29,90 @@ replace_once(
       window.history.replaceState(window.history.state,'',next.toString());
     }catch{}
   };
-  const directClientNavigate=page=>{
-    vm.currentPage=page;
+  const invokeLegacyClientNavigate=page=>{
+    const sourcePage=vm.currentPage;
+    if(sourcePage)rememberPageScroll(sourcePage);
+    const targetTop=getPageScroll(page);
+    const originalScrollTo=window.scrollTo;
+    window.scrollTo=()=>writeScrollTop(targetTop);
+    try{
+      if(typeof vm.navigateTo==='function')vm.navigateTo(page);
+      else{
+        vm.currentPage=page;
+        setPageUrl(page);
+      }
+    }catch(error){
+      console.error(error);
+      vm.notify?.('页面切换失败，请刷新页面后重试');
+      return false;
+    }finally{
+      window.scrollTo=originalScrollTo;
+    }
     vm.mobileMenuOpen=false;
-    setPageUrl(page);
+    try{vm.$forceUpdate?.()}catch{}
+    const settle=()=>restorePageScrollInstant(page);
+    if(typeof vm.$nextTick==='function')vm.$nextTick(settle);
+    else queueMicrotask(settle);
+    return true;
   };
-  const clientIdForDetailButton=button=>{
-    const label=text(button);
-    if(label==='详情'){
-      const row=button.closest('tr');
-      const rows=row?.parentElement?[...row.parentElement.children].filter(node=>node.tagName==='TR'):[];
-      const index=rows.indexOf(row);
-      return index>=0?(vm.filteredClients?.[index]?.id??null):null;
-    }
-    if(label==='查看客户详情'){
-      const buttons=[...document.querySelectorAll('button')].filter(node=>text(node)==='查看客户详情');
-      const index=buttons.indexOf(button);
-      return index>=0?(vm.filteredClients?.[index]?.id??null):null;
-    }
-    return null;
+  const clientIdForTableRow=button=>{
+    const row=button?.closest('tr');
+    const rows=row?.parentElement?[...row.parentElement.children].filter(node=>node.tagName==='TR'):[];
+    const index=rows.indexOf(row);
+    return index>=0?(vm.filteredClients?.[index]?.id??null):null;
   };
-  const openClientDetailNative=button=>{
-    const clientId=clientIdForDetailButton(button);
+  const clientIdForMobileDetailButton=button=>{
+    const buttons=[...document.querySelectorAll('button')].filter(node=>text(node)==='查看客户详情');
+    const index=buttons.indexOf(button);
+    return index>=0?(vm.filteredClients?.[index]?.id??null):null;
+  };
+  const openClientDetailNative=(button,mobile=false)=>{
+    const clientId=mobile?clientIdForMobileDetailButton(button):clientIdForTableRow(button);
     if(clientId==null){vm.notify?.('客户详情未加载，请刷新页面');return}
-    const originalNavigate=vm.navigateTo;
-    if(typeof originalNavigate==='function')vm.navigateTo=()=>true;
+    const sourcePage=vm.currentPage;
+    if(sourcePage)rememberPageScroll(sourcePage);
+    pageScrollPositions['client-detail']=0;
+    const originalScrollTo=window.scrollTo;
+    window.scrollTo=()=>writeScrollTop(0);
     try{
       if(typeof vm.openClientDetail==='function')vm.openClientDetail(clientId);
-      else vm.selectedClientId=clientId;
+      else{
+        vm.selectedClientId=clientId;
+        if(typeof vm.navigateTo==='function')vm.navigateTo('client-detail');
+        else vm.currentPage='client-detail';
+      }
     }catch(error){
       console.error(error);
       vm.notify?.('客户详情打开失败，请刷新页面后重试');
       return;
     }finally{
-      if(vm.navigateTo!==originalNavigate)vm.navigateTo=originalNavigate;
+      window.scrollTo=originalScrollTo;
     }
     if(vm.selectedClientId==null)vm.selectedClientId=clientId;
-    directClientNavigate('client-detail');
+    if(vm.currentPage!=='client-detail')vm.currentPage='client-detail';
+    setPageUrl('client-detail');
+    try{vm.$forceUpdate?.()}catch{}
+    const settle=()=>restorePageScrollInstant('client-detail');
+    if(typeof vm.$nextTick==='function')vm.$nextTick(settle);
+    else queueMicrotask(settle);
   };
   const readScrollTop=()=>{
 """,
-'direct client navigation helpers'
+'legacy client navigation helpers'
 )
 
 replace_once(
 """    if(vm.currentPage==='client-form'){
 """,
 """    if(vm.currentPage==='clients'){
+      document.querySelectorAll('tbody tr').forEach(row=>{
+        const firstButton=row.querySelector('td:first-child button');
+        const detailButton=[...row.querySelectorAll('button')].find(button=>text(button)==='详情');
+        if(firstButton)bind(firstButton,'client-detail-name-open',()=>openClientDetailNative(firstButton,false));
+        if(detailButton)bind(detailButton,'client-detail-open',()=>openClientDetailNative(detailButton,false));
+      });
       document.querySelectorAll('button').forEach(button=>{
-        const label=text(button);
-        if(label==='详情'||label==='查看客户详情')bind(button,'client-detail-open',()=>openClientDetailNative(button));
+        if(text(button)==='查看客户详情')bind(button,'client-detail-mobile-open',()=>openClientDetailNative(button,true));
       });
     }
     if(vm.currentPage==='client-form'){
@@ -91,7 +125,7 @@ replace_once(
 """,
 """        if(label==='取消'||icon)bind(button,'client-form-back',()=>{
           vm.formDirty=false;
-          directClientNavigate(vm.form?.id?'client-detail':'clients');
+          invokeLegacyClientNavigate(vm.form?.id?'client-detail':'clients');
         });
 """,
 'client form back/cancel binding'
@@ -99,7 +133,7 @@ replace_once(
 
 replace_once(
 """version:'native-action-bridge-v15-page-scroll-memory'""",
-"""version:'native-action-bridge-v16-client-native-navigation'""",
+"""version:'native-action-bridge-v17-legacy-method-navigation'""",
 'UI action bridge version'
 )
 
