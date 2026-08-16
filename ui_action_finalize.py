@@ -8,18 +8,14 @@ src=root/'cloud-ui-action-bridge.js'
 dst=dist/'cloud-ui-action-bridge.js'
 anchor_src=root/'client-scroll-anchor-bridge.js'
 anchor_dst=dist/'client-scroll-anchor-bridge.js'
-transition_src=root/'client-view-transition-bridge.js'
-transition_dst=dist/'client-view-transition-bridge.js'
 
 if not index_path.exists(): raise SystemExit('dist/index.html missing')
 if not src.exists(): raise SystemExit('cloud-ui-action-bridge.js missing')
 if not anchor_src.exists(): raise SystemExit('client-scroll-anchor-bridge.js missing')
-if not transition_src.exists(): raise SystemExit('client-view-transition-bridge.js missing')
 html=index_path.read_text(encoding='utf-8')
 security_tag='<script src="/cloud-security-hotfix.js"></script>'
 bridge_tag='<script src="/cloud-ui-action-bridge.js"></script>'
 anchor_tag='<script src="/client-scroll-anchor-bridge.js"></script>'
-transition_tag='<script src="/client-view-transition-bridge.js"></script>'
 restore_guard='''<style id="growthops-session-restore-style">
 html.growthops-session-restoring body>*{visibility:hidden!important}
 html.growthops-session-restoring body::before{content:'正在恢复登录会话…';visibility:visible!important;position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;background:#f8fafc;color:#334155;font:600 14px/1.4 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.02em}
@@ -27,14 +23,12 @@ html.growthops-session-restoring body::before{content:'正在恢复登录会话�
 if html.count(security_tag)!=1: raise SystemExit('security hotfix tag count mismatch')
 if bridge_tag in html: raise SystemExit('UI action bridge already injected')
 if anchor_tag in html: raise SystemExit('client scroll anchor bridge already injected')
-if transition_tag in html: raise SystemExit('client view transition bridge already injected')
 if 'growthops-session-restore-guard' in html: raise SystemExit('session restore guard already injected')
 if '</head>' not in html: raise SystemExit('head close tag missing')
 html=html.replace('</head>',restore_guard+'</head>',1)
-html=html.replace(security_tag,security_tag+bridge_tag+anchor_tag+transition_tag,1)
+html=html.replace(security_tag,security_tag+bridge_tag+anchor_tag,1)
 index_path.write_text(html,encoding='utf-8')
 shutil.copyfile(src,dst)
 shutil.copyfile(anchor_src,anchor_dst)
-shutil.copyfile(transition_src,transition_dst)
 sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
-print(f'UI_ACTION_FINALIZE_OK: index={sha(index_path)}; bridge={sha(dst)}; anchor={sha(anchor_dst)}; transition={sha(transition_dst)}')
+print(f'UI_ACTION_FINALIZE_OK: index={sha(index_path)}; bridge={sha(dst)}; anchor={sha(anchor_dst)}')
