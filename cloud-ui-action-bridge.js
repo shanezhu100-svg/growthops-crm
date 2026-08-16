@@ -64,20 +64,6 @@
     settleScrollTop();
   };
   const finalizeClientListNavigation=()=>quietNavigate('clients');
-  const beginSaving=button=>{
-    if(button.dataset.growthopsSaving==='1')return null;
-    const state={html:button.innerHTML,disabled:button.disabled};
-    button.dataset.growthopsSaving='1';
-    button.disabled=true;
-    button.innerHTML='<i class="fas fa-spinner fa-spin mr-2"></i>保存中…';
-    return state;
-  };
-  const endSaving=(button,state)=>{
-    if(!state)return;
-    delete button.dataset.growthopsSaving;
-    button.disabled=state.disabled;
-    button.innerHTML=state.html;
-  };
   function modalByButton(match){
     const button=[...document.querySelectorAll('button')].find(b=>match(text(b)));
     return button?.closest('.fixed.inset-0.modal-backdrop')||null;
@@ -91,43 +77,26 @@
       document.querySelectorAll('button').forEach(button=>{
         const label=text(button),icon=button.querySelector('i.fa-arrow-left');
         if(label==='取消'||icon)bind(button,'client-form-back',()=>quietNavigate(vm.form?.id?'client-detail':'clients'));
-        if(label==='保存修改'||label==='确认合作并创建客户')bind(button,'client-form-save',async()=>{
+        if(label==='保存修改'||label==='确认合作并创建客户')bind(button,'client-form-save',()=>{
           if(!validateButtonForm(button))return;
           if(typeof vm.saveClient!=='function'){vm.notify?.('客户保存功能未加载，请刷新页面');return}
-          const savingState=beginSaving(button);
-          if(!savingState)return;
           const cloud=window.__growthOpsCloud;
           const originalPersist=vm.persist;
-          const originalNavigate=vm.navigateTo;
           let persistRequested=false;
           if(typeof cloud?.saveNow==='function'&&typeof originalPersist==='function')vm.persist=()=>{persistRequested=true;return true};
-          if(typeof originalNavigate==='function')vm.navigateTo=()=>true;
-          try{
-            const result=vm.saveClient();
-            if(result&&typeof result.then==='function')await result;
-          }catch(error){
-            console.error(error);
-            vm.notify?.('客户保存失败，请稍后重试');
-            endSaving(button,savingState);
-            return;
-          }finally{
-            if(vm.persist!==originalPersist)vm.persist=originalPersist;
-            if(vm.navigateTo!==originalNavigate)vm.navigateTo=originalNavigate;
-          }
-          if(vm.formDirty!==false||!vm.selectedClientId){
-            endSaving(button,savingState);
-            return;
-          }
-          if(persistRequested&&typeof cloud?.saveNow==='function'){
-            try{await cloud.saveNow()}
-            catch(error){
-              console.error(error);
-              vm.notify?.('客户资料未完成云端保存，请处理提示后重试');
-              endSaving(button,savingState);
-              return;
+          let result;
+          try{result=vm.saveClient()}
+          finally{if(vm.persist!==originalPersist)vm.persist=originalPersist}
+          const complete=async()=>{
+            if(vm.formDirty!==false||!vm.selectedClientId)return;
+            if(persistRequested&&typeof cloud?.saveNow==='function'){
+              try{await cloud.saveNow()}
+              catch(error){console.error(error);vm.notify?.('客户资料未完成云端保存，请处理提示后重试');return}
             }
-          }
-          finalizeClientListNavigation();
+            finalizeClientListNavigation();
+          };
+          if(result&&typeof result.then==='function')result.then(()=>complete()).catch(error=>{console.error(error);vm.notify?.('客户保存失败，请稍后重试')});
+          else complete().catch(error=>{console.error(error);vm.notify?.('客户保存后的页面切换失败，请重试')});
         });
       });
     }
@@ -136,5 +105,5 @@
   observer.observe(document.documentElement,{subtree:true,childList:true});
   setInterval(install,250);
   install();
-  window.__GROWTHOPS_UI_ACTION_BRIDGE__={installed:true,version:'native-action-bridge-v10'};
+  window.__GROWTHOPS_UI_ACTION_BRIDGE__={installed:true,version:'native-action-bridge-v9'};
 })();
