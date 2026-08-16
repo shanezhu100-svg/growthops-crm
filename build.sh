@@ -29,6 +29,7 @@ python3 credential_client_detail_v4_finalize.py
 python3 test_credential_client_detail_v4_output.py
 python3 test_workspace_state_secret_hard_guard.py
 python3 test_backup_security_output.py
+python3 test_vercel_security_headers.py
 python3 cloud_save_queue_finalize.py
 python3 test_cloud_save_queue_output.py
 python3 ui_action_finalize.py
