@@ -10,10 +10,12 @@ def require(condition, message):
     if not condition:
         raise SystemExit(message)
 
-dynamic_status = """<span class="inline-flex px-2.5 py-1 rounded-full text-xs font-bold" :class="selectedClient.archived?'bg-slate-100 text-slate-600':statusStyle(selectedClient.status)">{{ selectedClient.archived?'已归档':statusText(selectedClient.status) }}</span>"""
+dynamic_status = """<span class="inline-flex px-2.5 py-1 rounded-full text-xs font-bold" :class="selectedClient.archived?'bg-slate-200 text-slate-600':selectedClient.status==='ACTIVE'?'bg-emerald-50 text-emerald-700':'bg-slate-100 text-slate-600'">{{ selectedClient.archived?'已归档':(selectedClient.status==='ACTIVE'?'合作中':'暂停') }}</span>"""
 old_status = """<span class="inline-flex px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700">合作中</span>"""
-require(html.count(dynamic_status) == 1, 'P2 client-detail status binding missing or duplicated')
+require(html.count(dynamic_status) == 1, 'P2 client-detail inline status binding missing or duplicated')
 require(old_status not in html, 'P2 old hard-coded client-detail status still present')
+require('statusStyle(selectedClient.status)' not in html, 'P2 client-detail still calls missing statusStyle()')
+require('statusText(selectedClient.status)' not in html, 'P2 client-detail still calls missing statusText()')
 
 require(html.count('浏览器本地缓存占用 {{ storageUsageText }}') == 1, 'P2 browser-cache usage heading missing')
 require('本地存储容量 {{ storageUsageText }}' not in html, 'P2 misleading local storage heading remains')
