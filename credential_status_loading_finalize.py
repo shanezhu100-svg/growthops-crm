@@ -33,12 +33,20 @@ replacement=r'''  const credentialStatusCacheKey=clientId=>{
       sessionStorage.setItem(credentialStatusCacheKey(clientId),JSON.stringify({savedAt:Date.now(),data}));
     }catch{}
   };
+  const matchCredentialValueTypography=cell=>{
+    if(!cell)return;
+    cell.style.fontFamily='ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
+    cell.style.fontSize='0.875rem';
+    cell.style.lineHeight='1.25rem';
+    cell.style.fontWeight='600';
+  };
   const applyCredentialLoadingToCards=()=>{
     if(!isAccountAssetPage())return;
     for(const row of locateCredentialRows()){
       for(const cell of [row.accountCell,row.passwordCell]){
         if(!cell||cell.getAttribute(INLINE_ATTR)==='1')continue;
         if(cell.getAttribute(STATUS_ATTR)==='1'||cell.getAttribute(STATUS_ATTR)==='0')continue;
+        matchCredentialValueTypography(cell);
         cell.textContent='读取中…';
         cell.setAttribute(STATUS_ATTR,'loading');
         cell.title='正在安全检查 Vault 录入状态';
@@ -51,6 +59,7 @@ replacement=r'''  const credentialStatusCacheKey=clientId=>{
       for(const cell of [row.accountCell,row.passwordCell]){
         if(!cell||cell.getAttribute(INLINE_ATTR)==='1')continue;
         if(cell.getAttribute(STATUS_ATTR)!=='loading')continue;
+        matchCredentialValueTypography(cell);
         cell.textContent='状态暂不可用';
         cell.setAttribute(STATUS_ATTR,'error');
         cell.title='凭证状态读取失败，请稍后刷新重试';
@@ -64,6 +73,7 @@ replacement=r'''  const credentialStatusCacheKey=clientId=>{
     for(const row of locateCredentialRows()){
       const status=credentialStatusData?.[row.platform]||{};
       if(row.accountCell&&row.accountCell.getAttribute(INLINE_ATTR)!=='1'){
+        matchCredentialValueTypography(row.accountCell);
         if(status.hasLoginAccount){
           row.accountCell.textContent='已录入';
           row.accountCell.setAttribute(STATUS_ATTR,'1');
@@ -75,6 +85,7 @@ replacement=r'''  const credentialStatusCacheKey=clientId=>{
         }
       }
       if(row.passwordCell&&row.passwordCell.getAttribute(INLINE_ATTR)!=='1'){
+        matchCredentialValueTypography(row.passwordCell);
         if(status.hasPassword||status.has2FA){
           row.passwordCell.textContent='••••••••';
           row.passwordCell.setAttribute(STATUS_ATTR,'1');
