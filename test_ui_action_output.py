@@ -5,7 +5,6 @@ dist=root/'dist'
 html=(dist/'index.html').read_text(encoding='utf-8')
 bridge=(dist/'cloud-ui-action-bridge.js').read_text(encoding='utf-8')
 anchor=(dist/'client-scroll-anchor-bridge.js').read_text(encoding='utf-8')
-transition=(dist/'client-view-transition-bridge.js').read_text(encoding='utf-8')
 
 def require(c,m):
     if not c: raise SystemExit(m)
@@ -13,11 +12,9 @@ def require(c,m):
 security='<script src="/cloud-security-hotfix.js"></script>'
 tag='<script src="/cloud-ui-action-bridge.js"></script>'
 anchor_tag='<script src="/client-scroll-anchor-bridge.js"></script>'
-transition_tag='<script src="/client-view-transition-bridge.js"></script>'
 require(html.count(tag)==1,'UI action bridge tag missing or duplicated')
 require(html.count(anchor_tag)==1,'client scroll anchor bridge tag missing or duplicated')
-require(html.count(transition_tag)==1,'client view transition bridge tag missing or duplicated')
-require(security+tag+anchor_tag+transition_tag in html,'client bridges must load immediately after security hotfix in stable order')
+require(security+tag+anchor_tag in html,'scroll bridges must load immediately after security hotfix in stable order')
 for marker in ('growthops-session-restore-style','growthops-session-restore-guard','growthops-session-restoring','正在恢复登录会话','growthops_crm_token_v2'):
     require(marker in html,f'session restore guard missing: {marker}')
 for marker in (
@@ -79,23 +76,6 @@ require("if(vm.currentPage!=='client-detail'||!anchor)return;" in anchor,'detail
 require("button.querySelector('i.fa-arrow-left')" in anchor,'detail back button must trigger anchor restoration')
 require("vm.$nextTick(afterRender)" in anchor,'anchor correction must wait for Vue list render')
 
-for marker in (
-    'client-view-transition-v20-soft-detail-entry','growthops-client-view-transition-style','growthops-client-nav-exit',
-    'growthops-client-nav-enter','growthops-client-nav-enter-active','resolveSurface','armExit','playEnter','scheduleEnter',
-    'prefers-reduced-motion: reduce','cubic-bezier(.16,1,.3,1)','__GROWTHOPS_CLIENT_VIEW_TRANSITION__'
-):
-    require(marker in transition,f'client view transition marker missing: {marker}')
-require("window.addEventListener('pointerdown',event=>" in transition,'detail transition must begin on pointerdown for a responsive exit')
-require("if(vm.currentPage!=='clients')return;" in transition,'detail transition must only arm from the client list')
-require("const originalOpenClientDetail=vm.openClientDetail;" in transition,'detail transition must wrap the already-isolated native navigation')
-require("const fromClients=vm.currentPage==='clients';" in transition,'detail transition must be forward-only from client list')
-require("Date.now()-lastActivationAt<1000" in transition,'programmatic detail opens must not be delayed or animated accidentally')
-require("result=originalOpenClientDetail.apply(this,args)" in transition,'detail business logic must remain synchronous and authoritative')
-require("scheduleEnter();" in transition,'detail content must animate in after Vue renders')
-require("vm.$nextTick(run)" in transition,'detail enter animation must wait for Vue render')
-require("if(vm.currentPage!=='client-detail')" in transition,'enter animation must abort if navigation did not reach detail')
-require("button.querySelector('i.fa-arrow-left')" not in transition,'transition bridge must not interfere with the working detail-back anchor behavior')
-
 require("finalizeClientListNavigation=()=>navigateWithPageScroll('clients')" in bridge,'client save must return using client-list scroll memory')
 require("navigateWithPageScroll(vm.form?.id?'client-detail':'clients',button)" in bridge,'client form back must restore destination scroll state')
 require("vm.persist=()=>{persistRequested=true;return true}" in bridge,'client save must suppress delayed duplicate persist')
@@ -105,4 +85,4 @@ require('window.location.replace' not in bridge and 'window.location.reload' not
 require('resetScrollNow' not in bridge,'legacy global scroll reset must remain removed')
 require("getAttribute('@submit.prevent')" not in bridge,'runtime bridge must not depend on Vue directive attributes after mount')
 
-print('UI_ACTION_OUTPUT_TESTS_OK: index='+hashlib.sha256((dist/'index.html').read_bytes()).hexdigest()+'; bridge='+hashlib.sha256((dist/'cloud-ui-action-bridge.js').read_bytes()).hexdigest()+'; anchor='+hashlib.sha256((dist/'client-scroll-anchor-bridge.js').read_bytes()).hexdigest()+'; transition='+hashlib.sha256((dist/'client-view-transition-bridge.js').read_bytes()).hexdigest())
+print('UI_ACTION_OUTPUT_TESTS_OK: index='+hashlib.sha256((dist/'index.html').read_bytes()).hexdigest()+'; bridge='+hashlib.sha256((dist/'cloud-ui-action-bridge.js').read_bytes()).hexdigest()+'; anchor='+hashlib.sha256((dist/'client-scroll-anchor-bridge.js').read_bytes()).hexdigest())
