@@ -7,6 +7,7 @@ bootstrap = (root / 'supabase/migrations/20260816_retire_unused_bootstrap_and_v3
 restore_v3 = (root / 'supabase/migrations/20260816_z_restore_v3_browser_exec_after_build_chain_audit.sql').read_text(encoding='utf-8')
 legacy = (root / 'supabase/migrations/20260816_retire_direct_legacy_login_load_rpc.sql').read_text(encoding='utf-8')
 authn = (root / 'supabase/migrations/20260816_revoke_unused_authenticated_rpc_exec.sql').read_text(encoding='utf-8')
+defaults = (root / 'supabase/migrations/20260816_default_deny_public_schema_for_crm.sql').read_text(encoding='utf-8')
 
 required = {
     'finalizer switches login to v3': 'security v3 login endpoint',
@@ -23,6 +24,9 @@ required = {
     'authenticated removed from v3 login': 'revoke execute on function public.crm_login_v3(text,text) from authenticated;',
     'authenticated removed from v3 load': 'revoke execute on function public.crm_load_state_v3(text) from authenticated;',
     'authenticated removed from v4 reveal': 'revoke execute on function public.crm_reveal_client_secret_field_v4(text,text,text,text,text) from authenticated;',
+    'future tables default deny': 'alter default privileges for role postgres in schema public revoke all on tables from anon, authenticated;',
+    'future sequences default deny': 'alter default privileges for role postgres in schema public revoke all on sequences from anon, authenticated;',
+    'future functions default deny': 'alter default privileges for role postgres in schema public revoke execute on functions from anon, authenticated;',
 }
 
 sources = {
@@ -40,6 +44,9 @@ sources = {
     'authenticated removed from v3 login': authn,
     'authenticated removed from v3 load': authn,
     'authenticated removed from v4 reveal': authn,
+    'future tables default deny': defaults,
+    'future sequences default deny': defaults,
+    'future functions default deny': defaults,
 }
 
 missing = [name for name, marker in required.items() if marker not in sources[name]]
