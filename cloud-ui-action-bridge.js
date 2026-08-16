@@ -6,9 +6,11 @@
   const TOKEN_KEY='growthops_crm_token_v2';
   const PAGE_SCROLL_PAGES=new Set(['clients','client-form','client-detail']);
   const pageScrollPositions=Object.create(null);
+  const pageScrollTargets=Object.create(null);
   let pendingClientCloudSaves=0;
   let routeSwitching=false;
   let lastObservedPage=vm.currentPage||'';
+  let lastClientPointerTarget=null;
   try{if('scrollRestoration' in window.history)window.history.scrollRestoration='manual'}catch{}
   const text=el=>String(el?.textContent||'').replace(/\s+/g,' ').trim();
   const bind=(el,key,handler)=>{
@@ -54,26 +56,82 @@
       window.history.replaceState(window.history.state,'',next.toString());
     }catch{}
   };
-  const readScrollTop=()=>{
-    const scroller=document.scrollingElement||document.documentElement;
-    return Math.max(0,Number(scroller?.scrollTop||document.documentElement?.scrollTop||document.body?.scrollTop||0));
+  const documentScroller=()=>document.scrollingElement||document.documentElement||document.body;
+  const normalizeScrollTarget=target=>{
+    if(target===window||target===document||target===document.documentElement||target===document.body)return documentScroller();
+    return target instanceof Element?target:null;
   };
-  const writeScrollTop=top=>{
+  const hasVerticalRange=target=>!!target&&Number(target.scrollHeight||0)>Number(target.clientHeight||0)+1;
+  const canOwnVerticalScroll=target=>{
+    target=normalizeScrollTarget(target);
+    if(!target||!hasVerticalRange(target))return false;
+    if(target===documentScroller())return true;
+    try{
+      const overflowY=getComputedStyle(target).overflowY;
+      return overflowY!=='visible'&&overflowY!=='clip';
+    }catch{return true}
+  };
+  const findScrollTarget=node=>{
+    let current=node instanceof Element?node:null;
+    while(current&&current!==document.body&&current!==document.documentElement){
+      if(canOwnVerticalScroll(current))return current;
+      current=current.parentElement;
+    }
+    return documentScroller();
+  };
+  const scanVisibleScrollTarget=()=>{
+    const doc=documentScroller();
+    let best=canOwnVerticalScroll(doc)?doc:null;
+    let bestScore=best?Math.max(0,Number(best.scrollHeight||0)-Number(best.clientHeight||0)):0;
+    let candidates=[];
+    try{candidates=[...document.querySelectorAll('main,[class*="overflow-y-auto"],[class*="overflow-auto"],[class*="overflow-y-scroll"],[style*="overflow"]')]}catch{}
+    for(const el of candidates){
+      if(!canOwnVerticalScroll(el))continue;
+      let rect;
+      try{rect=el.getBoundingClientRect()}catch{continue}
+      if(rect.width<20||rect.height<20||rect.bottom<=0||rect.top>=window.innerHeight)continue;
+      const score=Math.max(0,Number(el.scrollHeight||0)-Number(el.clientHeight||0))+Math.min(rect.height,window.innerHeight);
+      if(score>bestScore){best=el;bestScore=score}
+    }
+    return best||doc;
+  };
+  const resolvePageScrollTarget=(page,hint)=>{
+    const hinted=hint instanceof Element?findScrollTarget(hint):normalizeScrollTarget(hint);
+    if(hinted&&hinted.isConnected!==false){pageScrollTargets[page]=hinted;return hinted}
+    const saved=normalizeScrollTarget(pageScrollTargets[page]);
+    if(saved&&saved.isConnected!==false)return saved;
+    const detected=scanVisibleScrollTarget();
+    if(detected)pageScrollTargets[page]=detected;
+    return detected;
+  };
+  const readTargetScrollTop=target=>Math.max(0,Number(normalizeScrollTarget(target)?.scrollTop||0));
+  const writeTargetScrollTop=(target,top)=>{
+    target=normalizeScrollTarget(target);
+    if(!target)return;
     const value=Math.max(0,Number(top)||0);
-    const scroller=document.scrollingElement||document.documentElement;
-    if(scroller)scroller.scrollTop=value;
-    if(document.documentElement&&document.documentElement!==scroller)document.documentElement.scrollTop=value;
-    if(document.body&&document.body!==scroller)document.body.scrollTop=value;
+    target.scrollTop=value;
+    if(target===documentScroller()){
+      if(document.documentElement&&document.documentElement!==target)document.documentElement.scrollTop=value;
+      if(document.body&&document.body!==target)document.body.scrollTop=value;
+    }
   };
-  const rememberPageScroll=(page=vm.currentPage)=>{
+  const rememberPageScroll=(page=vm.currentPage,hint)=>{
     if(routeSwitching||!PAGE_SCROLL_PAGES.has(page))return;
-    pageScrollPositions[page]=readScrollTop();
+    const target=resolvePageScrollTarget(page,hint);
+    if(!target)return;
+    pageScrollTargets[page]=target;
+    pageScrollPositions[page]=readTargetScrollTop(target);
   };
   const getPageScroll=page=>{
     const value=pageScrollPositions[page];
     return Number.isFinite(value)?Math.max(0,value):0;
   };
-  const restorePageScrollInstant=page=>{
+  const applyPageScroll=(page,top,hint)=>{
+    const target=resolvePageScrollTarget(page,hint);
+    writeTargetScrollTop(target,top);
+    return target;
+  };
+  const restorePageScrollInstant=(page,hint)=>{
     const targetTop=getPageScroll(page);
     const root=document.documentElement;
     const body=document.body;
@@ -82,7 +140,9 @@
     routeSwitching=true;
     root.style.scrollBehavior='auto';
     if(body)body.style.scrollBehavior='auto';
-    const apply=()=>writeScrollTop(targetTop);
+    const apply=()=>applyPageScroll(page,targetTop,hint);
+    const saved=normalizeScrollTarget(pageScrollTargets[page]);
+    if(saved&&saved.isConnected!==false)apply();
     const finish=()=>{
       apply();
       routeSwitching=false;
@@ -90,20 +150,19 @@
       root.style.scrollBehavior=oldRootBehavior;
       if(body)body.style.scrollBehavior=oldBodyBehavior;
     };
-    apply();
     const settle=()=>{
       apply();
       requestAnimationFrame(()=>{
         apply();
-        setTimeout(finish,80);
+        setTimeout(finish,90);
       });
     };
     if(typeof vm.$nextTick==='function')vm.$nextTick(settle);
     else queueMicrotask(settle);
   };
-  const navigateWithPageScroll=page=>{
+  const navigateWithPageScroll=(page,sourceHint)=>{
     const sourcePage=vm.currentPage;
-    if(sourcePage)rememberPageScroll(sourcePage);
+    if(sourcePage)rememberPageScroll(sourcePage,sourceHint);
     const targetTop=getPageScroll(page);
     const root=document.documentElement;
     const body=document.body;
@@ -115,20 +174,24 @@
     vm.currentPage=page;
     vm.mobileMenuOpen=false;
     setPageUrl(page);
-    writeScrollTop(targetTop);
+    const savedTarget=normalizeScrollTarget(pageScrollTargets[page]);
+    if(savedTarget&&savedTarget.isConnected!==false)writeTargetScrollTop(savedTarget,targetTop);
     try{vm.$forceUpdate?.()}catch{}
     const settle=()=>{
       if(vm.currentPage!==page){
         vm.currentPage=page;
         try{vm.$forceUpdate?.()}catch{}
       }
-      writeScrollTop(targetTop);
+      applyPageScroll(page,targetTop);
       requestAnimationFrame(()=>{
-        writeScrollTop(targetTop);
-        routeSwitching=false;
-        lastObservedPage=page;
-        root.style.scrollBehavior=oldRootBehavior;
-        if(body)body.style.scrollBehavior=oldBodyBehavior;
+        applyPageScroll(page,targetTop);
+        setTimeout(()=>{
+          applyPageScroll(page,targetTop);
+          routeSwitching=false;
+          lastObservedPage=page;
+          root.style.scrollBehavior=oldRootBehavior;
+          if(body)body.style.scrollBehavior=oldBodyBehavior;
+        },90);
       });
     };
     if(typeof vm.$nextTick==='function')vm.$nextTick(settle);
@@ -162,23 +225,59 @@
     const row=button.closest('tbody tr');
     return !!row&&button===row.querySelector('td:first-child button');
   };
+  window.addEventListener('scroll',event=>{
+    if(routeSwitching)return;
+    const page=vm.currentPage||'';
+    if(!PAGE_SCROLL_PAGES.has(page))return;
+    const target=normalizeScrollTarget(event.target);
+    if(!target)return;
+    if(target!==documentScroller()&&!canOwnVerticalScroll(target))return;
+    pageScrollTargets[page]=target;
+    pageScrollPositions[page]=readTargetScrollTop(target);
+  },{capture:true,passive:true});
   window.addEventListener('pointerdown',event=>{
     if(vm.currentPage!=='clients')return;
     const button=event.target?.closest?.('button');
     if(!isClientDetailOpenButton(button))return;
-    rememberPageScroll('clients');
+    lastClientPointerTarget=findScrollTarget(button);
+    rememberPageScroll('clients',lastClientPointerTarget);
     pageScrollPositions['client-detail']=0;
+    if(lastClientPointerTarget)pageScrollTargets['client-detail']=lastClientPointerTarget;
   },true);
+  const originalOpenClientDetail=vm.openClientDetail;
+  if(typeof originalOpenClientDetail==='function'){
+    vm.openClientDetail=function(...args){
+      const fromClients=vm.currentPage==='clients';
+      if(fromClients){
+        rememberPageScroll('clients',lastClientPointerTarget);
+        pageScrollPositions['client-detail']=0;
+        if(lastClientPointerTarget)pageScrollTargets['client-detail']=lastClientPointerTarget;
+        routeSwitching=true;
+      }
+      try{
+        const result=originalOpenClientDetail.apply(this,args);
+        if(fromClients){
+          const restore=()=>{
+            if(vm.currentPage==='client-detail')restorePageScrollInstant('client-detail',lastClientPointerTarget);
+            else routeSwitching=false;
+          };
+          if(typeof vm.$nextTick==='function')vm.$nextTick(restore);
+          else queueMicrotask(restore);
+        }
+        return result;
+      }catch(error){
+        if(fromClients)routeSwitching=false;
+        throw error;
+      }
+    };
+  }
   function modalByButton(match){
     const button=[...document.querySelectorAll('button')].find(b=>match(text(b)));
     return button?.closest('.fixed.inset-0.modal-backdrop')||null;
   }
   const observePageScroll=()=>{
     const page=vm.currentPage||'';
-    if(page===lastObservedPage){
-      rememberPageScroll(page);
-      return;
-    }
+    if(page===lastObservedPage)return;
     const previousPage=lastObservedPage;
     lastObservedPage=page;
     if(routeSwitching)return;
@@ -187,7 +286,6 @@
     if(page==='client-detail'&&previousPage==='clients')pageScrollPositions['client-detail']=0;
     restorePageScrollInstant(page);
   };
-  window.addEventListener('scroll',()=>rememberPageScroll(vm.currentPage),{passive:true});
   function install(){
     clearSessionRestoreCover();
     observePageScroll();
@@ -196,13 +294,13 @@
     bindModal(modalByButton(label=>label.includes('保存并同步数据')||label.includes('更新并同步数据')),'showAdDataModal',label=>label.includes('保存并同步数据')||label.includes('更新并同步数据'),'saveAdDataRecord');
     if(vm.currentPage==='client-detail'){
       document.querySelectorAll('button').forEach(button=>{
-        if(button.querySelector('i.fa-arrow-left'))bind(button,'client-detail-back',()=>navigateWithPageScroll('clients'));
+        if(button.querySelector('i.fa-arrow-left'))bind(button,'client-detail-back',button=>navigateWithPageScroll('clients',button));
       });
     }
     if(vm.currentPage==='client-form'){
       document.querySelectorAll('button').forEach(button=>{
         const label=text(button),icon=button.querySelector('i.fa-arrow-left');
-        if(label==='取消'||icon)bind(button,'client-form-back',()=>navigateWithPageScroll(vm.form?.id?'client-detail':'clients'));
+        if(label==='取消'||icon)bind(button,'client-form-back',button=>navigateWithPageScroll(vm.form?.id?'client-detail':'clients',button));
         if(label==='保存修改'||label==='确认合作并创建客户')bind(button,'client-form-save',()=>{
           if(button.dataset.growthopsClientSaving==='1')return;
           if(!validateButtonForm(button))return;
@@ -253,5 +351,5 @@
   observer.observe(document.documentElement,{subtree:true,childList:true});
   setInterval(install,250);
   install();
-  window.__GROWTHOPS_UI_ACTION_BRIDGE__={installed:true,version:'native-action-bridge-v17-route-scroll-isolation'};
+  window.__GROWTHOPS_UI_ACTION_BRIDGE__={installed:true,version:'native-action-bridge-v18-real-scroll-targets'};
 })();
