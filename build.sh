@@ -24,6 +24,8 @@ python3 test_account_login_identifier_output.py
 python3 test_credential_field_reveal_v3_output.py
 python3 credential_unlock_v4_finalize.py
 python3 test_credential_unlock_v4_output.py
+python3 credential_client_detail_v4_finalize.py
+python3 test_credential_client_detail_v4_output.py
 python3 cloud_save_queue_finalize.py
 python3 test_cloud_save_queue_output.py
 python3 ui_action_finalize.py
