@@ -4,14 +4,17 @@ root=Path(__file__).resolve().parent
 dist=root/'dist'
 html=(dist/'index.html').read_text(encoding='utf-8')
 bridge=(dist/'cloud-ui-action-bridge.js').read_text(encoding='utf-8')
+anchor=(dist/'client-scroll-anchor-bridge.js').read_text(encoding='utf-8')
 
 def require(c,m):
     if not c: raise SystemExit(m)
 
 security='<script src="/cloud-security-hotfix.js"></script>'
 tag='<script src="/cloud-ui-action-bridge.js"></script>'
+anchor_tag='<script src="/client-scroll-anchor-bridge.js"></script>'
 require(html.count(tag)==1,'UI action bridge tag missing or duplicated')
-require(security+tag in html,'UI action bridge must load immediately after security hotfix')
+require(html.count(anchor_tag)==1,'client scroll anchor bridge tag missing or duplicated')
+require(security+tag+anchor_tag in html,'scroll bridges must load immediately after security hotfix in stable order')
 for marker in ('growthops-session-restore-style','growthops-session-restore-guard','growthops-session-restoring','正在恢复登录会话','growthops_crm_token_v2'):
     require(marker in html,f'session restore guard missing: {marker}')
 for marker in (
@@ -55,6 +58,24 @@ require("rememberPageScroll(sourcePage,sourceHint);" in nav_block,'back navigati
 require(nav_block.index('vm.currentPage=page;') < nav_block.index('applyPageScroll(page,targetTop);'),'destination page must render before fallback target resolution')
 require("routeSwitching=true;" in nav_block and "routeSwitching=false;" in nav_block,'explicit navigation must isolate scroll events')
 
+for marker in (
+    'client-scroll-anchor-v19-row-position','rowFingerprint','locateAnchorRow','stableClientTokens','captureAnchor',
+    'viewportTop','rowIndex','clientId','applyAnchor','scheduleAnchorRestore','setTimeout(run,130)',
+    'setTimeout(run,260)','setTimeout(run,520)','__GROWTHOPS_CLIENT_SCROLL_ANCHOR__'
+):
+    require(marker in anchor,f'client scroll anchor marker missing: {marker}')
+require("window.addEventListener('pointerdown',event=>" in anchor,'row anchor must be captured before opening detail')
+require("if(vm.currentPage!=='clients')return;" in anchor,'anchor capture must be scoped to client list')
+require("const row=button?.closest?.('tbody tr');" in anchor,'clicked customer row must be captured')
+require("viewportTop:rect.top" in anchor,'clicked customer viewport position must be stored')
+require("fingerprint:rowFingerprint(row)" in anchor,'clicked customer row identity must be stored')
+require("anchor.clientId=String(vm.selectedClientId)" in anchor,'selected customer id must be captured after native detail selection')
+require("const delta=rect.top-anchor.viewportTop;" in anchor,'return must calculate row displacement from original viewport position')
+require("writeTargetScrollTop(target,readTargetScrollTop(target)+delta)" in anchor,'return must correct the real scroll container by row-anchor delta')
+require("if(vm.currentPage!=='client-detail'||!anchor)return;" in anchor,'detail back restoration must only run for a captured client anchor')
+require("button.querySelector('i.fa-arrow-left')" in anchor,'detail back button must trigger anchor restoration')
+require("vm.$nextTick(afterRender)" in anchor,'anchor correction must wait for Vue list render')
+
 require("finalizeClientListNavigation=()=>navigateWithPageScroll('clients')" in bridge,'client save must return using client-list scroll memory')
 require("navigateWithPageScroll(vm.form?.id?'client-detail':'clients',button)" in bridge,'client form back must restore destination scroll state')
 require("vm.persist=()=>{persistRequested=true;return true}" in bridge,'client save must suppress delayed duplicate persist')
@@ -64,4 +85,4 @@ require('window.location.replace' not in bridge and 'window.location.reload' not
 require('resetScrollNow' not in bridge,'legacy global scroll reset must remain removed')
 require("getAttribute('@submit.prevent')" not in bridge,'runtime bridge must not depend on Vue directive attributes after mount')
 
-print('UI_ACTION_OUTPUT_TESTS_OK: index='+hashlib.sha256((dist/'index.html').read_bytes()).hexdigest()+'; bridge='+hashlib.sha256((dist/'cloud-ui-action-bridge.js').read_bytes()).hexdigest())
+print('UI_ACTION_OUTPUT_TESTS_OK: index='+hashlib.sha256((dist/'index.html').read_bytes()).hexdigest()+'; bridge='+hashlib.sha256((dist/'cloud-ui-action-bridge.js').read_bytes()).hexdigest()+'; anchor='+hashlib.sha256((dist/'client-scroll-anchor-bridge.js').read_bytes()).hexdigest())
