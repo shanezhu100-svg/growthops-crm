@@ -5,29 +5,25 @@ root=Path(__file__).resolve().parent
 index_path=root/'dist'/'index.html'
 html=index_path.read_text(encoding='utf-8')
 
-start=html.find('Facebook 资产')
-if start<0:
-    raise SystemExit('Account asset template anchor missing')
-region=html[start:min(len(html),start+70000)]
+checked=0
+for platform_anchor in ('Facebook 资产','TikTok 资产'):
+    anchor=html.find(platform_anchor)
+    if anchor<0:
+        raise SystemExit(f'Account asset platform anchor missing: {platform_anchor}')
+    for label in ('登录账号','密码 / 2FA'):
+        label_pos=html.find(label,anchor,anchor+12000)
+        if label_pos<0:
+            raise SystemExit(f'Credential label missing after {platform_anchor}: {label}')
+        window=html[label_pos+len(label):label_pos+1500]
+        loading=window.find('读取中…')
+        unrecorded=window.find('未录入')
+        if loading<0:
+            raise SystemExit(f'Neutral loading default missing after {platform_anchor}: {label}')
+        if unrecorded>=0 and unrecorded<loading:
+            raise SystemExit(f'False unrecorded default precedes loading state after {platform_anchor}: {label}')
+        checked+=1
 
-loading_targets=0
-false_unrecorded=0
-for label in ('登录账号','密码 / 2FA'):
-    pos=0
-    while True:
-        pos=region.find(label,pos)
-        if pos<0:
-            break
-        window=region[pos+len(label):min(len(region),pos+1500)]
-        if '读取中…' in window:
-            loading_targets+=1
-        if '未录入' in window and ('读取中…' not in window or window.find('未录入')<window.find('读取中…')):
-            false_unrecorded+=1
-        pos+=len(label)
-
-if loading_targets!=4:
-    raise SystemExit(f'Neutral credential loading defaults missing: {loading_targets}')
-if false_unrecorded:
-    raise SystemExit(f'False initial unrecorded credential defaults remain: {false_unrecorded}')
+if checked!=4:
+    raise SystemExit(f'Primary credential template checks must equal 4, got {checked}')
 
 print('CREDENTIAL_TEMPLATE_INITIAL_OUTPUT_TESTS_OK: index='+hashlib.sha256(index_path.read_bytes()).hexdigest())
