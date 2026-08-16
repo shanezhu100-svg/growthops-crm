@@ -40,8 +40,37 @@ replacement=r'''  const credentialStatusCacheKey=clientId=>{
     cell.style.lineHeight='1.25rem';
     cell.style.fontWeight='600';
   };
+  const exactLeaves=(root,label)=>root?[...root.querySelectorAll('*')].filter(el=>el.children.length===0&&cleanText(el)===label):[];
+  const assetSectionForHeading=(headingText)=>{
+    const heading=[...document.querySelectorAll('h1,h2,h3,h4')].find(el=>cleanText(el).includes(headingText));
+    if(!heading)return null;
+    let node=heading.parentElement;
+    for(let i=0;node&&i<8;i++,node=node.parentElement){
+      const text=cleanText(node);
+      if(text.includes(headingText)&&text.includes('账号名称')&&text.includes('密码 / 2FA'))return node;
+    }
+    return heading.parentElement;
+  };
+  const normalizeOtherAccountAssetTypography=()=>{
+    if(!isAccountAssetPage())return;
+    const specs=[
+      ['Google 资产',['账号名称','Google Ads 客户 ID','MCC ID','登录邮箱','密码 / 2FA']],
+      ['Instagram 资产',['账号名称','Instagram 用户名','Instagram ID','登录邮箱 / 手机号','密码 / 2FA']],
+    ];
+    for(const [headingText,labels] of specs){
+      const section=assetSectionForHeading(headingText);
+      if(!section)continue;
+      for(const label of labels){
+        for(const labelEl of exactLeaves(section,label)){
+          const cell=valueCellForLabel(labelEl);
+          if(cell)matchCredentialValueTypography(cell);
+        }
+      }
+    }
+  };
   const applyCredentialLoadingToCards=()=>{
     if(!isAccountAssetPage())return;
+    normalizeOtherAccountAssetTypography();
     for(const row of locateCredentialRows()){
       for(const cell of [row.accountCell,row.passwordCell]){
         if(!cell||cell.getAttribute(INLINE_ATTR)==='1')continue;
@@ -55,6 +84,7 @@ replacement=r'''  const credentialStatusCacheKey=clientId=>{
   };
   const applyCredentialStatusUnavailable=()=>{
     if(!isAccountAssetPage())return;
+    normalizeOtherAccountAssetTypography();
     for(const row of locateCredentialRows()){
       for(const cell of [row.accountCell,row.passwordCell]){
         if(!cell||cell.getAttribute(INLINE_ATTR)==='1')continue;
@@ -68,6 +98,7 @@ replacement=r'''  const credentialStatusCacheKey=clientId=>{
   };
   const applyCredentialStatusToCards=()=>{
     if(!isAccountAssetPage()||!credentialStatusData)return;
+    normalizeOtherAccountAssetTypography();
     const clientId=resolveCredentialClientId();
     if(!clientId||clientId!==credentialStatusClientId)return;
     for(const row of locateCredentialRows()){
@@ -100,6 +131,7 @@ replacement=r'''  const credentialStatusCacheKey=clientId=>{
   };
   const ensureCredentialStatus=()=>{
     if(!isAccountAssetPage())return;
+    normalizeOtherAccountAssetTypography();
     if(!['ADMIN','OPS'].includes(String(vm.currentUser?.role||'')))return;
     const clientId=resolveCredentialClientId();
     if(!clientId)return;
