@@ -133,9 +133,100 @@ replace_once(
 
 replace_once(
 """version:'native-action-bridge-v15-page-scroll-memory'""",
-"""version:'native-action-bridge-v17-legacy-method-navigation'""",
+"""version:'native-action-bridge-v18-root-client-capture'""",
 'UI action bridge version'
 )
+
+root_capture=r'''
+  // Client detail/back/cancel need a root capture path independent of Vue's patched
+  // button listeners. This listener runs before document/button handlers and invokes
+  // the component's original navigation method from $options.methods.
+  const ROOT_CLIENT_CAPTURE='__GROWTHOPS_ROOT_CLIENT_CAPTURE_V18__';
+  const rawClientMethods=vm.$options?.methods||{};
+  const rawClientNavigate=typeof rawClientMethods.navigateTo==='function'?rawClientMethods.navigateTo:null;
+  const rootNavigateClientPage=(page,targetTop=getPageScroll(page))=>{
+    const sourcePage=vm.currentPage;
+    if(sourcePage)rememberPageScroll(sourcePage);
+    const root=document.documentElement,body=document.body;
+    const oldRootBehavior=root.style.scrollBehavior;
+    const oldBodyBehavior=body?.style?.scrollBehavior||'';
+    const originalScrollTo=window.scrollTo;
+    root.style.scrollBehavior='auto';
+    if(body)body.style.scrollBehavior='auto';
+    window.scrollTo=()=>writeScrollTop(targetTop);
+    try{
+      if(rawClientNavigate)rawClientNavigate.call(vm,page);
+      else{
+        vm.currentPage=page;
+        setPageUrl(page);
+      }
+    }catch(error){
+      console.error(error);
+      vm.notify?.('页面切换失败，请刷新页面后重试');
+      return false;
+    }finally{
+      window.scrollTo=originalScrollTo;
+    }
+    vm.mobileMenuOpen=false;
+    try{vm.$forceUpdate?.()}catch{}
+    const settle=()=>{
+      writeScrollTop(targetTop);
+      requestAnimationFrame(()=>{
+        writeScrollTop(targetTop);
+        root.style.scrollBehavior=oldRootBehavior;
+        if(body)body.style.scrollBehavior=oldBodyBehavior;
+      });
+    };
+    if(typeof vm.$nextTick==='function')vm.$nextTick(settle);
+    else queueMicrotask(settle);
+    return true;
+  };
+  const rootClientButtonId=button=>{
+    if(text(button)==='查看客户详情')return clientIdForMobileDetailButton(button);
+    return clientIdForTableRow(button);
+  };
+  const rootClientCapture=event=>{
+    const button=event.target?.closest?.('button');
+    if(!button)return;
+    const label=text(button);
+    if(vm.currentPage==='clients'){
+      const row=button.closest('tbody tr');
+      const nameButton=row?.querySelector('td:first-child button')||null;
+      const isDetail=label==='详情'||label==='查看客户详情'||button===nameButton;
+      if(!isDetail)return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const clientId=rootClientButtonId(button);
+      if(clientId==null){vm.notify?.('客户详情未加载，请刷新页面');return}
+      rememberPageScroll('clients');
+      pageScrollPositions['client-detail']=0;
+      vm.selectedClientId=clientId;
+      vm.credentialsVisible=false;
+      try{vm.resetAssetPager?.('detail')}catch{}
+      rootNavigateClientPage('client-detail',0);
+      return;
+    }
+    if(vm.currentPage==='client-form'){
+      const isBack=label==='取消'||!!button.querySelector('i.fa-arrow-left');
+      if(!isBack)return;
+      if(button.closest('.fixed.inset-0.modal-backdrop'))return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      vm.formDirty=false;
+      const target=vm.form?.id?'client-detail':'clients';
+      rootNavigateClientPage(target,getPageScroll(target));
+    }
+  };
+  if(!window[ROOT_CLIENT_CAPTURE]){
+    window[ROOT_CLIENT_CAPTURE]=true;
+    window.addEventListener('click',rootClientCapture,true);
+  }
+  if(window.__GROWTHOPS_UI_ACTION_BRIDGE__)window.__GROWTHOPS_UI_ACTION_BRIDGE__.rootClientCapture=true;
+'''
+end='\n})();\n'
+if text.count(end)!=1:
+    raise SystemExit(f'Unexpected bridge closure count: {text.count(end)}')
+text=text.replace(end,root_capture+end,1)
 
 path.write_text(text,encoding='utf-8')
 print('UI_CLIENT_NAVIGATION_FINALIZE_OK: bridge='+hashlib.sha256(path.read_bytes()).hexdigest())
