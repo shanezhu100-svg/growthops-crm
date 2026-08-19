@@ -40,5 +40,7 @@ python3 ui_action_finalize.py
 python3 test_ui_action_output.py
 python3 remove_login_material_view_finalize.py
 python3 test_remove_login_material_view_output.py
+python3 credential_refresh_eye_finalize.py
+python3 test_credential_refresh_eye_output.py
 node --check dist/cloud-security-hotfix.js
 node --check dist/cloud-ui-action-bridge.js
