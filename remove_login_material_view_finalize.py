@@ -1,5 +1,6 @@
 from pathlib import Path
 import hashlib
+import re
 
 root=Path(__file__).resolve().parent
 index_path=root/'dist'/'index.html'
@@ -13,6 +14,17 @@ if html.count(old_header)!=1:
     raise SystemExit(f'Unexpected platform asset credential header count: {html.count(old_header)}')
 html=html.replace(old_header,new_header,1)
 
+# Defense in depth: remove any other rendered button carrying the same view/hide action.
+button_pattern=re.compile(r'<button\b[^>]*>.*?</button>',re.S|re.I)
+removed=[]
+def drop_login_material_button(match):
+    block=match.group(0)
+    if '查看登录资料' in block or '隐藏登录资料' in block:
+        removed.append(block)
+        return ''
+    return block
+html=button_pattern.sub(drop_login_material_button,html)
+
 old_hint='密码 / 2FA 已安全保存在 Vault；管理员点“查看登录资料”后可用眼睛短暂显示'
 if security.count(old_hint)!=1:
     raise SystemExit(f'Unexpected credential reveal hint count: {security.count(old_hint)}')
@@ -20,4 +32,4 @@ security=security.replace(old_hint,'密码 / 2FA 已安全保存在 Vault',1)
 
 index_path.write_text(html,encoding='utf-8')
 security_path.write_text(security,encoding='utf-8')
-print('REMOVE_LOGIN_MATERIAL_VIEW_FINALIZE_OK: index='+hashlib.sha256(index_path.read_bytes()).hexdigest()+'; security='+hashlib.sha256(security_path.read_bytes()).hexdigest())
+print('REMOVE_LOGIN_MATERIAL_VIEW_FINALIZE_OK: extra_buttons_removed='+str(len(removed))+'; index='+hashlib.sha256(index_path.read_bytes()).hexdigest()+'; security='+hashlib.sha256(security_path.read_bytes()).hexdigest())
