@@ -4,13 +4,16 @@ import hashlib
 root=Path(__file__).resolve().parent
 index_path=root/'dist'/'index.html'
 bridge_path=root/'dist'/'cloud-ui-action-bridge.js'
+adapter_path=root/'dist'/'cloud-adapter.js'
 html=index_path.read_text(encoding='utf-8')
 bridge=bridge_path.read_text(encoding='utf-8')
+adapter=adapter_path.read_text(encoding='utf-8')
 
 def require(condition,message):
     if not condition:
         raise SystemExit(message)
 
+# Client-detail source-aware return remains protected.
 for marker in (
     "openClientDetail(id,sourcePage=''){",
     "const allowedSources=new Set(['dashboard','leads','clients','assets','sop','analytics','ads','account-opening','finance','alerts','tools','system']);",
@@ -41,8 +44,52 @@ block=html[method_start:method_end]
 require("sessionStorage.setItem('growthops_client_detail_return_page',source)" in block,'detail source must survive rerender/edit via sessionStorage')
 require("this.navigateTo(source);" in block,'detail return must navigate to preserved source')
 
+# One authoritative pre-render resolver owns assets / ads / SOP navigation.
+for marker in (
+    "prepareScopedPageClient(page){",
+    "const scopedPages=new Set(['assets','ads','sop']);",
+    "if(!scopedPages.has(page)||page===this.currentPage)return;",
+    "if(this.currentPage==='assets')sourceId=resolvedId(this.selectedAssetsClientId);",
+    "else if(this.currentPage==='ads')sourceId=resolvedId(this.selectedAdsClientId);",
+    "else if(this.currentPage==='sop')sourceId=resolvedId(this.selectedSopClientId);",
+    "const preferred=sourceId??ownId??resolvedId(this.selectedClientId)??active[0].id;",
+    "this.selectedAssetsClientId=preferred;",
+    "this.selectedAdsClientId=preferred;",
+    "this.syncAdsAccountSelection();",
+    "this.selectedSopClientId=preferred;",
+    "this.syncSopAccountSelection(changed);",
+    "this.prepareScopedPageClient(page);if(page==='assets'",
+    "if(allowed.includes(hash)&&this.canViewPage(hash)){this.prepareScopedPageClient(hash);this.currentPage=hash;}",
+    "if(allowed.includes(h)&&this.canViewPage(h)){this.prepareScopedPageClient(h);this.currentPage=h;",
+):
+    require(marker in html,f'scoped page pre-render marker missing: {marker}')
+
+# Aggregate modes remain available by explicit user choice after the page is open.
+require('<option :value="0">全部客户</option>' in html,
+        'account-assets explicit all-client option must remain available')
+require("if(!text||text==='0'||text.toUpperCase()==='ALL')return null;" in html,
+        'transient aggregate sentinel must not win page-entry client resolution')
+
+nav_start=html.find('    navigateTo(page){')
+nav_end=html.find("    openClientDetail(id,sourcePage='')",nav_start)
+require(nav_start>=0 and nav_end>nav_start,'unable to bound navigateTo method')
+nav_block=html[nav_start:nav_end]
+prepare_pos=nav_block.find('this.prepareScopedPageClient(page);')
+render_pos=nav_block.find('this.currentPage=page;')
+require(prepare_pos>=0 and render_pos>=0 and prepare_pos<render_pos,
+        'navigateTo must resolve scoped client before assigning currentPage')
+
+mounted_hash_pos=html.find("this.prepareScopedPageClient(h);this.currentPage=h;")
+require(mounted_hash_pos>=0,'hashchange must resolve scoped client before rendering route')
+
+# Cloud/session hash restoration must use the same resolver before currentPage.
+require("if(allowed.includes(h)&&vm.canViewPage(h)){vm.prepareScopedPageClient?.(h);vm.currentPage=h;}" in adapter,
+        'cloud routeFromHash must prepare scoped client before currentPage')
+require("if(allowed.includes(h)&&vm.canViewPage(h))vm.currentPage=h;" not in adapter,
+        'legacy cloud routeFromHash direct render must not survive')
+
 # Runtime bridge is capture-phase and can override Vue handlers. Gate the final
-# browser bridge itself so a hard-coded clients return can never silently win.
+# browser bridge itself so it cannot bypass either return-source or client scope.
 for marker in (
     "const PAGE_SCROLL_PAGES=new Set(['clients','assets','client-form','client-detail']);",
     "const CLIENT_DETAIL_RETURN_KEY='growthops_client_detail_return_page';",
@@ -53,12 +100,26 @@ for marker in (
     "bind(button,'client-detail-back',button=>returnFromClientDetailBridge(button))",
     "const finalizeClientSaveNavigation=()=>navigateWithPageScroll('client-detail');",
     "finalizeClientSaveNavigation();",
+    "if(page!==sourcePage)vm.prepareScopedPageClient?.(page);",
 ):
-    require(marker in bridge,f'client detail runtime bridge marker missing: {marker}')
+    require(marker in bridge,f'client detail/runtime scoped navigation marker missing: {marker}')
+
+bridge_nav_start=bridge.find('  const navigateWithPageScroll=(page,sourceHint)=>{')
+bridge_nav_end=bridge.find('  const CLIENT_DETAIL_RETURN_KEY=',bridge_nav_start)
+require(bridge_nav_start>=0 and bridge_nav_end>bridge_nav_start,'unable to bound bridge navigation')
+bridge_nav=bridge[bridge_nav_start:bridge_nav_end]
+bridge_prepare=bridge_nav.find('vm.prepareScopedPageClient?.(page);')
+bridge_render=bridge_nav.find('vm.currentPage=page;')
+require(bridge_prepare>=0 and bridge_render>=0 and bridge_prepare<bridge_render,
+        'runtime bridge must resolve scoped client before assigning currentPage')
 
 require("bind(button,'client-detail-back',button=>navigateWithPageScroll('clients',button))" not in bridge,
         'runtime bridge must not force client-detail back to clients')
 require('finalizeClientListNavigation();' not in bridge,
         'client edit save bridge must not force navigation to clients')
 
-print('CLIENT_DETAIL_RETURN_OUTPUT_TESTS_OK: index='+hashlib.sha256(index_path.read_bytes()).hexdigest()+'; bridge='+hashlib.sha256(bridge_path.read_bytes()).hexdigest())
+index_sha=hashlib.sha256(index_path.read_bytes()).hexdigest()
+bridge_sha=hashlib.sha256(bridge_path.read_bytes()).hexdigest()
+adapter_sha=hashlib.sha256(adapter_path.read_bytes()).hexdigest()
+print('CLIENT_DETAIL_RETURN_OUTPUT_TESTS_OK: index='+index_sha+'; bridge='+bridge_sha+'; adapter='+adapter_sha)
+print('SCOPED_PAGE_NAVIGATION_OUTPUT_TESTS_OK: assets=pre-render; ads=pre-render; sop=pre-render')
