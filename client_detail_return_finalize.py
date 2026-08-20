@@ -4,8 +4,69 @@ import hashlib
 root=Path(__file__).resolve().parent
 index_path=root/'dist'/'index.html'
 bridge_path=root/'dist'/'cloud-ui-action-bridge.js'
+adapter_path=root/'dist'/'cloud-adapter.js'
 html=index_path.read_text(encoding='utf-8')
 bridge=bridge_path.read_text(encoding='utf-8')
+adapter=adapter_path.read_text(encoding='utf-8')
+
+# Keep all client-scoped pages on one pre-render selection path.  Aggregate
+# modes remain user-selectable inside the page, but are never used as a
+# transient navigation state while entering assets / ads / SOP.
+nav_marker="    navigateTo(page){"
+scoped_helper="""    prepareScopedPageClient(page){
+      const scopedPages=new Set(['assets','ads','sop']);
+      if(!scopedPages.has(page)||page===this.currentPage)return;
+      const active=(this.activeClients||[]).filter(c=>c&&!c.archived);
+      if(!active.length)return;
+      const resolvedId=id=>{
+        const text=String(id??'').trim();
+        if(!text||text==='0'||text.toUpperCase()==='ALL')return null;
+        return active.find(c=>String(c.id)===text)?.id??null;
+      };
+      let sourceId=null;
+      if(this.currentPage==='assets')sourceId=resolvedId(this.selectedAssetsClientId);
+      else if(this.currentPage==='ads')sourceId=resolvedId(this.selectedAdsClientId);
+      else if(this.currentPage==='sop')sourceId=resolvedId(this.selectedSopClientId);
+      const ownId=page==='assets'?resolvedId(this.selectedAssetsClientId):(page==='ads'?resolvedId(this.selectedAdsClientId):resolvedId(this.selectedSopClientId));
+      const preferred=sourceId??ownId??resolvedId(this.selectedClientId)??active[0].id;
+      if(page==='assets'){
+        this.selectedAssetsClientId=preferred;
+        return;
+      }
+      if(page==='ads'){
+        this.selectedAdsClientId=preferred;
+        this.syncAdsAccountSelection();
+        return;
+      }
+      const changed=String(this.selectedSopClientId??'')!==String(preferred);
+      this.selectedSopClientId=preferred;
+      this.syncSopAccountSelection(changed);
+    },
+    navigateTo(page){"""
+if html.count(nav_marker)!=1:
+    raise SystemExit(f'Unexpected navigateTo method count: {html.count(nav_marker)}')
+html=html.replace(nav_marker,scoped_helper,1)
+
+permission_marker="if(!this.canViewPage(page)){this.notify('当前角色没有访问该页面的权限');return}if(page==='assets'"
+permission_replacement="if(!this.canViewPage(page)){this.notify('当前角色没有访问该页面的权限');return}this.prepareScopedPageClient(page);if(page==='assets'"
+if html.count(permission_marker)!=1:
+    raise SystemExit(f'Unexpected navigate permission marker count: {html.count(permission_marker)}')
+html=html.replace(permission_marker,permission_replacement,1)
+
+# Initial hash restoration and later hash changes must resolve the client scope
+# before assigning currentPage, otherwise Vue can paint the aggregate state for
+# one frame and only then synchronize the selected client.
+initial_hash="if(allowed.includes(hash)&&this.canViewPage(hash))this.currentPage=hash;"
+initial_hash_new="if(allowed.includes(hash)&&this.canViewPage(hash)){this.prepareScopedPageClient(hash);this.currentPage=hash;}"
+if html.count(initial_hash)!=1:
+    raise SystemExit(f'Unexpected initial hash route marker count: {html.count(initial_hash)}')
+html=html.replace(initial_hash,initial_hash_new,1)
+
+hash_change="if(allowed.includes(h)&&this.canViewPage(h)){this.currentPage=h;"
+hash_change_new="if(allowed.includes(h)&&this.canViewPage(h)){this.prepareScopedPageClient(h);this.currentPage=h;"
+if html.count(hash_change)!=1:
+    raise SystemExit(f'Unexpected hashchange route marker count: {html.count(hash_change)}')
+html=html.replace(hash_change,hash_change_new,1)
 
 old_method="    openClientDetail(id){this.selectedClientId=id;this.credentialsVisible=false;this.resetAssetPager('detail');this.navigateTo('client-detail')},"
 new_method="""    openClientDetail(id,sourcePage=''){
@@ -48,6 +109,14 @@ if html.count(old_assets_detail)!=1:
     raise SystemExit(f'Unexpected aggregate-aware account-assets detail shortcut count: {html.count(old_assets_detail)}')
 html=html.replace(old_assets_detail,new_assets_detail,1)
 
+# Cloud/session hash restoration is another direct currentPage writer.  Make it
+# use the same pre-render scope resolver before exposing the target page.
+old_adapter_route="if(allowed.includes(h)&&vm.canViewPage(h))vm.currentPage=h;"
+new_adapter_route="if(allowed.includes(h)&&vm.canViewPage(h)){vm.prepareScopedPageClient?.(h);vm.currentPage=h;}"
+if adapter.count(old_adapter_route)!=1:
+    raise SystemExit(f'Unexpected cloud adapter route marker count: {adapter.count(old_adapter_route)}')
+adapter=adapter.replace(old_adapter_route,new_adapter_route,1)
+
 # The native UI action bridge runs in capture phase and previously swallowed the
 # Vue back click, forcing every client-detail arrow to the client list. Patch the
 # actual browser runtime so it honors the same remembered source as the Vue method.
@@ -56,6 +125,20 @@ new_scroll_pages="const PAGE_SCROLL_PAGES=new Set(['clients','assets','client-fo
 if bridge.count(old_scroll_pages)!=1:
     raise SystemExit(f'Unexpected UI bridge scroll page set count: {bridge.count(old_scroll_pages)}')
 bridge=bridge.replace(old_scroll_pages,new_scroll_pages,1)
+
+# Any bridge-driven navigation must also resolve the scoped client before it
+# assigns currentPage. This prevents runtime helpers from bypassing Vue's
+# pre-render selection order.
+bridge_source="""  const navigateWithPageScroll=(page,sourceHint)=>{
+    const sourcePage=vm.currentPage;
+    if(sourcePage)rememberPageScroll(sourcePage,sourceHint);"""
+bridge_source_new="""  const navigateWithPageScroll=(page,sourceHint)=>{
+    const sourcePage=vm.currentPage;
+    if(page!==sourcePage)vm.prepareScopedPageClient?.(page);
+    if(sourcePage)rememberPageScroll(sourcePage,sourceHint);"""
+if bridge.count(bridge_source)!=1:
+    raise SystemExit(f'Unexpected UI bridge navigation marker count: {bridge.count(bridge_source)}')
+bridge=bridge.replace(bridge_source,bridge_source_new,1)
 
 old_finalize="  const finalizeClientListNavigation=()=>navigateWithPageScroll('clients');"
 new_finalize="""  const CLIENT_DETAIL_RETURN_KEY='growthops_client_detail_return_page';
@@ -95,4 +178,6 @@ bridge=bridge.replace(old_save_return,new_save_return,1)
 
 index_path.write_text(html,encoding='utf-8')
 bridge_path.write_text(bridge,encoding='utf-8')
-print('CLIENT_DETAIL_RETURN_FINALIZE_OK: index='+hashlib.sha256(index_path.read_bytes()).hexdigest()+'; bridge='+hashlib.sha256(bridge_path.read_bytes()).hexdigest())
+adapter_path.write_text(adapter,encoding='utf-8')
+print('CLIENT_DETAIL_RETURN_FINALIZE_OK: index='+hashlib.sha256(index_path.read_bytes()).hexdigest()+'; bridge='+hashlib.sha256(bridge_path.read_bytes()).hexdigest()+'; adapter='+hashlib.sha256(adapter_path.read_bytes()).hexdigest())
+print('SCOPED_PAGE_NAVIGATION_FINALIZE_OK: assets=preselected; ads=preselected; sop=preselected')
