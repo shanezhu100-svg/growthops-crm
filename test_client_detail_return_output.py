@@ -2,7 +2,10 @@ from pathlib import Path
 import hashlib
 
 root=Path(__file__).resolve().parent
-html=(root/'dist'/'index.html').read_text(encoding='utf-8')
+index_path=root/'dist'/'index.html'
+bridge_path=root/'dist'/'cloud-ui-action-bridge.js'
+html=index_path.read_text(encoding='utf-8')
+bridge=bridge_path.read_text(encoding='utf-8')
 
 def require(condition,message):
     if not condition:
@@ -10,7 +13,7 @@ def require(condition,message):
 
 for marker in (
     "openClientDetail(id,sourcePage=''){",
-    "const allowedSources=new Set(['dashboard','leads','clients','assets','sop','analytics','ads','opening','finance','alerts','settings']);",
+    "const allowedSources=new Set(['dashboard','leads','clients','assets','sop','analytics','ads','account-opening','finance','alerts','tools','system']);",
     "const requestedSource=String(sourcePage||'').trim();",
     "const source=allowedSources.has(requestedSource)?requestedSource:(allowedSources.has(currentSource)?currentSource:'clients');",
     "sessionStorage.setItem('growthops_client_detail_return_page',source)",
@@ -38,4 +41,24 @@ block=html[method_start:method_end]
 require("sessionStorage.setItem('growthops_client_detail_return_page',source)" in block,'detail source must survive rerender/edit via sessionStorage')
 require("this.navigateTo(source);" in block,'detail return must navigate to preserved source')
 
-print('CLIENT_DETAIL_RETURN_OUTPUT_TESTS_OK: index='+hashlib.sha256((root/'dist'/'index.html').read_bytes()).hexdigest())
+# Runtime bridge is capture-phase and can override Vue handlers. Gate the final
+# browser bridge itself so a hard-coded clients return can never silently win.
+for marker in (
+    "const PAGE_SCROLL_PAGES=new Set(['clients','assets','client-form','client-detail']);",
+    "const CLIENT_DETAIL_RETURN_KEY='growthops_client_detail_return_page';",
+    "const CLIENT_DETAIL_RETURN_PAGES=new Set(['dashboard','leads','clients','assets','sop','analytics','ads','account-opening','finance','alerts','tools','system']);",
+    "const readClientDetailReturnPage=()=>{",
+    "const returnFromClientDetailBridge=button=>{",
+    "if(target==='assets'&&vm.selectedClientId!==null&&vm.selectedClientId!==undefined)vm.selectedAssetsClientId=vm.selectedClientId;",
+    "bind(button,'client-detail-back',button=>returnFromClientDetailBridge(button))",
+    "const finalizeClientSaveNavigation=()=>navigateWithPageScroll('client-detail');",
+    "finalizeClientSaveNavigation();",
+):
+    require(marker in bridge,f'client detail runtime bridge marker missing: {marker}')
+
+require("bind(button,'client-detail-back',button=>navigateWithPageScroll('clients',button))" not in bridge,
+        'runtime bridge must not force client-detail back to clients')
+require('finalizeClientListNavigation();' not in bridge,
+        'client edit save bridge must not force navigation to clients')
+
+print('CLIENT_DETAIL_RETURN_OUTPUT_TESTS_OK: index='+hashlib.sha256(index_path.read_bytes()).hexdigest()+'; bridge='+hashlib.sha256(bridge_path.read_bytes()).hexdigest())
