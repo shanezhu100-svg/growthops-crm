@@ -42,5 +42,7 @@ python3 remove_login_material_view_finalize.py
 python3 test_remove_login_material_view_output.py
 python3 credential_ui_v5_finalize.py
 python3 test_credential_ui_v5_output.py
+python3 credential_ui_v51_prefetch_finalize.py
+python3 test_credential_ui_v51_prefetch_output.py
 node --check dist/cloud-security-hotfix.js
 node --check dist/cloud-ui-action-bridge.js
