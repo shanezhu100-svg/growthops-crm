@@ -7,6 +7,8 @@ python3 test_p2_output.py
 python3 security_finalize.py
 python3 backup_security_finalize.py
 python3 security_reveal_ui_finalize.py
+# Canonical compatibility scaffolding. These legacy credential UI stages are
+# stripped from the final browser runtime by credential_ui_v6_finalize.py.
 python3 credential_template_initial_finalize.py
 python3 credential_status_ui_finalize.py
 python3 account_asset_client_context_finalize.py
@@ -44,5 +46,7 @@ python3 credential_ui_v5_finalize.py
 python3 test_credential_ui_v5_output.py
 python3 credential_ui_v51_prefetch_finalize.py
 python3 test_credential_ui_v51_prefetch_output.py
+python3 credential_ui_v6_finalize.py
+python3 test_credential_ui_v6_output.py
 node --check dist/cloud-security-hotfix.js
 node --check dist/cloud-ui-action-bridge.js
