@@ -59,8 +59,6 @@ for marker in (
     "this.selectedSopClientId=preferred;",
     "this.syncSopAccountSelection(changed);",
     "this.prepareScopedPageClient(page);if(page==='assets'",
-    "if(allowed.includes(hash)&&this.canViewPage(hash)){this.prepareScopedPageClient(hash);this.currentPage=hash;}",
-    "if(allowed.includes(h)&&this.canViewPage(h)){this.prepareScopedPageClient(h);this.currentPage=h;",
 ):
     require(marker in html,f'scoped page pre-render marker missing: {marker}')
 
@@ -79,8 +77,24 @@ render_pos=nav_block.find('this.currentPage=page;')
 require(prepare_pos>=0 and render_pos>=0 and prepare_pos<render_pos,
         'navigateTo must resolve scoped client before assigning currentPage')
 
-mounted_hash_pos=html.find("this.prepareScopedPageClient(h);this.currentPage=h;")
-require(mounted_hash_pos>=0,'hashchange must resolve scoped client before rendering route')
+# Gate mounted initial hash restoration and hashchange by actual execution order,
+# independent of how prior finalizers format the surrounding conditions.
+hash_anchor=html.find("const hash=window.location.hash.slice(1);")
+hash_listener=html.find("window.addEventListener('hashchange'",hash_anchor)
+require(hash_anchor>=0 and hash_listener>hash_anchor,'unable to bound mounted initial hash route')
+initial_hash_block=html[hash_anchor:hash_listener]
+initial_prepare=initial_hash_block.find('this.prepareScopedPageClient(hash);')
+initial_render=initial_hash_block.find('this.currentPage=hash')
+require(initial_prepare>=0 and initial_render>=0 and initial_prepare<initial_render,
+        'initial hash route must resolve scoped client before currentPage')
+
+hash_end=html.find("window.addEventListener('beforeunload'",hash_listener)
+require(hash_end>hash_listener,'unable to bound mounted hashchange route')
+hash_block=html[hash_listener:hash_end]
+hash_prepare=hash_block.find('this.prepareScopedPageClient(h);')
+hash_render=hash_block.find('this.currentPage=h')
+require(hash_prepare>=0 and hash_render>=0 and hash_prepare<hash_render,
+        'hashchange must resolve scoped client before currentPage')
 
 # Cloud/session hash restoration must use the same resolver before currentPage.
 require("if(allowed.includes(h)&&vm.canViewPage(h)){vm.prepareScopedPageClient?.(h);vm.currentPage=h;}" in adapter,
