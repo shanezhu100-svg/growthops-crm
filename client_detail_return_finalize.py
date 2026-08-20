@@ -9,7 +9,7 @@ html=index_path.read_text(encoding='utf-8')
 bridge=bridge_path.read_text(encoding='utf-8')
 adapter=adapter_path.read_text(encoding='utf-8')
 
-# Keep all client-scoped pages on one pre-render selection path.  Aggregate
+# Keep all client-scoped pages on one pre-render selection path. Aggregate
 # modes remain user-selectable inside the page, but are never used as a
 # transient navigation state while entering assets / ads / SOP.
 nav_marker="    navigateTo(page){"
@@ -54,19 +54,28 @@ if html.count(permission_marker)!=1:
 html=html.replace(permission_marker,permission_replacement,1)
 
 # Initial hash restoration and later hash changes must resolve the client scope
-# before assigning currentPage, otherwise Vue can paint the aggregate state for
-# one frame and only then synchronize the selected client.
-initial_hash="if(allowed.includes(hash)&&this.canViewPage(hash))this.currentPage=hash;"
-initial_hash_new="if(allowed.includes(hash)&&this.canViewPage(hash)){this.prepareScopedPageClient(hash);this.currentPage=hash;}"
-if html.count(initial_hash)!=1:
-    raise SystemExit(f'Unexpected initial hash route marker count: {html.count(initial_hash)}')
-html=html.replace(initial_hash,initial_hash_new,1)
+# before assigning currentPage. Locate the final mounted route blocks by their
+# actual boundaries instead of depending on canonical one-line formatting.
+hash_anchor="const hash=window.location.hash.slice(1);"
+hash_pos=html.find(hash_anchor)
+hash_listener=html.find("window.addEventListener('hashchange'",hash_pos)
+if hash_pos<0 or hash_listener<0:
+    raise SystemExit('Unable to bound initial hash restoration block')
+initial_block=html[hash_pos:hash_listener]
+if initial_block.count('this.currentPage=hash')!=1:
+    raise SystemExit(f"Unexpected initial currentPage=hash count: {initial_block.count('this.currentPage=hash')}")
+initial_block=initial_block.replace('this.currentPage=hash','this.prepareScopedPageClient(hash);this.currentPage=hash',1)
+html=html[:hash_pos]+initial_block+html[hash_listener:]
 
-hash_change="if(allowed.includes(h)&&this.canViewPage(h)){this.currentPage=h;"
-hash_change_new="if(allowed.includes(h)&&this.canViewPage(h)){this.prepareScopedPageClient(h);this.currentPage=h;"
-if html.count(hash_change)!=1:
-    raise SystemExit(f'Unexpected hashchange route marker count: {html.count(hash_change)}')
-html=html.replace(hash_change,hash_change_new,1)
+hash_listener=html.find("window.addEventListener('hashchange'",hash_pos)
+hash_end=html.find("window.addEventListener('beforeunload'",hash_listener)
+if hash_listener<0 or hash_end<0:
+    raise SystemExit('Unable to bound hashchange route block')
+hash_block=html[hash_listener:hash_end]
+if hash_block.count('this.currentPage=h')!=1:
+    raise SystemExit(f"Unexpected hashchange currentPage=h count: {hash_block.count('this.currentPage=h')}")
+hash_block=hash_block.replace('this.currentPage=h','this.prepareScopedPageClient(h);this.currentPage=h',1)
+html=html[:hash_listener]+hash_block+html[hash_end:]
 
 old_method="    openClientDetail(id){this.selectedClientId=id;this.credentialsVisible=false;this.resetAssetPager('detail');this.navigateTo('client-detail')},"
 new_method="""    openClientDetail(id,sourcePage=''){
@@ -109,7 +118,7 @@ if html.count(old_assets_detail)!=1:
     raise SystemExit(f'Unexpected aggregate-aware account-assets detail shortcut count: {html.count(old_assets_detail)}')
 html=html.replace(old_assets_detail,new_assets_detail,1)
 
-# Cloud/session hash restoration is another direct currentPage writer.  Make it
+# Cloud/session hash restoration is another direct currentPage writer. Make it
 # use the same pre-render scope resolver before exposing the target page.
 old_adapter_route="if(allowed.includes(h)&&vm.canViewPage(h))vm.currentPage=h;"
 new_adapter_route="if(allowed.includes(h)&&vm.canViewPage(h)){vm.prepareScopedPageClient?.(h);vm.currentPage=h;}"
