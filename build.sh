@@ -47,6 +47,8 @@ python3 test_credential_ui_v5_output.py
 python3 credential_ui_v51_prefetch_finalize.py
 python3 test_credential_ui_v51_prefetch_output.py
 python3 credential_ui_v6_finalize.py
+python3 credential_ui_v6_event_finalize.py
 python3 test_credential_ui_v6_output.py
+python3 test_credential_ui_v6_event_output.py
 node --check dist/cloud-security-hotfix.js
 node --check dist/cloud-ui-action-bridge.js
