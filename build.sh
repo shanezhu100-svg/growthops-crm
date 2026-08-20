@@ -52,5 +52,7 @@ python3 test_credential_ui_v6_output.py
 python3 test_credential_ui_v6_event_output.py
 python3 client_detail_return_finalize.py
 python3 test_client_detail_return_output.py
+python3 module_home_navigation_finalize.py
+python3 test_module_home_navigation_output.py
 node --check dist/cloud-security-hotfix.js
 node --check dist/cloud-ui-action-bridge.js
