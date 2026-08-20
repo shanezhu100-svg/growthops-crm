@@ -40,15 +40,11 @@ if html.count(old_back)!=1:
     raise SystemExit(f'Unexpected client-detail fixed back button count: {html.count(old_back)}')
 html=html.replace(old_back,new_back,1)
 
-old_assets_button='''<button v-if="selectedAssetsClient" @click="openClientDetail(selectedAssetsClient.id)" class="h-10 px-4 rounded-xl border border-slate-200 bg-white text-xs font-bold hover:bg-slate-50 transition">
-                <i class="fa-regular fa-folder-open mr-1.5"></i>客户详情
-              </button>'''
-new_assets_button='''<button v-if="selectedAssetsClient" @click="openClientDetail(selectedAssetsClient.id,'assets')" class="h-10 px-4 rounded-xl border border-slate-200 bg-white text-xs font-bold hover:bg-slate-50 transition">
-                <i class="fa-regular fa-folder-open mr-1.5"></i>客户详情
-              </button>'''
-if html.count(old_assets_button)!=1:
-    raise SystemExit(f'Unexpected account-assets client detail button count: {html.count(old_assets_button)}')
-html=html.replace(old_assets_button,new_assets_button,1)
+old_assets_detail='<button v-if="selectedAssetsClient && selectedAssetsClientId!==0" @click="openClientDetail(selectedAssetsClient.id)"'
+new_assets_detail='<button v-if="selectedAssetsClient && selectedAssetsClientId!==0" @click="openClientDetail(selectedAssetsClient.id,\'assets\')"'
+if html.count(old_assets_detail)!=1:
+    raise SystemExit(f'Unexpected aggregate-aware account-assets detail shortcut count: {html.count(old_assets_detail)}')
+html=html.replace(old_assets_detail,new_assets_detail,1)
 
 index_path.write_text(html,encoding='utf-8')
 print('CLIENT_DETAIL_RETURN_FINALIZE_OK: index='+hashlib.sha256(index_path.read_bytes()).hexdigest())
