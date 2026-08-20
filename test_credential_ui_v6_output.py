@@ -25,18 +25,22 @@ require('读取中…' not in html,'loading placeholder must not survive into br
 for marker in (
     "window.__GROWTHOPS_CREDENTIAL_V6_GATE__?.hide?.();",
     "window.__GROWTHOPS_CREDENTIAL_V6_GATE__?.reveal?.();",
-    "version:'6.0'",
+    "version:'6.1'",
     "renderMode:'atomic-visibility'",
+    "runtimeCleanup:true",
     "crm_client_account_safe_summary",
     "crm_unlock_credentials_v1",
     "crm_reveal_client_secret_field_v4",
+    "const bestSecretValue=",
+    "const locateCredentialRows=()=>{",
+    "const prepareInlineCell=(cell,kind)=>{",
     "setTimeout(hide,10000)",
     "if(document.hidden){clearReveal();clearCredentialUnlock();}",
 ):
     require(marker in security,f'credential UI v6 runtime marker missing: {marker}')
 
-# Deprecated status/loading runtime must not ship. Earlier finalizers may still act as
-# build-time canonical compatibility scaffolding, but the browser artifact is clean.
+# Deprecated status/loading/full-client runtime must not ship. Earlier finalizers may
+# still act as build-time compatibility scaffolding, but the browser artifact is clean.
 for forbidden in (
     "crm_client_credential_status",
     "growthops_credential_status_v2",
@@ -47,8 +51,23 @@ for forbidden in (
     "cell.textContent='读取中…'",
     "cloud.rpc('crm_reveal_client_secrets'",
     "cloud.rpc('crm_reveal_client_secret_field_v3'",
+    "setInterval(ensureRevealButton,300)",
+    "function ensureRevealButton()",
+    "async function revealSelectedClient()",
+    "accountAssetRevealButtons",
+    "secureRevealButtons",
+    "setRevealButtonState",
+    "setInlineValue=(cell,value,kind)",
+    "setInlineSecretControl=(cell,value)",
+    "applyInlineSecrets(secretTree)",
+    "renderRevealModal(clientId,secretTree)",
+    "const ensureCredentialStatus=()=>{}",
+    "const applyCredentialStatusToCards=()=>{}",
+    "const applyCredentialLoadingToCards=()=>{}",
+    "const installProtectedFieldControls=()=>{}",
+    "growthops-secure-credential-button",
 ):
-    require(forbidden not in security,f'deprecated credential runtime survived v6: {forbidden}')
+    require(forbidden not in security,f'deprecated credential runtime survived v6 cleanup: {forbidden}')
 
 # Prefetch stays memory-only and must never become a secret/password cache.
 prefetch_start=security.find("  const credentialUiV51CandidateClientId=()=>{")

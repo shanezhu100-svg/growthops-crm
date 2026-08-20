@@ -120,6 +120,70 @@ if "__GROWTHOPS_CREDENTIAL_V6_GATE__" not in error_block:
     error_block=error_block[:error_tail]+"    window.__GROWTHOPS_CREDENTIAL_V6_GATE__?.reveal?.();\n"+error_block[error_tail:]
 security=security[:error_start]+error_block+security[error_end:]
 
+# -----------------------------------------------------------------------------
+# Runtime cleanup: remove obsolete polling/button/full-client compatibility code.
+# These paths are no longer reachable because the top-level reveal action was removed
+# and v5/v6 render credentials from safe-summary + v4 per-field reveal only.
+# -----------------------------------------------------------------------------
+
+poll="  setInterval(ensureRevealButton,300);\n  ensureRevealButton();\n"
+if security.count(poll)!=1:
+    raise SystemExit(f'Unexpected legacy reveal polling count: {security.count(poll)}')
+security=security.replace(poll,'',1)
+
+# Remove obsolete account-asset/top-button lookup helpers while preserving the
+# client resolver that follows them.
+asset_buttons_start=security.find("  const accountAssetRevealButtons=()=>{")
+secure_buttons_start=security.find("  const secureRevealButtons=()=>{",asset_buttons_start)
+resolver_comment=security.find("  // Resolver coverage marker retained",secure_buttons_start)
+if asset_buttons_start<0 or secure_buttons_start<0 or resolver_comment<0:
+    raise SystemExit('Unable to bound legacy reveal-button helper blocks')
+security=security[:asset_buttons_start]+security[resolver_comment:]
+
+# setRevealButtonState is now dead. clearReveal still remains because v4 uses it to
+# clear any visible per-field secret controls on background/page lifecycle events.
+set_button_start=security.find("  function setRevealButtonState(visible){")
+clear_reveal_start=security.find("  function clearReveal(){",set_button_start)
+if set_button_start<0 or clear_reveal_start<0:
+    raise SystemExit('Unable to bound legacy reveal-button state function')
+security=security[:set_button_start]+security[clear_reveal_start:]
+if security.count("    setRevealButtonState(false);\n")!=1:
+    raise SystemExit('Unexpected clearReveal legacy button-state call count')
+security=security.replace("    setRevealButtonState(false);\n",'',1)
+
+# Remove obsolete full-client inline rendering helpers. Keep bestSecretValue,
+# locateCredentialRows and prepareInlineCell because the v4 single-field eye path
+# still relies on them.
+full_inline_start=security.find("  const setInlineValue=(cell,value,kind)=>{")
+reveal_selected_start=security.find("  async function revealSelectedClient(){",full_inline_start)
+if full_inline_start<0 or reveal_selected_start<0:
+    raise SystemExit('Unable to bound obsolete full-client inline reveal block')
+security=security[:full_inline_start]+security[reveal_selected_start:]
+
+# Remove the now-unreachable revealSelectedClient + ensureRevealButton functions.
+reveal_selected_start=security.find("  async function revealSelectedClient(){")
+visibility_start=security.find("  document.addEventListener('visibilitychange',()=>{",reveal_selected_start)
+if reveal_selected_start<0 or visibility_start<0:
+    raise SystemExit('Unable to bound obsolete reveal entry functions')
+security=security[:reveal_selected_start]+security[visibility_start:]
+
+# Remove compatibility no-op functions from the shipped JS. Build-time legacy
+# finalizers can still create them earlier, but they must not execute or ship.
+for noop in (
+    "  const installProtectedFieldControls=()=>{};\n",
+    "  const applyCredentialLoadingToCards=()=>{};\n",
+    "  const applyCredentialStatusUnavailable=()=>{};\n",
+    "  const applyCredentialStatusToCards=()=>{};\n",
+    "  const ensureCredentialStatus=()=>{};\n",
+):
+    if noop in security:
+        security=security.replace(noop,'',1)
+
+# The removed top-level button id must not remain as live runtime machinery.
+button_const="  const BUTTON_ID='growthops-secure-credential-button';\n"
+if button_const in security:
+    security=security.replace(button_const,'',1)
+
 # Version the diagnostics without exposing any cached summary values.
 version_marker="    version:'5.1',\n"
 version_count=security.count(version_marker)
@@ -127,7 +191,7 @@ if version_count!=1:
     raise SystemExit(f'Unexpected v5.1 diagnostic version count: {version_count}')
 security=security.replace(
     version_marker,
-    "    version:'6.0',\n    renderMode:'atomic-visibility',\n",
+    "    version:'6.1',\n    renderMode:'atomic-visibility',\n    runtimeCleanup:true,\n",
     1,
 )
 
@@ -140,18 +204,33 @@ for forbidden in (
     "writeCredentialStatusCache",
     "cloud.rpc('crm_reveal_client_secrets'",
     "cloud.rpc('crm_reveal_client_secret_field_v3'",
+    "setInterval(ensureRevealButton,300)",
+    "function ensureRevealButton()",
+    "async function revealSelectedClient()",
+    "accountAssetRevealButtons",
+    "secureRevealButtons",
+    "setRevealButtonState",
+    "setInlineValue=(cell,value,kind)",
+    "setInlineSecretControl=(cell,value)",
+    "applyInlineSecrets(secretTree)",
+    "renderRevealModal(clientId,secretTree)",
+    "const ensureCredentialStatus=()=>{}",
+    "const installProtectedFieldControls=()=>{}",
 ):
     if forbidden in security:
-        raise SystemExit(f'Forbidden legacy credential browser path survived v6: {forbidden}')
+        raise SystemExit(f'Forbidden legacy credential browser path survived v6 cleanup: {forbidden}')
 for required in (
     "crm_client_account_safe_summary",
     "crm_unlock_credentials_v1",
     "crm_reveal_client_secret_field_v4",
+    "const bestSecretValue=",
+    "const locateCredentialRows=()=>{",
+    "const prepareInlineCell=(cell,kind)=>{",
     "setTimeout(hide,10000)",
     "if(document.hidden){clearReveal();clearCredentialUnlock();}",
 ):
     if required not in security:
-        raise SystemExit(f'Required credential safety path missing after v6: {required}')
+        raise SystemExit(f'Required credential safety path missing after v6 cleanup: {required}')
 
 index_path.write_text(html,encoding='utf-8')
 security_path.write_text(security,encoding='utf-8')
