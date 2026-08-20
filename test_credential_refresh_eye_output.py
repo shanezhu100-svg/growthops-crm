@@ -14,16 +14,19 @@ require('growthops-secure-credential-button' not in html,'top-level credential v
 require('查看登录资料</button>' not in html and '隐藏登录资料</button>' not in html,
         'top-level view/hide login material controls must remain removed')
 
-# Refresh/loading behavior must cover both account-assets and client-detail.
+# Refresh/loading behavior must cover both account-assets and client-detail, but the
+# loading state is intentionally blank so no “读取中…” label flashes on screen.
 loading_start=security.find("const applyCredentialLoadingToCards=()=>{")
 loading_end=security.find("const applyCredentialStatusUnavailable=()=>{",loading_start)
 require(loading_start>=0 and loading_end>loading_start,'credential loading helper missing')
 loading_block=security[loading_start:loading_end]
 require("if(!isCredentialSummaryContext())return;" in loading_block,
         'credential loading must cover account-assets and client-detail')
-require("cell.textContent='读取中…';" in loading_block,'credential loading placeholder missing')
+require("cell.textContent='';" in loading_block,'credential loading must remain visually blank')
+require("cell.textContent='读取中…';" not in loading_block,'visible loading text must be removed')
+require('读取中…' not in html,'final HTML must not render the loading label')
 
-# A new client must clear stale state and enter loading before the safe-summary RPC.
+# A new client must clear stale state and enter blank loading before the safe-summary RPC.
 ensure_start=security.find("const ensureAccountSafeSummary=()=>{")
 ensure_end=security.find("const applyCredentialLoadingToCards=()=>{",ensure_start)
 require(ensure_start>=0 and ensure_end>ensure_start,'safe-summary ensure helper missing')
@@ -38,7 +41,15 @@ for marker in (
 ):
     require(marker in ensure_block,f'safe-summary refresh marker missing: {marker}')
 
-# Once summary data lands, eye controls must be installed in the same render pass.
+# The legacy boolean status endpoint must not paint intermediate “已录入 / 未录入”.
+status_start=security.find("const applyCredentialStatusToCards=()=>{")
+status_end=security.find("const ensureCredentialStatus=()=>{",status_start)
+require(status_start>=0 and status_end>status_start,'credential status renderer missing')
+status_block=security[status_start:status_end]
+require("if(isCredentialSummaryContext())return;" in status_block,
+        'legacy credential status renderer must be suppressed in visible credential contexts')
+
+# Once summary data lands, final values and eye controls are installed in one render pass.
 apply_start=security.find("const applyAccountSafeSummaryToCards=()=>{")
 apply_end=security.find("const markAccountSafeSummaryUnavailable=()=>{",apply_start)
 require(apply_start>=0 and apply_end>apply_start,'safe-summary apply helper missing')
