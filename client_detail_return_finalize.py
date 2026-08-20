@@ -9,9 +9,16 @@ html=index_path.read_text(encoding='utf-8')
 bridge=bridge_path.read_text(encoding='utf-8')
 adapter=adapter_path.read_text(encoding='utf-8')
 
-# Keep all client-scoped pages on one pre-render selection path. Aggregate
-# modes remain user-selectable inside the page, but are never used as a
-# transient navigation state while entering assets / ads / SOP.
+def replace_once(text,old,new,label):
+    count=text.count(old)
+    if count!=1:
+        raise SystemExit(f'Unexpected {label} count: {count}')
+    return text.replace(old,new,1)
+
+# -----------------------------------------------------------------------------
+# Scoped page navigation: resolve the final client before Vue exposes the page.
+# “全部客户” remains an explicit in-page option; it is not a transition state.
+# -----------------------------------------------------------------------------
 nav_marker="    navigateTo(page){"
 scoped_helper="""    prepareScopedPageClient(page){
       const scopedPages=new Set(['assets','ads','sop']);
@@ -43,40 +50,28 @@ scoped_helper="""    prepareScopedPageClient(page){
       this.syncSopAccountSelection(changed);
     },
     navigateTo(page){"""
-if html.count(nav_marker)!=1:
-    raise SystemExit(f'Unexpected navigateTo method count: {html.count(nav_marker)}')
-html=html.replace(nav_marker,scoped_helper,1)
+html=replace_once(html,nav_marker,scoped_helper,'navigateTo method')
 
 permission_marker="if(!this.canViewPage(page)){this.notify('当前角色没有访问该页面的权限');return}if(page==='assets'"
-permission_replacement="if(!this.canViewPage(page)){this.notify('当前角色没有访问该页面的权限');return}this.prepareScopedPageClient(page);if(page==='assets'"
-if html.count(permission_marker)!=1:
-    raise SystemExit(f'Unexpected navigate permission marker count: {html.count(permission_marker)}')
-html=html.replace(permission_marker,permission_replacement,1)
+permission_new="if(!this.canViewPage(page)){this.notify('当前角色没有访问该页面的权限');return}this.prepareScopedPageClient(page);if(page==='assets'"
+html=replace_once(html,permission_marker,permission_new,'navigate permission marker')
 
-# Initial hash restoration and later hash changes must resolve the client scope
-# before assigning currentPage. Locate the final mounted route blocks by their
-# actual boundaries instead of depending on canonical one-line formatting.
-hash_anchor="const hash=window.location.hash.slice(1);"
-hash_pos=html.find(hash_anchor)
-hash_listener=html.find("window.addEventListener('hashchange'",hash_pos)
-if hash_pos<0 or hash_listener<0:
-    raise SystemExit('Unable to bound initial hash restoration block')
-initial_block=html[hash_pos:hash_listener]
-if initial_block.count('this.currentPage=hash')!=1:
-    raise SystemExit(f"Unexpected initial currentPage=hash count: {initial_block.count('this.currentPage=hash')}")
-initial_block=initial_block.replace('this.currentPage=hash','this.prepareScopedPageClient(hash);this.currentPage=hash',1)
-html=html[:hash_pos]+initial_block+html[hash_listener:]
+# Some earlier finalizers may remove/reformat the canonical mounted hash router.
+# If its direct writes still survive, prepend the same scope resolver. Never add a
+# second hash router just to satisfy a build marker.
+for old,new,label in (
+    ('this.currentPage=hash','this.prepareScopedPageClient(hash);this.currentPage=hash','mounted initial hash writer'),
+    ('this.currentPage=h','this.prepareScopedPageClient(h);this.currentPage=h','mounted hashchange writer'),
+):
+    count=html.count(old)
+    if count>1:
+        raise SystemExit(f'Unexpected {label} count: {count}')
+    if count==1:
+        html=html.replace(old,new,1)
 
-hash_listener=html.find("window.addEventListener('hashchange'",hash_pos)
-hash_end=html.find("window.addEventListener('beforeunload'",hash_listener)
-if hash_listener<0 or hash_end<0:
-    raise SystemExit('Unable to bound hashchange route block')
-hash_block=html[hash_listener:hash_end]
-if hash_block.count('this.currentPage=h')!=1:
-    raise SystemExit(f"Unexpected hashchange currentPage=h count: {hash_block.count('this.currentPage=h')}")
-hash_block=hash_block.replace('this.currentPage=h','this.prepareScopedPageClient(h);this.currentPage=h',1)
-html=html[:hash_listener]+hash_block+html[hash_end:]
-
+# -----------------------------------------------------------------------------
+# Client-detail source-aware return.
+# -----------------------------------------------------------------------------
 old_method="    openClientDetail(id){this.selectedClientId=id;this.credentialsVisible=false;this.resetAssetPager('detail');this.navigateTo('client-detail')},"
 new_method="""    openClientDetail(id,sourcePage=''){
       const allowedSources=new Set(['dashboard','leads','clients','assets','sop','analytics','ads','account-opening','finance','alerts','tools','system']);
@@ -102,52 +97,39 @@ new_method="""    openClientDetail(id,sourcePage=''){
       try{sessionStorage.removeItem('growthops_client_detail_return_page')}catch(_e){}
       this.navigateTo(source);
     },"""
-if html.count(old_method)!=1:
-    raise SystemExit(f'Unexpected openClientDetail method count: {html.count(old_method)}')
-html=html.replace(old_method,new_method,1)
+html=replace_once(html,old_method,new_method,'openClientDetail method')
 
 old_back='<button @click="navigateTo(\'clients\')" class="w-10 h-10 rounded-xl border border-slate-200 bg-white"><i class="fa-solid fa-arrow-left"></i></button>'
 new_back='<button type="button" @click="returnFromClientDetail()" class="w-10 h-10 rounded-xl border border-slate-200 bg-white" title="返回上一来源页面"><i class="fa-solid fa-arrow-left"></i></button>'
-if html.count(old_back)!=1:
-    raise SystemExit(f'Unexpected client-detail fixed back button count: {html.count(old_back)}')
-html=html.replace(old_back,new_back,1)
+html=replace_once(html,old_back,new_back,'client-detail fixed back button')
 
 old_assets_detail='<button v-if="selectedAssetsClient && selectedAssetsClientId!==0" @click="openClientDetail(selectedAssetsClient.id)"'
 new_assets_detail='<button v-if="selectedAssetsClient && selectedAssetsClientId!==0" @click="openClientDetail(selectedAssetsClient.id,\'assets\')"'
-if html.count(old_assets_detail)!=1:
-    raise SystemExit(f'Unexpected aggregate-aware account-assets detail shortcut count: {html.count(old_assets_detail)}')
-html=html.replace(old_assets_detail,new_assets_detail,1)
+html=replace_once(html,old_assets_detail,new_assets_detail,'account-assets detail shortcut')
 
-# Cloud/session hash restoration is another direct currentPage writer. Make it
-# use the same pre-render scope resolver before exposing the target page.
+# -----------------------------------------------------------------------------
+# Cloud/session routing must resolve client scope before currentPage.
+# -----------------------------------------------------------------------------
 old_adapter_route="if(allowed.includes(h)&&vm.canViewPage(h))vm.currentPage=h;"
 new_adapter_route="if(allowed.includes(h)&&vm.canViewPage(h)){vm.prepareScopedPageClient?.(h);vm.currentPage=h;}"
-if adapter.count(old_adapter_route)!=1:
-    raise SystemExit(f'Unexpected cloud adapter route marker count: {adapter.count(old_adapter_route)}')
-adapter=adapter.replace(old_adapter_route,new_adapter_route,1)
+adapter=replace_once(adapter,old_adapter_route,new_adapter_route,'cloud adapter route')
 
-# The native UI action bridge runs in capture phase and previously swallowed the
-# Vue back click, forcing every client-detail arrow to the client list. Patch the
-# actual browser runtime so it honors the same remembered source as the Vue method.
+# -----------------------------------------------------------------------------
+# Runtime bridge: it runs in capture phase, so it must obey the same navigation
+# state rather than overriding Vue after the fact.
+# -----------------------------------------------------------------------------
 old_scroll_pages="const PAGE_SCROLL_PAGES=new Set(['clients','client-form','client-detail']);"
 new_scroll_pages="const PAGE_SCROLL_PAGES=new Set(['clients','assets','client-form','client-detail']);"
-if bridge.count(old_scroll_pages)!=1:
-    raise SystemExit(f'Unexpected UI bridge scroll page set count: {bridge.count(old_scroll_pages)}')
-bridge=bridge.replace(old_scroll_pages,new_scroll_pages,1)
+bridge=replace_once(bridge,old_scroll_pages,new_scroll_pages,'UI bridge scroll page set')
 
-# Any bridge-driven navigation must also resolve the scoped client before it
-# assigns currentPage. This prevents runtime helpers from bypassing Vue's
-# pre-render selection order.
-bridge_source="""  const navigateWithPageScroll=(page,sourceHint)=>{
+bridge_nav="""  const navigateWithPageScroll=(page,sourceHint)=>{
     const sourcePage=vm.currentPage;
     if(sourcePage)rememberPageScroll(sourcePage,sourceHint);"""
-bridge_source_new="""  const navigateWithPageScroll=(page,sourceHint)=>{
+bridge_nav_new="""  const navigateWithPageScroll=(page,sourceHint)=>{
     const sourcePage=vm.currentPage;
     if(page!==sourcePage)vm.prepareScopedPageClient?.(page);
     if(sourcePage)rememberPageScroll(sourcePage,sourceHint);"""
-if bridge.count(bridge_source)!=1:
-    raise SystemExit(f'Unexpected UI bridge navigation marker count: {bridge.count(bridge_source)}')
-bridge=bridge.replace(bridge_source,bridge_source_new,1)
+bridge=replace_once(bridge,bridge_nav,bridge_nav_new,'UI bridge navigation')
 
 old_finalize="  const finalizeClientListNavigation=()=>navigateWithPageScroll('clients');"
 new_finalize="""  const CLIENT_DETAIL_RETURN_KEY='growthops_client_detail_return_page';
@@ -169,24 +151,19 @@ new_finalize="""  const CLIENT_DETAIL_RETURN_KEY='growthops_client_detail_return
     navigateWithPageScroll(target,button);
   };
   const finalizeClientSaveNavigation=()=>navigateWithPageScroll('client-detail');"""
-if bridge.count(old_finalize)!=1:
-    raise SystemExit(f'Unexpected UI bridge client-list finalizer count: {bridge.count(old_finalize)}')
-bridge=bridge.replace(old_finalize,new_finalize,1)
+bridge=replace_once(bridge,old_finalize,new_finalize,'UI bridge client-list finalizer')
 
 old_runtime_back="if(button.querySelector('i.fa-arrow-left'))bind(button,'client-detail-back',button=>navigateWithPageScroll('clients',button));"
 new_runtime_back="if(button.querySelector('i.fa-arrow-left'))bind(button,'client-detail-back',button=>returnFromClientDetailBridge(button));"
-if bridge.count(old_runtime_back)!=1:
-    raise SystemExit(f'Unexpected UI bridge hard-coded detail back count: {bridge.count(old_runtime_back)}')
-bridge=bridge.replace(old_runtime_back,new_runtime_back,1)
+bridge=replace_once(bridge,old_runtime_back,new_runtime_back,'UI bridge hard-coded detail back')
 
-old_save_return='            finalizeClientListNavigation();'
-new_save_return='            finalizeClientSaveNavigation();'
-if bridge.count(old_save_return)!=1:
-    raise SystemExit(f'Unexpected UI bridge client save return count: {bridge.count(old_save_return)}')
-bridge=bridge.replace(old_save_return,new_save_return,1)
+bridge=replace_once(bridge,'            finalizeClientListNavigation();','            finalizeClientSaveNavigation();','UI bridge client save return')
 
 index_path.write_text(html,encoding='utf-8')
 bridge_path.write_text(bridge,encoding='utf-8')
 adapter_path.write_text(adapter,encoding='utf-8')
-print('CLIENT_DETAIL_RETURN_FINALIZE_OK: index='+hashlib.sha256(index_path.read_bytes()).hexdigest()+'; bridge='+hashlib.sha256(bridge_path.read_bytes()).hexdigest()+'; adapter='+hashlib.sha256(adapter_path.read_bytes()).hexdigest())
+index_sha=hashlib.sha256(index_path.read_bytes()).hexdigest()
+bridge_sha=hashlib.sha256(bridge_path.read_bytes()).hexdigest()
+adapter_sha=hashlib.sha256(adapter_path.read_bytes()).hexdigest()
+print(f'CLIENT_DETAIL_RETURN_FINALIZE_OK: index={index_sha}; bridge={bridge_sha}; adapter={adapter_sha}')
 print('SCOPED_PAGE_NAVIGATION_FINALIZE_OK: assets=preselected; ads=preselected; sop=preselected')
