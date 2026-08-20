@@ -2,19 +2,27 @@ from pathlib import Path
 import hashlib
 
 root=Path(__file__).resolve().parent
+index_path=root/'dist'/'index.html'
 security_path=root/'dist'/'cloud-security-hotfix.js'
+html=index_path.read_text(encoding='utf-8')
 security=security_path.read_text(encoding='utf-8')
 
-# 1) Loading state must work in both account-assets and client-detail.
+# 1) Loading state must work in both account-assets and client-detail, but it must
+# stay visually blank. The user should see only the final safe-summary result.
 loading_start=security.find("  const applyCredentialLoadingToCards=()=>{")
 loading_end=security.find("  const applyCredentialStatusUnavailable=()=>{", loading_start)
 if loading_start<0 or loading_end<0:
     raise SystemExit('Unable to locate credential loading helper')
 loading_block=security[loading_start:loading_end]
 old_loading="    if(!isAccountAssetPage())return;\n"
-if loading_block.count(old_loading)!=1:
-    raise SystemExit(f'Unexpected loading context count: {loading_block.count(old_loading)}')
-loading_block=loading_block.replace(old_loading,"    if(!isCredentialSummaryContext())return;\n",1)
+if old_loading in loading_block:
+    loading_block=loading_block.replace(old_loading,"    if(!isCredentialSummaryContext())return;\n",1)
+elif "    if(!isCredentialSummaryContext())return;\n" not in loading_block:
+    raise SystemExit('Credential loading context guard missing')
+old_loading_text="        cell.textContent='读取中…';\n"
+if loading_block.count(old_loading_text)!=1:
+    raise SystemExit(f'Unexpected loading text writer count: {loading_block.count(old_loading_text)}')
+loading_block=loading_block.replace(old_loading_text,"        cell.textContent='';\n",1)
 security=security[:loading_start]+loading_block+security[loading_end:]
 
 # 2) Safe-summary failure state also applies to client-detail.
@@ -24,13 +32,14 @@ if unavailable_start<0 or unavailable_end<0:
     raise SystemExit('Unable to locate safe-summary unavailable helper')
 unavailable_block=security[unavailable_start:unavailable_end]
 old_unavailable="    if(!isAccountAssetPage())return;\n"
-if unavailable_block.count(old_unavailable)!=1:
-    raise SystemExit(f'Unexpected unavailable context count: {unavailable_block.count(old_unavailable)}')
-unavailable_block=unavailable_block.replace(old_unavailable,"    if(!isCredentialSummaryContext())return;\n",1)
+if old_unavailable in unavailable_block:
+    unavailable_block=unavailable_block.replace(old_unavailable,"    if(!isCredentialSummaryContext())return;\n",1)
+elif "    if(!isCredentialSummaryContext())return;\n" not in unavailable_block:
+    raise SystemExit('Safe-summary unavailable context guard missing')
 security=security[:unavailable_start]+unavailable_block+security[unavailable_end:]
 
 # 3) When switching client/context, clear any old inline secret controls and status
-# markers before showing the new loading state. This prevents stale masked/eye UI.
+# markers before entering the blank loading state. This prevents stale masked/eye UI.
 ensure_start=security.find("  const ensureAccountSafeSummary=()=>{")
 ensure_end=security.find("  const applyCredentialLoadingToCards=()=>{", ensure_start)
 if ensure_start<0 or ensure_end<0:
@@ -57,16 +66,34 @@ new_switch="""    if(accountSafeSummaryClientId!==clientId){
       accountSafeSummaryFetchedAt=0;
     }
 """
-if ensure_block.count(old_switch)!=1:
-    raise SystemExit(f'Unexpected safe-summary client switch count: {ensure_block.count(old_switch)}')
-ensure_block=ensure_block.replace(old_switch,new_switch,1)
+if old_switch in ensure_block:
+    ensure_block=ensure_block.replace(old_switch,new_switch,1)
+elif 'cell.removeAttribute(FIELD_REVEAL_ATTR);' not in ensure_block:
+    raise SystemExit('Safe-summary client-switch cleanup missing')
 promise_marker="    accountSafeSummaryPromise=cloud.rpc('crm_client_account_safe_summary'"
 if ensure_block.count(promise_marker)!=1:
     raise SystemExit(f'Unexpected safe-summary RPC marker count: {ensure_block.count(promise_marker)}')
-ensure_block=ensure_block.replace(promise_marker,"    if(!accountSafeSummaryData)applyCredentialLoadingToCards();\n"+promise_marker,1)
+loading_call="    if(!accountSafeSummaryData)applyCredentialLoadingToCards();\n"
+if loading_call not in ensure_block:
+    ensure_block=ensure_block.replace(promise_marker,loading_call+promise_marker,1)
 security=security[:ensure_start]+ensure_block+security[ensure_end:]
 
-# 4) Install the per-field eye control immediately in the same render pass that
+# 4) Do not let the older boolean status endpoint render intermediate “已录入 / 未录入”.
+# The safe-summary endpoint is the only renderer for login identifiers and password state.
+status_start=security.find("  const applyCredentialStatusToCards=()=>{")
+status_end=security.find("  const ensureCredentialStatus=()=>{",status_start)
+if status_start<0 or status_end<0:
+    raise SystemExit('Unable to locate credential status renderer')
+status_block=security[status_start:status_end]
+status_guard="    if(isCredentialSummaryContext())return;\n"
+if status_guard not in status_block:
+    status_entry="    if(!isAccountAssetPage()||!credentialStatusData)return;\n"
+    if status_block.count(status_entry)!=1:
+        raise SystemExit(f'Unexpected credential status entry count: {status_block.count(status_entry)}')
+    status_block=status_block.replace(status_entry,status_entry+status_guard,1)
+security=security[:status_start]+status_block+security[status_end:]
+
+# 5) Install the per-field eye control immediately in the same render pass that
 # applies the safe summary. Do not wait for the next periodic UI scan.
 apply_start=security.find("  const applyAccountSafeSummaryToCards=()=>{")
 apply_end=security.find("  const markAccountSafeSummaryUnavailable=()=>{", apply_start)
@@ -88,5 +115,12 @@ if new_hint not in security:
         raise SystemExit('Credential masked-state hint missing')
     security=security.replace(old_hint,new_hint,1)
 
+# 6) Remove static “读取中…” placeholders from the final HTML. Earlier build gates
+# may still use them as an internal transition marker; the browser output must not.
+placeholder_count=html.count('读取中…')
+if placeholder_count:
+    html=html.replace('读取中…','')
+
+index_path.write_text(html,encoding='utf-8')
 security_path.write_text(security,encoding='utf-8')
-print('CREDENTIAL_REFRESH_EYE_FINALIZE_OK: security='+hashlib.sha256(security_path.read_bytes()).hexdigest())
+print('CREDENTIAL_REFRESH_EYE_FINALIZE_OK: placeholders_removed='+str(placeholder_count)+'; index='+hashlib.sha256(index_path.read_bytes()).hexdigest()+'; security='+hashlib.sha256(security_path.read_bytes()).hexdigest())
