@@ -32,17 +32,20 @@ This file freezes the known-good CRM state before any Cloudflare Pages/Workers m
 
 ## Production output integrity checkpoints
 
-These are existing hard-gated output hashes and must remain unchanged during P1 static-host migration unless a deliberate, separately reviewed build change is made.
+The values below were re-read directly from the build log of production deployment `dpl_GrqUWZuHikcp2LX5PTpyozLC8skH`. They supersede older pre-merge/intermediate hash notes. P1 must reproduce these current production outputs unless a deliberate, separately reviewed build change is made.
 
 - Credential controller index: `3fb5874a43264d74e55222be7c19fa2a0abaa516a0b3fe480e6bcf327cdbe11e`
 - Credential controller security: `c47e0ebc7c5c09fdee1f542974ec4e560e5d46987f523d1995f2a4d34d51976c`
 - Credential runtime index: `14bcf8c660fbd7dc8721237af00e100fea1584f3193fe6fa4a0b584454ea03f2`
 - Credential runtime security: `366c4c2dd3e649efc2c153382eac5009a593ffd00e4b24c20d8de799d48d8cba`
-- HttpOnly index: `049977912853aff3a554449584633c2441b3fc8d7028d74a4d6c5cdb379989e2`
-- HttpOnly adapter: `92c607710b6428479081997eb523f5e153271683f3bc46fdc54d71cf8f448e01`
-- HttpOnly security: `a5e225f8a525eea07902c854816ec874b100760554743575169dfdf85f31a2ca`
-- Client-detail final index: `9c5c27f1547970dc917aa25d55f18af34ad7fb8ec68d425eeea72794b080365a`
-- Final module-home index: `453964664819622285d9f081e1b1c95f3c3d832b56a21a32d007895ad53debb2`
+- HttpOnly index: `29c83f4c9d9e98ae4c84a801f3db99194340cad086480b9872367d7596ccf53c`
+- HttpOnly adapter: `2a5b5da0f94ba66a2b58ed64b923e0167e7723eb7ccccd3c6384dfbeb471a2a6`
+- HttpOnly security: `ebe0cc3fe1ff4d40481973b188a799700b786a958ef492a36b5b6ed541617a25`
+- HttpOnly P1 override: `e50e05322a0d56e78bf112a52be08ff54263f4ce88cb0b9b91f6613722b8ccab`
+- HttpOnly UI bridge: `c9ce3c3474fd0c623eb4c15ace8fc8d2ce90134b4d99c06d2d82d430a03de090`
+- Client-detail final index: `b965f8f637a5c6a4dcb9e9f7b6d41d396a0fa696a691126e227fe682f2b245cd`
+- Client-detail final bridge: `b15e0b792e2f0ba6e99bef53fea96dde78b647b5528ae199311c4be9b37027a7`
+- Final module-home index: `941be51fcaf60acd0bb350c1822260f24555340fb2d719effe0f339c3b69a1e5`
 
 ## Supabase checkpoint
 
