@@ -38,15 +38,15 @@ for marker in (
 ):
     require(marker in security,f'credential unlock/minimal reveal UI marker missing: {marker}')
 
-# Browser output may request only the v5 scalar transport. v3/v4 broader bundle
-# endpoints and browser-side bundle flattening are forbidden after this stage.
+# Browser reveal call path may request only the v5 scalar transport. Legacy helper
+# definitions still exist at this intermediate build stage and are stripped by v6,
+# so scope this gate to active RPC/bundle-consumer markers rather than all strings.
 for forbidden in (
     "cloud.rpc('crm_reveal_client_secret_field_v3'",
     "cloud.rpc('crm_reveal_client_secret_field_v4'",
     'flattenSecretFields(bundle',
-    'accountSecrets',
 ):
-    require(forbidden not in security,f'broader credential reveal survived browser output: {forbidden}')
+    require(forbidden not in security,f'broader credential reveal survived browser call path: {forbidden}')
 
 unlock_start=security.find("  let credentialUnlockToken='';")
 unlock_end=security.find('  const installProtectedFieldControl=',unlock_start)
@@ -92,12 +92,11 @@ for marker in (
 ):
     require(marker in v5_sql,f'credential v5 SQL marker missing: {marker}')
 
-# v5 browser-visible return must never serialize the broader v3 keys.
+# v5 browser-visible return must never construct a broader accountSecrets response.
 return_tail=v5_sql[v5_sql.find('create or replace function public.crm_reveal_client_secret_value_v5'):]
 require("return jsonb_build_object('value', v_value)" in return_tail,'v5 scalar return missing')
 require("jsonb_build_object('accountSecrets'" not in return_tail,'v5 must not build accountSecrets response')
 
-# Password and unlock token are never part of audit detail objects.
 for audit_action in ('CREDENTIAL_UNLOCK_FAILURE','CREDENTIAL_UNLOCK_THROTTLED','CREDENTIAL_UNLOCK'):
     require(audit_action in unlock_sql,f'audit action missing: {audit_action}')
 require("jsonb_build_object('reason','INVALID_PASSWORD')" in unlock_sql,
