@@ -18,8 +18,9 @@ for marker in (
     "row.style.visibility='visible'",
     "const clearPlaceholder=()=>{",
     "window.__GROWTHOPS_CREDENTIAL_V6_GATE__={hide,reveal}",
+    "growthops:credential-dom-change",
 ):
-    require(marker in html,f'credential UI v6 placeholder marker missing: {marker}')
+    require(marker in html,f'credential UI v6 placeholder/event marker missing: {marker}')
 require("row.style.visibility='hidden'" not in html,
         'credential rows must not be hidden while safe summary loads')
 require("if(cell.textContent)cell.textContent=''" not in html,
@@ -40,8 +41,16 @@ for marker in (
     "const prepareInlineCell=(cell,kind)=>{",
     "setTimeout(hide,10000)",
     "if(document.hidden){clearReveal();clearCredentialUnlock();}",
+    "const credentialUiV6ScheduleEnsure=()=>{",
+    "requestAnimationFrame(()=>{",
+    "document.addEventListener('click',credentialUiV6ScheduleEnsure,true);",
+    "document.addEventListener('change',credentialUiV6ScheduleEnsure,true);",
+    "document.addEventListener('growthops:credential-dom-change',credentialUiV6ScheduleEnsure);",
+    "window.addEventListener('hashchange',credentialUiV6ScheduleEnsure);",
+    "window.addEventListener('popstate',credentialUiV6ScheduleEnsure);",
+    "credentialUiV6ScheduleEnsure();",
 ):
-    require(marker in security,f'credential UI v6 runtime marker missing: {marker}')
+    require(marker in security,f'credential UI v6 runtime/event marker missing: {marker}')
 
 for forbidden in (
     "crm_client_credential_status",
@@ -93,8 +102,10 @@ require("row.accountCell.textContent=login||'未录入';" in security,'final log
 require("row.passwordCell.textContent='••••••••';" in security,'final masked-password writer missing')
 require("row.passwordCell.textContent='未录入';" in security,'true-empty password writer missing')
 
-print(
-    'CREDENTIAL_UI_V6_OUTPUT_TESTS_OK: reveal_transport=v5-single-value; '
-    f'index={hashlib.sha256((root/"dist"/"index.html").read_bytes()).hexdigest()}; '
-    f'security={hashlib.sha256((root/"dist"/"cloud-security-hotfix.js").read_bytes()).hexdigest()}'
-)
+index_hash=hashlib.sha256((root/'dist'/'index.html').read_bytes()).hexdigest()
+security_hash=hashlib.sha256((root/'dist'/'cloud-security-hotfix.js').read_bytes()).hexdigest()
+require(index_hash=='14bcf8c660fbd7dc8721237af00e100fea1584f3193fe6fa4a0b584454ea03f2',
+        'credential runtime index drifted from production v6-event baseline: '+index_hash)
+require(security_hash=='366c4c2dd3e649efc2c153382eac5009a593ffd00e4b24c20d8de799d48d8cba',
+        'credential runtime security drifted from production v6-event baseline: '+security_hash)
+print('CREDENTIAL_UI_RUNTIME_OUTPUT_TESTS_OK: reveal_transport=v5-single-value; index='+index_hash+'; security='+security_hash)
