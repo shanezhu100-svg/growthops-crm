@@ -9,24 +9,30 @@ def require(condition,message):
     if not condition:
         raise SystemExit(message)
 
-# Atomic visual gate: keep layout, suppress transitional credential rows, then reveal
-# the whole safe-summary pass together.
+# First-paint visual gate: show a stable non-secret placeholder immediately, then
+# replace it atomically with the safe-summary result. Credential rows must never be
+# hidden for the duration of the network request.
 for marker in (
+    "growthops-credential-v6-placeholder-style",
     "data-growthops-credential-v6-gate",
-    "row.style.visibility='hidden'",
+    "data-growthops-credential-v6-placeholder-kind",
+    "cell.textContent=kind==='password'?'••••••••':'\\u00a0';",
     "row.style.visibility='visible'",
+    "const clearPlaceholder=()=>{",
     "window.__GROWTHOPS_CREDENTIAL_V6_GATE__={hide,reveal}",
 ):
-    require(marker in html,f'credential UI v6 gate marker missing: {marker}')
+    require(marker in html,f'credential UI v6 placeholder marker missing: {marker}')
+require("row.style.visibility='hidden'" not in html,
+        'credential rows must not be hidden while safe summary loads')
 require("if(cell.textContent)cell.textContent=''" not in html,
-        'preboot must not churn credential text while the row is hidden')
-require('读取中…' not in html,'loading placeholder must not survive into browser HTML')
+        'preboot must not expose or churn stale credential fallback text')
+require('读取中…' not in html,'legacy textual loading placeholder must not survive into browser HTML')
 
 for marker in (
     "window.__GROWTHOPS_CREDENTIAL_V6_GATE__?.hide?.();",
     "window.__GROWTHOPS_CREDENTIAL_V6_GATE__?.reveal?.();",
-    "version:'6.1'",
-    "renderMode:'atomic-visibility'",
+    "version:'6.2'",
+    "renderMode:'atomic-placeholder'",
     "runtimeCleanup:true",
     "crm_client_account_safe_summary",
     "crm_unlock_credentials_v1",
