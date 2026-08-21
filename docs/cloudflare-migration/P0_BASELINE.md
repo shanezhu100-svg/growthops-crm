@@ -53,6 +53,10 @@ The values below were re-read directly from the build log of production deployme
 - Vault secret rows at checkpoint: `1`
 - `crm_workspace_state` sensitive-key matches: `0`
 - `crm_server_audit_logs` sensitive payload-value matches: `0`
+- Schema/security inventory lines: `258`
+- Schema/security composite SHA-256: `d78c430cdd33757f50a5286b66c0095e3ff322d64f364eb4b61f1a517fd3d729`
+- Fingerprint query: `supabase/baseline/p0_schema_security_fingerprint.sql`
+- Detailed structural snapshot: `P0_SCHEMA_MANIFEST.md`
 - Audit metadata may contain non-secret booleans such as `passwordChanged`; these do not count as credential payload values.
 - CRM business tables observed at checkpoint have RLS enabled.
 - No RLS policies were present on the `crm_*` business tables at checkpoint; direct table access therefore remains default-deny and application access is mediated through controlled functions.
