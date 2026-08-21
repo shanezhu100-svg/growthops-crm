@@ -11,8 +11,8 @@ python3 test_p2_output.py
 python3 security_finalize.py
 python3 backup_security_finalize.py
 python3 security_reveal_ui_finalize.py
-# Canonical compatibility scaffolding. These legacy credential UI stages are
-# stripped from the final browser runtime by credential_ui_v6_finalize.py.
+# Canonical compatibility scaffolding. Legacy status/loading paths are retained
+# only as build-time markers and are stripped from the shipped runtime by v6.
 python3 credential_template_initial_finalize.py
 python3 credential_status_ui_finalize.py
 python3 account_asset_client_context_finalize.py
@@ -24,13 +24,13 @@ python3 test_account_asset_client_context_output.py
 python3 test_credential_status_loading_output.py
 python3 test_account_asset_value_typography_output.py
 python3 account_login_identifier_v2_finalize.py
-python3 credential_field_reveal_v3_finalize.py
+# Generate the final unlock + scalar-value credential reveal controller in one
+# build stage. This replaces the historical persisted v3 -> v4 intermediate chain.
+python3 credential_secure_reveal_finalize.py
 python3 test_security_hotfix_output.py
 python3 test_security_reveal_ui_output.py
 python3 test_credential_template_initial_output.py
 python3 test_account_login_identifier_output.py
-python3 test_credential_field_reveal_v3_output.py
-python3 credential_unlock_v4_finalize.py
 python3 test_credential_unlock_v4_output.py
 python3 credential_client_detail_v4_finalize.py
 python3 test_credential_client_detail_v4_output.py
