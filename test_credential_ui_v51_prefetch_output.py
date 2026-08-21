@@ -31,23 +31,31 @@ end=security.find("  const ensureAccountSafeSummary=()=>{",start)
 require(start>=0 and end>start,'unable to bound v5.1 prefetch helper block')
 block=security[start:end]
 
-# Prefetch is allowed to read only the existing CRM session token and the safe-summary RPC.
-# It must never reveal passwords or persist summary data in browser storage.
 require("crm_client_account_safe_summary" in block,'safe-summary prefetch RPC missing')
-require("crm_reveal_client_secret_field_v4" not in block,'prefetch must never read password / 2FA')
-require("crm_reveal_client_secrets" not in block,'prefetch must never use full secret reveal')
+for forbidden in (
+    "crm_reveal_client_secret_value_v5",
+    "crm_reveal_client_secret_field_v4",
+    "crm_reveal_client_secret_field_v3",
+    "crm_reveal_client_secrets",
+):
+    require(forbidden not in block,f'prefetch must never read password / 2FA: {forbidden}')
 require("localStorage.setItem" not in block,'prefetch must not persist safe summary to localStorage')
 require("sessionStorage" not in block,'prefetch must not persist safe summary to sessionStorage')
 require("new Map()" in block or "credentialUiV51PrefetchCache" in security,'memory-only prefetch cache missing')
 require("Date.now()-Number(cached.savedAt||0)>60000" in block,'prefetch cache TTL must remain 60 seconds')
 
-# Password reveal remains the existing v4 ADMIN-only path and keeps 10-second auto-hide.
 for marker in (
     "crm_unlock_credentials_v1",
-    "crm_reveal_client_secret_field_v4",
+    "crm_reveal_client_secret_value_v5",
+    "p_field:field",
     "setTimeout(hide,10000)",
     "if(vm.currentUser?.role!=='ADMIN')",
 ):
-    require(marker in security,f'v4 password safety marker missing after prefetch: {marker}')
+    require(marker in security,f'v5 password safety marker missing after prefetch: {marker}')
+for forbidden in (
+    "cloud.rpc('crm_reveal_client_secret_field_v4'",
+    "cloud.rpc('crm_reveal_client_secret_field_v3'",
+):
+    require(forbidden not in security,f'broader reveal call survived after prefetch: {forbidden}')
 
-print('CREDENTIAL_UI_V51_PREFETCH_OUTPUT_TESTS_OK: security='+hashlib.sha256((root/'dist'/'cloud-security-hotfix.js').read_bytes()).hexdigest())
+print('CREDENTIAL_UI_V51_PREFETCH_OUTPUT_TESTS_OK: reveal_transport=v5-single-value; security='+hashlib.sha256((root/'dist'/'cloud-security-hotfix.js').read_bytes()).hexdigest())
