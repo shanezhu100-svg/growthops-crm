@@ -144,18 +144,87 @@ security=security.replace(
     1,
 )
 
-rpc_old="""        bundle=await cloud.rpc('crm_reveal_client_secret_field_v3',{
+# Replace the v3 bundle fetch + browser-side flattening with true least-privilege v5
+# calls. Each network response contains at most one {value} scalar. The UI may still
+# combine password and 2FA for display, but broader accountSecrets never cross the
+# browser boundary.
+reveal_old="""      let bundle=null;
+      try{
+        bundle=await cloud.rpc('crm_reveal_client_secret_field_v3',{
           p_token:token,
           p_client_id:String(clientId),
+          p_platform:String(row.platform||''),
+          p_account_id:accountIdForProtectedField(row)||null
+        });
+        const fields=flattenSecretFields(bundle&&typeof bundle==='object'?bundle:{});
+        const password=bestSecretValue(fields,row.platform,'password',row.card);
+        const twofa=bestSecretValue(fields,row.platform,'twofa',row.card);
+        const secureParts=[];
+        if(password)secureParts.push(password);
+        if(twofa)secureParts.push(`2FA: ${twofa}`);
+        visibleValue=secureParts.join('  ·  ');
+        bundle=null;
+        fields.length=0;
+        if(!visibleValue){
+          vm.notify('该账号当前没有可显示的密码 / 2FA');
+          hide();
+          return;
+        }
+        display.textContent=visibleValue;
+        toggle.innerHTML='<i class=\"fa-regular fa-eye-slash\"></i>';
+        toggle.setAttribute('aria-label','隐藏密码和 2FA');
+        toggle.disabled=false;
+        loading=false;
+        fieldTimer=setTimeout(hide,10000);
+      }catch(error){
+        bundle=null;
+        hide();
+        vm.notify(fieldRevealErrorMessage(error));
+      }
 """
-rpc_new="""        bundle=await cloud.rpc('crm_reveal_client_secret_field_v4',{
-          p_token:token,
-          p_unlock_token:unlockToken,
-          p_client_id:String(clientId),
+reveal_new="""      try{
+        const accountId=accountIdForProtectedField(row)||null;
+        const revealValue=async field=>{
+          const data=await cloud.rpc('crm_reveal_client_secret_value_v5',{
+            p_token:token,
+            p_unlock_token:unlockToken,
+            p_client_id:String(clientId),
+            p_platform:String(row.platform||''),
+            p_account_id:accountId,
+            p_field:field
+          });
+          return String(data?.value||'');
+        };
+        let password='';
+        let twofa='';
+        if(summary?.hasPassword)password=await revealValue('password');
+        if(summary?.has2FA)twofa=await revealValue('twofa');
+        const secureParts=[];
+        if(password)secureParts.push(password);
+        if(twofa)secureParts.push(`2FA: ${twofa}`);
+        visibleValue=secureParts.join('  ·  ');
+        password='';
+        twofa='';
+        if(!visibleValue){
+          vm.notify('该账号当前没有可显示的密码 / 2FA');
+          hide();
+          return;
+        }
+        display.textContent=visibleValue;
+        toggle.innerHTML='<i class=\"fa-regular fa-eye-slash\"></i>';
+        toggle.setAttribute('aria-label','隐藏密码和 2FA');
+        toggle.disabled=false;
+        loading=false;
+        fieldTimer=setTimeout(hide,10000);
+      }catch(error){
+        if(String(error?.message||error||'').includes('CREDENTIAL_UNLOCK_REQUIRED'))clearCredentialUnlock();
+        hide();
+        vm.notify(fieldRevealErrorMessage(error));
+      }
 """
-if security.count(rpc_old)!=1:
-    raise SystemExit(f'Unexpected v3 browser RPC count: {security.count(rpc_old)}')
-security=security.replace(rpc_old,rpc_new,1)
+if security.count(reveal_old)!=1:
+    raise SystemExit(f'Unexpected v3 bundle reveal block count: {security.count(reveal_old)}')
+security=security.replace(reveal_old,reveal_new,1)
 
 error_marker="""    if(value.includes('FORBIDDEN'))return '只有管理员可以查看密码 / 2FA';
     return '读取密码 / 2FA 失败，请稍后重试';
@@ -166,27 +235,11 @@ security=security.replace(
     error_marker,
     """    if(value.includes('FORBIDDEN'))return '只有管理员可以查看密码 / 2FA';
     if(value.includes('CREDENTIAL_UNLOCK_REQUIRED'))return '管理员解锁已过期，请再次验证后查看';
+    if(value.includes('INVALID_CREDENTIAL_FIELD'))return '凭证字段请求无效';
     return '读取密码 / 2FA 失败，请稍后重试';
 """,
     1,
 )
-
-catch_old="""      }catch(error){
-        bundle=null;
-        hide();
-        vm.notify(fieldRevealErrorMessage(error));
-      }
-"""
-catch_new="""      }catch(error){
-        bundle=null;
-        if(String(error?.message||error||'').includes('CREDENTIAL_UNLOCK_REQUIRED'))clearCredentialUnlock();
-        hide();
-        vm.notify(fieldRevealErrorMessage(error));
-      }
-"""
-if security.count(catch_old)!=1:
-    raise SystemExit(f'Unexpected per-field catch count: {security.count(catch_old)}')
-security=security.replace(catch_old,catch_new,1)
 
 visibility_old="if(document.hidden)clearReveal();"
 if security.count(visibility_old)!=1:
@@ -198,5 +251,21 @@ if security.count(beforeunload)!=1:
     raise SystemExit(f'Unexpected beforeunload cleanup count: {security.count(beforeunload)}')
 security=security.replace(beforeunload,beforeunload+"\n  window.addEventListener('beforeunload',clearCredentialUnlock);\n  window.addEventListener('pagehide',clearCredentialUnlock);",1)
 
+for forbidden in (
+    "cloud.rpc('crm_reveal_client_secret_field_v3'",
+    "cloud.rpc('crm_reveal_client_secret_field_v4'",
+    "flattenSecretFields(bundle",
+):
+    if forbidden in security:
+        raise SystemExit(f'Broader credential reveal path survived v5 finalization: {forbidden}')
+for required in (
+    "cloud.rpc('crm_reveal_client_secret_value_v5'",
+    "p_field:field",
+    "if(summary?.hasPassword)password=await revealValue('password')",
+    "if(summary?.has2FA)twofa=await revealValue('twofa')",
+):
+    if required not in security:
+        raise SystemExit(f'Minimal credential v5 marker missing: {required}')
+
 security_path.write_text(security,encoding='utf-8')
-print('CREDENTIAL_UNLOCK_V4_FINALIZE_OK: security='+hashlib.sha256(security_path.read_bytes()).hexdigest())
+print('CREDENTIAL_UNLOCK_V4_FINALIZE_OK: reveal_transport=v5-single-value; security='+hashlib.sha256(security_path.read_bytes()).hexdigest())
