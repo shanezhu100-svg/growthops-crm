@@ -101,13 +101,19 @@ security, token_read_count = re.subn(
 if token_read_count < 3:
     raise SystemExit(f'Expected at least 3 credential token reads to migrate, got {token_read_count}')
 
-# Conflict recovery also uses cloud.rpc. Convert any residual direct token lookup to
-# the same non-secret marker while preserving its existing flow.
-p1, p1_token_reads = re.subn(
+# Conflict recovery also uses cloud.rpc. Convert both the literal-key and TOKEN_KEY
+# alias forms to the same non-secret marker while preserving the flow.
+p1, p1_literal_reads = re.subn(
     r"localStorage\.getItem\((?:'growthops_crm_token_v2'|\"growthops_crm_token_v2\")\)\s*\|\|\s*''",
     "(window.__growthOpsVm?.currentUser?'cookie':'')",
     p1,
 )
+p1, p1_alias_reads = re.subn(
+    r"localStorage\.getItem\(TOKEN_KEY\)\s*\|\|\s*''",
+    "(window.__growthOpsVm?.currentUser?'cookie':'')",
+    p1,
+)
+p1_token_reads = p1_literal_reads + p1_alias_reads
 p1 = re.sub(
     r"\n\s*const\s+TOKEN_KEY\s*=\s*['\"]growthops_crm_token_v2['\"];?",
     '',
