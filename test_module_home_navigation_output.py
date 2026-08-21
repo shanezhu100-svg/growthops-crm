@@ -23,7 +23,7 @@ require("if(this.currentPage==='ads'&&page!=='ads')this.selectedAdsClientId=0;" 
 
 for marker in (
     "navigateTo(page,moduleHome=false){",
-    "if(moduleHome){if(page==='assets')this.selectedAssetsClientId=0;else if(page==='ads')this.selectedAdsClientId=0;else if(page==='analytics')this.selectedAnalyticsClientId=0;}",
+    "if(moduleHome){if(page==='assets')this.selectedAssetsClientId=0;else if(page==='ads')this.selectedAdsClientId=0;else if(page==='analytics')this.selectedAnalyticsClientId=0;else if(page==='sop')this.selectedSopClientId=0;}",
     "if(page==='assets'&&Number(this.selectedAssetsClientId)!==0&&!this.clients.some(c=>c.id===this.selectedAssetsClientId))this.selectedAssetsClientId=this.clients[0]?.id||null;",
     "if(page==='analytics'){if(Number(this.selectedAnalyticsClientId)!==0&&!this.clients.some(c=>c.id===this.selectedAnalyticsClientId))this.selectedAnalyticsClientId=this.clients[0]?.id||null;this.syncAnalyticsAccountSelection()}",
     "if(page==='ads'){if(Number(this.selectedAdsClientId)!==0&&!this.clients.some(c=>c.id===this.selectedAdsClientId))this.selectedAdsClientId=this.clients[0]?.id||null;this.syncAdsAccountSelection()}",
@@ -33,17 +33,20 @@ for marker in (
     'data-growthops-module-home="analytics"',
     'data-growthops-module-home="ads"',
     'data-growthops-module-home="assets"',
+    'data-growthops-module-home="sop"',
     '@click="navigateTo(\'analytics\',true)"',
     '@click="navigateTo(\'ads\',true)"',
     '@click="navigateTo(\'assets\',true)"',
+    '@click="navigateTo(\'sop\',true)"',
     '@keydown.enter.prevent="navigateTo(\'analytics\',true)"',
     '@keydown.enter.prevent="navigateTo(\'ads\',true)"',
     '@keydown.enter.prevent="navigateTo(\'assets\',true)"',
+    '@keydown.enter.prevent="navigateTo(\'sop\',true)"',
 ):
     require(marker in html,f'module-home marker missing: {marker}')
 
-# The exact old validation that overwrote sentinel 0 must be gone for all three
-# aggregate-capable modules.
+# The exact old validation that overwrote sentinel 0 must be gone for the three
+# modules that have concrete-client fallback validation.
 require("if(page==='assets'&&!this.clients.some(c=>c.id===this.selectedAssetsClientId))" not in html,
         'assets navigation still rejects aggregate sentinel 0')
 require("if(page==='analytics'){if(!this.clients.some(c=>c.id===this.selectedAnalyticsClientId))" not in html,
@@ -57,7 +60,7 @@ require('MODULE_HOME_NAV_LABELS' not in bridge,
 require('showAllClientsForModule' not in bridge,
         'legacy module-home bridge callback must not survive')
 
-# All-client capability itself must remain intact.
+# Existing all-client capability must remain intact.
 require('<option :value="0">全部客户</option>' in html,
         'account-assets all-client option must remain available')
 require('v-if="selectedAssetsClientId===0"' in html,
@@ -66,6 +69,26 @@ require("selectedAnalyticsClient(){if(Number(this.selectedAnalyticsClientId)===0
         'analytics all-client sentinel must remain supported')
 require("selectedAdsClient(){if(Number(this.selectedAdsClientId)===0)return null;" in html,
         'ads all-client sentinel must remain supported')
+
+# SOP must now be a real all-client landing page, not just an empty "请选择客户"
+# state. It keeps the existing account-level execution workflow after a client is
+# selected from the aggregate table.
+for marker in (
+    '<option :value="0">所有客户</option><option v-for="c in activeClients" :value="c.id" :key="c.id">{{ c.name }}</option>',
+    'v-if="selectedSopClientId===0"',
+    '所有客户每日 SOP',
+    'sopAllClientRows(){',
+    'sopAllAccountCount(){',
+    'sopAllConfiguredAccountCount(){',
+    'sopAllTodayTaskCount(){',
+    '@click="selectedSopClientId=row.client.id; syncSopAccountSelection(true)"',
+    '<div v-else-if="selectedSopClient && selectedSopAccount" class="space-y-5">',
+):
+    require(marker in html,f'SOP all-client marker missing: {marker}')
+require('<option :value="null">请选择客户</option>' not in html,
+        'SOP selector still exposes legacy blank landing state')
+require("selectedSopClient(){return this.clients.find(c=>!c.archived&&String(c.id)===String(this.selectedSopClientId))||null}" in html,
+        'SOP concrete-client computed behavior changed unexpectedly')
 require('prepareScopedPageClient(page)' not in html,
         'reverted scoped preselection must not be restored')
 
@@ -78,9 +101,9 @@ require("this.navigateTo(source);" in html,
         'client-detail return must preserve source context')
 
 # Regression guard for the original failure: in the real navigateTo() method the
-# module-home reset must happen before the stale-client validation, and that
-# validation must explicitly exempt sentinel 0. This proves 0 survives the full
-# navigateTo path instead of only proving that it was assigned beforehand.
+# module-home reset must happen before stale-client validation. For SOP there is
+# no stale-client fallback; sentinel 0 must be assigned before the existing SOP
+# account synchronizer runs, proving module-home navigation reaches aggregate mode.
 start=html.find('    navigateTo(page,moduleHome=false){')
 end=html.find('    openClientDetail(',start)
 require(start>=0 and end>start,'unable to bound authoritative navigateTo method')
@@ -102,8 +125,17 @@ for reset,guard in (
     require(reset_pos<guard_pos,
             f'aggregate sentinel must be assigned before validation: {reset}')
 
+sop_reset=block.find("else if(page==='sop')this.selectedSopClientId=0;")
+sop_sync=block.rfind("if(page==='sop')this.syncSopAccountSelection()")
+require(sop_reset>=0 and sop_sync>=0,
+        'cannot verify SOP aggregate sentinel through navigateTo')
+require(sop_reset<sop_sync,
+        'SOP aggregate sentinel must be assigned before account synchronization')
+require("this.selectedSopClientId=this.clients[0]" not in block,
+        'SOP navigateTo must not replace all-client sentinel with first client')
+
 print(
-    'MODULE_HOME_NAVIGATION_OUTPUT_TESTS_OK: authority=navigateTo; sentinel-zero=valid-through-navigation; wrappers=removed; '
+    'MODULE_HOME_NAVIGATION_OUTPUT_TESTS_OK: authority=navigateTo; sentinel-zero=valid-through-navigation; wrappers=removed; sop=all-clients; '
     f'index={hashlib.sha256(index_path.read_bytes()).hexdigest()}; '
     f'bridge={hashlib.sha256(bridge_path.read_bytes()).hexdigest()}'
 )
