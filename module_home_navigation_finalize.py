@@ -7,7 +7,7 @@ html=index_path.read_text(encoding='utf-8')
 
 # Keep one navigation authority: the original Vue navigateTo() method.
 # Top-level module-home entry is expressed as a boolean argument instead of a
-# second wrapper method, so the aggregate sentinel cannot be written and then
+# second wrapper method, so aggregate sentinels cannot be written and then
 # immediately overwritten by normal navigation validation.
 old_signature="    navigateTo(page){"
 new_signature="    navigateTo(page,moduleHome=false){"
@@ -22,7 +22,8 @@ module_home_guard=(
     view_guard+
     "if(moduleHome){if(page==='assets')this.selectedAssetsClientId=0;"
     "else if(page==='ads')this.selectedAdsClientId=0;"
-    "else if(page==='analytics')this.selectedAnalyticsClientId=0;}"
+    "else if(page==='analytics')this.selectedAnalyticsClientId=0;"
+    "else if(page==='sop')this.selectedSopClientId=0;}"
 )
 if html.count(view_guard)!=1:
     raise SystemExit(f'Unexpected canViewPage guard count: {html.count(view_guard)}')
@@ -58,11 +59,52 @@ if html.count(mobile_old)!=1:
 html=html.replace(desktop_old,desktop_new,1)
 html=html.replace(mobile_old,mobile_new,1)
 
+# SOP now has the same explicit aggregate-home model as Assets / Ads / Analytics.
+sop_select_old='<option :value="null">请选择客户</option><option v-for="c in activeClients" :value="c.id" :key="c.id">{{ c.name }}</option>'
+sop_select_new='<option :value="0">所有客户</option><option v-for="c in activeClients" :value="c.id" :key="c.id">{{ c.name }}</option>'
+if html.count(sop_select_old)!=1:
+    raise SystemExit(f'Unexpected SOP client selector option count: {html.count(sop_select_old)}')
+html=html.replace(sop_select_old,sop_select_new,1)
+
+# Add aggregate SOP computed data beside the existing SOP computed properties.
+sop_computed_marker="    completedSopCount(){return this.selectedSopSteps.filter(step=>!!this.sopChecked[step.id]).length},"
+if html.count(sop_computed_marker)!=1:
+    raise SystemExit(f'Unexpected completedSopCount marker count: {html.count(sop_computed_marker)}')
+sop_computed=r'''    sopAllClientRows(){const today=this.localDateKey();return this.activeClients.map(c=>{const fb=c.fbAccounts||[],tk=c.tkAccounts||[],keys=[...fb.map(a=>`FB:${a.id}`),...tk.map(a=>`TK:${a.id}`)],configs=c.sopAccountConfigs&&typeof c.sopAccountConfigs==='object'?c.sopAccountConfigs:{},configured=keys.filter(key=>configs[key]).length,todayTasks=keys.reduce((n,key)=>n+(Array.isArray(configs[key]?.dailyTasks?.[today])?configs[key].dailyTasks[today].length:0),0);return{client:c,fbAccounts:fb.length,tkAccounts:tk.length,accounts:keys.length,configured,todayTasks}}).sort((a,b)=>b.todayTasks-a.todayTasks||b.configured-a.configured||String(a.client.name).localeCompare(String(b.client.name),'zh-CN'))},
+    sopAllAccountCount(){return this.sopAllClientRows.reduce((n,row)=>n+row.accounts,0)},
+    sopAllConfiguredAccountCount(){return this.sopAllClientRows.reduce((n,row)=>n+row.configured,0)},
+    sopAllTodayTaskCount(){return this.sopAllClientRows.reduce((n,row)=>n+row.todayTasks,0)},
+'''+sop_computed_marker
+html=html.replace(sop_computed_marker,sop_computed,1)
+
+# Insert the all-client SOP landing view before the existing client/account detail view.
+sop_detail_old='          <div v-if="selectedSopClient && selectedSopAccount" class="space-y-5">'
+if html.count(sop_detail_old)!=1:
+    raise SystemExit(f'Unexpected SOP detail root count: {html.count(sop_detail_old)}')
+sop_home=r'''          <div v-if="selectedSopClientId===0" class="space-y-5">
+            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+              <div class="bg-white border border-indigo-100 rounded-2xl p-5 soft-shadow"><div class="text-[10px] text-indigo-600 font-bold">在管客户</div><div class="text-2xl font-black text-indigo-700 mt-2">{{ activeClients.length }}</div><div class="text-[10px] text-slate-400 mt-1">所有未归档客户</div></div>
+              <div class="bg-white border border-blue-100 rounded-2xl p-5 soft-shadow"><div class="text-[10px] text-blue-600 font-bold">可执行账号</div><div class="text-2xl font-black text-blue-700 mt-2">{{ sopAllAccountCount }}</div><div class="text-[10px] text-slate-400 mt-1">Facebook + TikTok</div></div>
+              <div class="bg-white border border-violet-100 rounded-2xl p-5 soft-shadow"><div class="text-[10px] text-violet-600 font-bold">已配置 SOP 账号</div><div class="text-2xl font-black text-violet-700 mt-2">{{ sopAllConfiguredAccountCount }}</div><div class="text-[10px] text-slate-400 mt-1">已建立账号级执行配置</div></div>
+              <div class="bg-slate-950 text-white rounded-2xl p-5 soft-shadow"><div class="text-[10px] text-emerald-300 font-bold">今日任务</div><div class="text-2xl font-black mt-2">{{ sopAllTodayTaskCount }}</div><div class="text-[10px] text-slate-400 mt-1">全部客户账号今日计划任务</div></div>
+            </div>
+
+            <div class="bg-white border border-slate-200 rounded-2xl soft-shadow overflow-hidden">
+              <div class="p-5 border-b border-slate-100"><h3 class="font-extrabold text-sm">所有客户每日 SOP</h3><p class="text-[11px] text-slate-400 mt-1">先查看所有客户的账号与今日任务概况；点击「进入 SOP」后，再选择该客户的具体 Facebook / TikTok 账号执行任务。</p></div>
+              <div class="overflow-x-auto scrollbar"><table class="w-full min-w-[920px] text-xs"><thead class="bg-slate-50 text-slate-500"><tr><th class="p-3.5 text-left">客户</th><th class="p-3.5 text-left">Facebook</th><th class="p-3.5 text-left">TikTok</th><th class="p-3.5 text-left">可执行账号</th><th class="p-3.5 text-left">已配置 SOP</th><th class="p-3.5 text-left">今日任务</th><th class="p-3.5 text-left">操作</th></tr></thead><tbody class="divide-y divide-slate-100"><tr v-for="row in sopAllClientRows" :key="row.client.id" class="hover:bg-slate-50/70"><td class="p-3.5"><div class="font-extrabold text-slate-900">{{ row.client.name }}</div><div class="text-[10px] text-slate-400 mt-1">{{ row.client.project || row.client.product || '客户项目' }}</div></td><td class="p-3.5"><span class="inline-flex px-2 py-1 rounded-lg bg-blue-50 text-blue-700 font-bold text-[10px]">{{ row.fbAccounts }} 个账户</span></td><td class="p-3.5"><span class="inline-flex px-2 py-1 rounded-lg bg-slate-100 text-slate-700 font-bold text-[10px]">{{ row.tkAccounts }} 个账户</span></td><td class="p-3.5 font-extrabold text-slate-700">{{ row.accounts }}</td><td class="p-3.5 font-extrabold text-violet-600">{{ row.configured }}</td><td class="p-3.5 font-black text-emerald-600">{{ row.todayTasks }}</td><td class="p-3.5"><button type="button" @click="selectedSopClientId=row.client.id; syncSopAccountSelection(true)" class="h-8 px-3 rounded-lg bg-indigo-50 text-indigo-700 font-bold text-[11px]"><i class="fa-solid fa-list-check mr-1"></i>进入 SOP</button></td></tr></tbody></table></div>
+              <div v-if="!sopAllClientRows.length" class="py-12 text-center text-xs text-slate-400">暂无在管客户</div>
+            </div>
+          </div>
+
+          <div v-else-if="selectedSopClient && selectedSopAccount" class="space-y-5">'''
+html=html.replace(sop_detail_old,sop_home,1)
+
 # The visible module title is also an explicit return to that module's aggregate home.
 title_specs=(
     ('投放数据分析','analytics','所有客户投放数据'),
     ('广告管理','ads','所有客户广告管理'),
     ('账号与商业资产','assets','全部客户账号资产'),
+    ('每日 SOP 管理','sop','所有客户每日 SOP'),
 )
 for title,page,home_label in title_specs:
     pattern=re.compile(rf'<(?P<tag>h[1-3])(?P<attrs>[^>]*)>{re.escape(title)}</(?P=tag)>')
@@ -96,6 +138,6 @@ html=html.replace('</head>',style+'</head>',1)
 
 index_path.write_text(html,encoding='utf-8')
 print(
-    'MODULE_HOME_NAVIGATION_FINALIZE_OK: authority=navigateTo; sentinel-zero=valid; wrappers=removed; '
+    'MODULE_HOME_NAVIGATION_FINALIZE_OK: authority=navigateTo; sentinel-zero=valid; wrappers=removed; sop=all-clients; '
     f'index={hashlib.sha256(index_path.read_bytes()).hexdigest()}'
 )
