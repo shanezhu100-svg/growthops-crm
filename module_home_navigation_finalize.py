@@ -99,6 +99,35 @@ sop_home=r'''          <div v-if="selectedSopClientId===0" class="space-y-5">
           <div v-else-if="selectedSopClient && selectedSopAccount" class="space-y-5">'''
 html=html.replace(sop_detail_old,sop_home,1)
 
+# When a concrete SOP client is selected but no account is active, show every
+# executable FB/TikTok account directly in the page instead of hiding the only
+# choices in the top-right select. The select remains available as a fast switch.
+sop_account_empty_old='''          <div v-else-if="selectedSopClient && selectedSopAccounts.length" class="bg-white border border-slate-200 rounded-2xl py-16 text-center text-xs text-slate-400"><i class="fa-solid fa-arrow-up-right-dots text-3xl text-slate-200 block mb-3"></i><div class="font-bold text-slate-600">请选择执行账号</div><div class="mt-1">{{ selectedSopClient.name }} 有 {{ selectedSopAccounts.length }} 个 FB / TikTok 账号，请在右上角明确选择本次执行账号。</div><button type="button" @click="openClientDetail(selectedSopClient.id)" class="mt-4 h-9 px-4 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-600 hover:bg-slate-50">查看 {{ selectedSopClient.name }} 资产</button></div>'''
+if html.count(sop_account_empty_old)!=1:
+    raise SystemExit(f'Unexpected SOP account-empty state count: {html.count(sop_account_empty_old)}')
+sop_account_options=r'''          <div v-else-if="selectedSopClient && selectedSopAccounts.length" class="space-y-4">
+            <div class="bg-white border border-slate-200 rounded-2xl p-5 soft-shadow">
+              <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div><div class="font-extrabold text-sm text-slate-900">选择执行账号</div><p class="text-[11px] text-slate-400 mt-1">{{ selectedSopClient.name }} 有 {{ selectedSopAccounts.length }} 个可执行 FB / TikTok 账号，直接点击账号进入对应 SOP Checklist。</p></div>
+                <button type="button" @click="openClientDetail(selectedSopClient.id,'sop')" class="h-9 px-4 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-600 hover:bg-slate-50 shrink-0"><i class="fa-solid fa-box-archive mr-1.5"></i>查看客户资产</button>
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 mt-5">
+                <button v-for="item in selectedSopAccounts" :key="item.key" type="button" @click="selectedSopAccountKey=item.key; onSopAccountChange()" class="group text-left rounded-2xl border border-slate-200 bg-slate-50/70 p-4 hover:bg-white hover:border-indigo-300 hover:shadow-sm transition">
+                  <div class="flex items-start gap-3">
+                    <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" :class="item.platform==='FB'?'bg-blue-50 text-blue-600':'bg-slate-950 text-white'"><i :class="item.platform==='FB'?'fa-brands fa-facebook':'fa-brands fa-tiktok'"></i></div>
+                    <div class="min-w-0 flex-1"><div class="flex items-center justify-between gap-2"><div class="font-extrabold text-sm text-slate-900 truncate">{{ item.account.accountName || item.account.adAccountId || '未命名账号' }}</div><i class="fa-solid fa-chevron-right text-[10px] text-slate-300 group-hover:text-indigo-500 shrink-0"></i></div><div class="text-[10px] font-bold mt-1" :class="item.platform==='FB'?'text-blue-600':'text-slate-600'">{{ item.platformName }}</div></div>
+                  </div>
+                  <div class="mt-4 grid grid-cols-1 gap-2 text-[10px]">
+                    <div class="rounded-xl bg-white border border-slate-100 px-3 py-2"><div class="text-slate-400">广告账号 ID</div><div class="font-mono font-bold text-slate-700 mt-0.5 break-all">{{ item.account.adAccountId || '未录入' }}</div></div>
+                    <div class="rounded-xl bg-white border border-slate-100 px-3 py-2"><div class="text-slate-400">{{ item.platform==='FB' ? 'BM ID' : 'BC ID' }}</div><div class="font-mono font-bold text-slate-700 mt-0.5 break-all">{{ item.platform==='FB' ? (item.account.bmId || '未录入') : (item.account.bcId || '未录入') }}</div></div>
+                  </div>
+                  <div class="mt-3 pt-3 border-t border-slate-200 flex items-center justify-between"><span class="text-[10px] text-slate-400">点击进入账号 SOP</span><span class="inline-flex items-center gap-1 text-[10px] font-extrabold text-indigo-600">进入 Checklist <i class="fa-solid fa-arrow-right text-[9px]"></i></span></div>
+                </button>
+              </div>
+            </div>
+          </div>'''
+html=html.replace(sop_account_empty_old,sop_account_options,1)
+
 # The visible module title is also an explicit return to that module's aggregate home.
 title_specs=(
     ('投放数据分析','analytics','所有客户投放数据'),
@@ -138,6 +167,6 @@ html=html.replace('</head>',style+'</head>',1)
 
 index_path.write_text(html,encoding='utf-8')
 print(
-    'MODULE_HOME_NAVIGATION_FINALIZE_OK: authority=navigateTo; sentinel-zero=valid; wrappers=removed; sop=all-clients; '
+    'MODULE_HOME_NAVIGATION_FINALIZE_OK: authority=navigateTo; sentinel-zero=valid; wrappers=removed; sop=all-clients+account-options; '
     f'index={hashlib.sha256(index_path.read_bytes()).hexdigest()}'
 )
