@@ -11,44 +11,53 @@ def require(condition,message):
     if not condition:
         raise SystemExit(message)
 
+# The old wrapper implementation was the bug: it wrote sentinel 0 and then
+# navigateTo() treated that 0 as an invalid client and replaced it. It must not
+# survive anywhere in final browser output.
+require('navigateToModuleHome(' not in html,
+        'legacy module-home wrapper must not survive')
+require("if(this.currentPage==='assets'&&page!=='assets')this.selectedAssetsClientId=0;" not in html,
+        'legacy assets leave-reset must not survive')
+require("if(this.currentPage==='ads'&&page!=='ads')this.selectedAdsClientId=0;" not in html,
+        'legacy ads leave-reset must not survive')
+
 for marker in (
-    "navigateToModuleHome(page){",
-    "if(this.currentPage==='assets'&&page!=='assets')this.selectedAssetsClientId=0;",
-    "if(this.currentPage==='ads'&&page!=='ads')this.selectedAdsClientId=0;",
-    "if(page==='assets')this.selectedAssetsClientId=0;",
-    "else if(page==='ads')this.selectedAdsClientId=0;",
-    "else if(page==='analytics')this.selectedAnalyticsClientId=0;",
-    "this.navigateTo(page);",
-    '@click="navigateToModuleHome(item.key)"',
-    '@click="navigateToModuleHome(item.key); mobileMenuOpen=false"',
+    "navigateTo(page,moduleHome=false){",
+    "if(moduleHome){if(page==='assets')this.selectedAssetsClientId=0;else if(page==='ads')this.selectedAdsClientId=0;else if(page==='analytics')this.selectedAnalyticsClientId=0;}",
+    "if(page==='assets'&&Number(this.selectedAssetsClientId)!==0&&!this.clients.some(c=>c.id===this.selectedAssetsClientId))this.selectedAssetsClientId=this.clients[0]?.id||null;",
+    "if(page==='analytics'){if(Number(this.selectedAnalyticsClientId)!==0&&!this.clients.some(c=>c.id===this.selectedAnalyticsClientId))this.selectedAnalyticsClientId=this.clients[0]?.id||null;this.syncAnalyticsAccountSelection()}",
+    "if(page==='ads'){if(Number(this.selectedAdsClientId)!==0&&!this.clients.some(c=>c.id===this.selectedAdsClientId))this.selectedAdsClientId=this.clients[0]?.id||null;this.syncAdsAccountSelection()}",
+    '@click="navigateTo(item.key,true)"',
+    '@click="navigateTo(item.key,true); mobileMenuOpen=false"',
     'id="growthops-module-home-navigation-style"',
     'data-growthops-module-home="analytics"',
     'data-growthops-module-home="ads"',
     'data-growthops-module-home="assets"',
-    '@click="navigateToModuleHome(\'analytics\')"',
-    '@click="navigateToModuleHome(\'ads\')"',
-    '@click="navigateToModuleHome(\'assets\')"',
-    '@keydown.enter.prevent="navigateToModuleHome(\'analytics\')"',
-    '@keydown.enter.prevent="navigateToModuleHome(\'ads\')"',
-    '@keydown.enter.prevent="navigateToModuleHome(\'assets\')"',
+    '@click="navigateTo(\'analytics\',true)"',
+    '@click="navigateTo(\'ads\',true)"',
+    '@click="navigateTo(\'assets\',true)"',
+    '@keydown.enter.prevent="navigateTo(\'analytics\',true)"',
+    '@keydown.enter.prevent="navigateTo(\'ads\',true)"',
+    '@keydown.enter.prevent="navigateTo(\'assets\',true)"',
 ):
     require(marker in html,f'module-home marker missing: {marker}')
 
-# The canonical sidebar bindings must no longer bypass the module-home method.
-require('@click="navigateTo(item.key)"' not in html,
-        'desktop sidebar still bypasses module-home navigation')
-require('@click="navigateTo(item.key); mobileMenuOpen=false"' not in html,
-        'mobile sidebar still bypasses module-home navigation')
+# The exact old validation that overwrote sentinel 0 must be gone for all three
+# aggregate-capable modules.
+require("if(page==='assets'&&!this.clients.some(c=>c.id===this.selectedAssetsClientId))" not in html,
+        'assets navigation still rejects aggregate sentinel 0')
+require("if(page==='analytics'){if(!this.clients.some(c=>c.id===this.selectedAnalyticsClientId))" not in html,
+        'analytics navigation still rejects aggregate sentinel 0')
+require("if(page==='ads'){if(!this.clients.some(c=>c.id===this.selectedAdsClientId))" not in html,
+        'ads navigation still rejects aggregate sentinel 0')
 
-# No second runtime bridge handler is allowed for this behavior. This avoids the
-# duplicate/capture-order problem that made the prior implementation unreliable.
+# No second runtime bridge handler is allowed for this behavior.
 require('MODULE_HOME_NAV_LABELS' not in bridge,
         'duplicate module-home runtime bridge listener must not survive')
 require('showAllClientsForModule' not in bridge,
         'legacy module-home bridge callback must not survive')
 
-# All-client capability itself must remain intact, and previous scoped preselection
-# must stay reverted.
+# All-client capability itself must remain intact.
 require('<option :value="0">全部客户</option>' in html,
         'account-assets all-client option must remain available')
 require('v-if="selectedAssetsClientId===0"' in html,
@@ -60,37 +69,41 @@ require("selectedAdsClient(){if(Number(this.selectedAdsClientId)===0)return null
 require('prepareScopedPageClient(page)' not in html,
         'reverted scoped preselection must not be restored')
 
-# Previously fixed client-detail source-aware return must remain intact.
+# Previously fixed client-detail source-aware return must remain intact. Its
+# internal navigateTo(source) call intentionally does not pass moduleHome=true.
 require("returnFromClientDetail(){" in html,'client-detail return logic missing')
 require("sessionStorage.getItem('growthops_client_detail_return_page')" in html,
         'client-detail source persistence missing')
+require("this.navigateTo(source);" in html,
+        'client-detail return must preserve source context')
 
-# Ordering guard: leaving assets/ads through top-level navigation first stores
-# each module back to all-client mode, and target-module selectors reset before
-# normal navigation executes.
-start=html.find('    navigateToModuleHome(page){')
-end=html.find('    navigateTo(page){',start)
-require(start>=0 and end>start,'unable to bound module-home method')
+# Regression guard for the original failure: in the real navigateTo() method the
+# module-home reset must happen before the stale-client validation, and that
+# validation must explicitly exempt sentinel 0. This proves 0 survives the full
+# navigateTo path instead of only proving that it was assigned beforehand.
+start=html.find('    navigateTo(page,moduleHome=false){')
+end=html.find('    openClientDetail(',start)
+require(start>=0 and end>start,'unable to bound authoritative navigateTo method')
 block=html[start:end]
-nav_pos=block.find('this.navigateTo(page);')
-for leave_reset in (
-    "if(this.currentPage==='assets'&&page!=='assets')this.selectedAssetsClientId=0;",
-    "if(this.currentPage==='ads'&&page!=='ads')this.selectedAdsClientId=0;",
+module_home_pos=block.find('if(moduleHome){')
+require(module_home_pos>=0,'module-home reset missing from navigateTo')
+for reset,guard in (
+    ("if(page==='assets')this.selectedAssetsClientId=0;",
+     "if(page==='assets'&&Number(this.selectedAssetsClientId)!==0"),
+    ("else if(page==='ads')this.selectedAdsClientId=0;",
+     "if(page==='ads'){if(Number(this.selectedAdsClientId)!==0"),
+    ("else if(page==='analytics')this.selectedAnalyticsClientId=0;",
+     "if(page==='analytics'){if(Number(this.selectedAnalyticsClientId)!==0"),
 ):
-    leave_pos=block.find(leave_reset)
-    require(leave_pos>=0 and leave_pos<nav_pos,
-            f'module leave reset must execute before navigation: {leave_reset}')
-for assignment in (
-    "if(page==='assets')this.selectedAssetsClientId=0;",
-    "this.selectedAdsClientId=0;",
-    "this.selectedAnalyticsClientId=0;",
-):
-    pos=block.find(assignment)
-    require(pos>=0 and pos<nav_pos,
-            f'module-home selector must reset before navigation: {assignment}')
+    reset_pos=block.find(reset)
+    guard_pos=block.find(guard)
+    require(reset_pos>=0 and guard_pos>=0,
+            f'cannot verify sentinel flow: {reset} / {guard}')
+    require(reset_pos<guard_pos,
+            f'aggregate sentinel must be assigned before validation: {reset}')
 
 print(
-    'MODULE_HOME_NAVIGATION_OUTPUT_TESTS_OK: authoritative=vue-sidebar; assets-return=all-clients; ads-return=all-clients; '
+    'MODULE_HOME_NAVIGATION_OUTPUT_TESTS_OK: authority=navigateTo; sentinel-zero=valid-through-navigation; wrappers=removed; '
     f'index={hashlib.sha256(index_path.read_bytes()).hexdigest()}; '
     f'bridge={hashlib.sha256(bridge_path.read_bytes()).hexdigest()}'
 )
