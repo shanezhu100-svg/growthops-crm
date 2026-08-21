@@ -84,7 +84,6 @@ for marker in (
     '@click="selectedSopClientId=row.client.id; syncSopAccountSelection(true)"',
     '<div v-else-if="selectedSopClient && selectedSopAccount" class="space-y-5">',
     '<div class="font-extrabold text-sm text-slate-900">选择执行账号</div>',
-    'v-for="item in selectedSopAccounts"',
     '@click="selectedSopAccountKey=item.key; onSopAccountChange()"',
     "item.platform==='FB'?'fa-brands fa-facebook':'fa-brands fa-tiktok'",
     "{{ item.platform==='FB' ? 'BM ID' : 'BC ID' }}",
@@ -100,6 +99,35 @@ require("selectedSopClient(){return this.clients.find(c=>!c.archived&&String(c.i
         'SOP concrete-client computed behavior changed unexpectedly')
 require('prepareScopedPageClient(page)' not in html,
         'reverted scoped preselection must not be restored')
+
+# The visible SOP chooser has one canonical card implementation, grouped by
+# Facebook and TikTok. There must be no older mixed-grid card implementation in
+# this chooser; the top-right select may still iterate all accounts as a switch.
+chooser_start_marker='          <div v-else-if="selectedSopClient && selectedSopAccounts.length" class="space-y-4">'
+chooser_end_marker='          <div v-else-if="selectedSopClient" class="bg-white border border-slate-200 rounded-2xl py-16 text-center text-xs text-slate-400">'
+chooser_start=html.find(chooser_start_marker)
+chooser_end=html.find(chooser_end_marker,chooser_start)
+require(chooser_start>=0 and chooser_end>chooser_start,'unable to bound final SOP account chooser')
+chooser=html[chooser_start:chooser_end]
+for marker in (
+    'data-sop-platform-groups',
+    ':data-sop-platform-group="platformGroup.key"',
+    "[{key:'FB',name:'Facebook',icon:'fa-brands fa-facebook'},{key:'TK',name:'TikTok',icon:'fa-brands fa-tiktok'}]",
+    '{{ platformGroup.name }} 账号',
+    'selectedSopAccounts.filter(item=>item.platform===platformGroup.key).length',
+    'v-for="item in selectedSopAccounts.filter(item=>item.platform===platformGroup.key)"',
+    '暂无 {{ platformGroup.name }} 可执行账号',
+    'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 mt-3',
+    'mt-3 grid grid-cols-2 gap-2 text-[10px]',
+    'p-3.5 hover:border-indigo-300',
+):
+    require(marker in chooser,f'grouped SOP chooser marker missing: {marker}')
+require('grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 mt-5' not in chooser,
+        'legacy three-column mixed SOP account grid must not survive')
+require('v-for="item in selectedSopAccounts"' not in chooser,
+        'legacy mixed SOP account card iteration must not survive')
+require('v-for="item in selectedSopAccounts"' in html,
+        'top-right SOP account select should remain available as a fast switch')
 
 # Previously fixed client-detail source-aware return must remain intact. Its
 # internal navigateTo(source) call intentionally does not pass moduleHome=true.
@@ -144,7 +172,7 @@ require("this.selectedSopClientId=this.clients[0]" not in block,
         'SOP navigateTo must not replace all-client sentinel with first client')
 
 print(
-    'MODULE_HOME_NAVIGATION_OUTPUT_TESTS_OK: authority=navigateTo; sentinel-zero=valid-through-navigation; wrappers=removed; sop=all-clients+account-options; '
+    'MODULE_HOME_NAVIGATION_OUTPUT_TESTS_OK: authority=navigateTo; sentinel-zero=valid-through-navigation; wrappers=removed; sop=all-clients+grouped-account-options; '
     f'index={hashlib.sha256(index_path.read_bytes()).hexdigest()}; '
     f'bridge={hashlib.sha256(bridge_path.read_bytes()).hexdigest()}'
 )
