@@ -22,6 +22,28 @@ require('resetDemoData' not in html, 'P2 resetDemoData implementation or binding
 require('重置演示' not in html, 'P2 reset-demo button label still present')
 require('恢复初始演示数据' not in html, 'P2 reset-demo confirmation/copy still present')
 
+# Client archive mode must be mutually exclusive. The default list contains
+# current clients only; archive mode contains archived clients only. Search,
+# platform filtering and row counts operate on that already-scoped list.
+archive_filter = 'if(Boolean(c.archived)!==Boolean(this.showArchivedClients))return false;'
+require(html.count(archive_filter) == 1, 'P2 exclusive active/archive client filter missing or duplicated')
+require('if(c.archived&&!this.showArchivedClients)return false;' not in html, 'P2 legacy mixed archive-list filter remains')
+require("{{ showArchivedClients?'归档客户':'客户管理' }}" in html, 'P2 archive-aware client heading missing')
+require("{{ showArchivedClients?'返回客户':'查看归档' }}" in html, 'P2 archive toggle label missing')
+require("家{{ showArchivedClients?'归档客户':'客户' }}" in html, 'P2 archive-aware client count missing')
+require('仅显示已归档客户；历史广告、开户、财务和回款数据继续保留。' in html, 'P2 archive-view explanation missing')
+
+def in_client_view(client, archive_mode):
+    return bool(client.get('archived')) == bool(archive_mode)
+
+sample_clients = [
+    {'id': 1, 'archived': False},
+    {'id': 2, 'archived': True},
+    {'id': 3},
+]
+require([c['id'] for c in sample_clients if in_client_view(c, False)] == [1, 3], 'P2 current-client view semantics failed')
+require([c['id'] for c in sample_clients if in_client_view(c, True)] == [2], 'P2 archived-client view semantics failed')
+
 require(html.count('浏览器本地缓存占用 {{ storageUsageText }}') == 1, 'P2 browser-cache usage heading missing')
 require('本地存储容量 {{ storageUsageText }}' not in html, 'P2 misleading local storage heading remains')
 require('尽快迁移到数据库' not in html, 'P2 misleading migration warning remains')
