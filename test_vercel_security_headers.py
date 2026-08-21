@@ -46,15 +46,19 @@ for directive in (
 
 # Transitional CSP: current Vue global runtime compiles templates in-browser and the
 # Tailwind Play CDN injects styles, so unsafe-eval/unsafe-inline are temporarily
-# required. Despite that compatibility allowance, script and XHR destinations must
-# remain explicit and may not expand to wildcards or arbitrary HTTPS origins.
-if "script-src *" in csp or "connect-src *" in csp:
+# required. Script and XHR destinations still remain explicit and may not expand to
+# wildcard or bare-scheme sources.
+def directive_tokens(name):
+    part=csp.split(name+' ',1)[1].split(';',1)[0]
+    return [token for token in part.split() if token]
+
+script_tokens=directive_tokens('script-src')
+connect_tokens=directive_tokens('connect-src')
+if '*' in script_tokens or '*' in connect_tokens:
     raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED CSP wildcard source')
-script_part=csp.split('script-src ',1)[1].split(';',1)[0]
-if ' https:' in script_part or ' http:' in script_part:
+if 'https:' in script_tokens or 'http:' in script_tokens:
     raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED script-src broad scheme source')
-connect_part=csp.split('connect-src ',1)[1].split(';',1)[0].strip()
-if connect_part != "'self'":
+if connect_tokens != ["'self'"]:
     raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED connect-src must remain same-origin only')
 
 print('VERCEL_SECURITY_HEADERS_TESTS_OK: csp=dependency-allowlist; connect=self-only; runtime-inline-compat=true')
