@@ -36,16 +36,32 @@ for forbidden in (
     if forbidden in security:
         raise SystemExit(f'Legacy credential runtime path survived before v6: {forbidden}')
 
-# Upgrade the preboot scrubber into an atomic visibility gate. The original Vue
-# fallback text may exist briefly in DOM, but the entire credential row is hidden
-# before paint and layout space is preserved. v6 reveals all rows only after the
-# safe-summary renderer finishes the whole pass.
+# Replace the old blank/hidden preboot state with a stable first-paint placeholder.
+# Password cells are masked immediately; account cells get a neutral skeleton. This
+# prevents stale fallback values from flashing while also avoiding a several-second
+# empty gap on refresh. No credential summary or secret is persisted in the browser.
+placeholder_style=r'''<style id="growthops-credential-v6-placeholder-style">
+[data-growthops-credential-v6-placeholder-kind="account"]{color:transparent!important;min-height:1.25em;position:relative}
+[data-growthops-credential-v6-placeholder-kind="account"]::after{content:'';display:inline-block;width:64px;height:10px;border-radius:999px;background:#e8ecf3;vertical-align:middle}
+[data-growthops-credential-v6-placeholder-kind="password"]{letter-spacing:.08em;color:#475569}
+</style>'''
+preboot_marker='<script id="growthops-credential-ui-v5-preboot">'
+if html.count(preboot_marker)!=1:
+    raise SystemExit(f'Unexpected v5 preboot marker count: {html.count(preboot_marker)}')
+if 'growthops-credential-v6-placeholder-style' in html:
+    raise SystemExit('Credential v6 placeholder style already present')
+html=html.replace(preboot_marker,placeholder_style+preboot_marker,1)
+
 old_scrub="""      if(cell.textContent)cell.textContent='';
       cell.setAttribute(ATTR,'preboot');
 """
-new_scrub="""      const row=label.parentElement;
+new_scrub=r"""      const row=label.parentElement;
+      const kind=clean(label)==='密码 / 2FA'?'password':'account';
+      cell.textContent=kind==='password'?'••••••••':'\u00a0';
+      cell.setAttribute('data-growthops-credential-v6-placeholder-kind',kind);
+      cell.setAttribute('aria-busy','true');
       if(row){
-        row.style.visibility='hidden';
+        row.style.visibility='visible';
         row.style.pointerEvents='none';
         row.setAttribute('data-growthops-credential-v6-gate','pending');
       }
@@ -57,15 +73,22 @@ html=html.replace(old_scrub,new_scrub,1)
 
 old_export="  window.__GROWTHOPS_CREDENTIAL_V5_PREBOOT__={scrub};\n"
 new_export=r'''  const gatedRows=()=>[...document.querySelectorAll('[data-growthops-credential-v6-gate]')];
+  const clearPlaceholder=()=>{
+    for(const cell of document.querySelectorAll('[data-growthops-credential-v6-placeholder-kind]')){
+      cell.removeAttribute('data-growthops-credential-v6-placeholder-kind');
+      cell.removeAttribute('aria-busy');
+    }
+  };
   const hide=()=>{
     scrub();
     for(const row of gatedRows()){
-      row.style.visibility='hidden';
+      row.style.visibility='visible';
       row.style.pointerEvents='none';
       row.setAttribute('data-growthops-credential-v6-gate','pending');
     }
   };
   const reveal=()=>{
+    clearPlaceholder();
     for(const row of gatedRows()){
       row.style.visibility='visible';
       row.style.pointerEvents='';
@@ -79,19 +102,19 @@ if html.count(old_export)!=1:
     raise SystemExit(f'Unexpected v5 preboot export count: {html.count(old_export)}')
 html=html.replace(old_export,new_export,1)
 
-# Hide synchronously before any client/context reset writes transitional values.
-blank_marker="""  const credentialUiV5Blank=clientId=>{
-    credentialUiV5State='loading';
-    credentialUiV5ClientId=String(clientId||'');
-"""
-blank_new="""  const credentialUiV5Blank=clientId=>{
-    window.__GROWTHOPS_CREDENTIAL_V6_GATE__?.hide?.();
-    credentialUiV5State='loading';
-    credentialUiV5ClientId=String(clientId||'');
-"""
-if security.count(blank_marker)!=1:
-    raise SystemExit(f'Unexpected v5 blank marker count: {security.count(blank_marker)}')
-security=security.replace(blank_marker,blank_new,1)
+# Apply the placeholder after v5 resets the cells so the loading state survives the
+# reset synchronously and is present before the next paint.
+blank_start=security.find("  const credentialUiV5Blank=clientId=>{")
+blank_end=security.find("  const credentialUiV5DomReady=()=>{",blank_start)
+if blank_start<0 or blank_end<0:
+    raise SystemExit('Unable to bound v5 blank block')
+blank_block=security[blank_start:blank_end]
+blank_tail=blank_block.rfind("  };\n")
+if blank_tail<0:
+    raise SystemExit('Unable to locate v5 blank tail')
+if "__GROWTHOPS_CREDENTIAL_V6_GATE__" not in blank_block:
+    blank_block=blank_block[:blank_tail]+"    window.__GROWTHOPS_CREDENTIAL_V6_GATE__?.hide?.();\n"+blank_block[blank_tail:]
+security=security[:blank_start]+blank_block+security[blank_end:]
 
 # Reveal only after the complete safe-summary render pass has finished.
 render_start=security.find("  const credentialUiV5Render=()=>{")
@@ -106,8 +129,8 @@ if "__GROWTHOPS_CREDENTIAL_V6_GATE__" not in render_block:
     render_block=render_block[:render_tail]+"    window.__GROWTHOPS_CREDENTIAL_V6_GATE__?.reveal?.();\n"+render_block[render_tail:]
 security=security[:render_start]+render_block+security[render_end:]
 
-# Error is also a final state: reveal all rows together only after all error cells
-# have been written, avoiding per-row stagger on network failures.
+# Error is also a final state: clear placeholders only after all error cells have
+# been written, avoiding per-row stagger on network failures.
 error_start=security.find("  const credentialUiV5Error=()=>{")
 error_end=security.find("  const applyAccountSafeSummaryToCards=credentialUiV5Render;",error_start)
 if error_start<0 or error_end<0:
@@ -191,7 +214,7 @@ if version_count!=1:
     raise SystemExit(f'Unexpected v5.1 diagnostic version count: {version_count}')
 security=security.replace(
     version_marker,
-    "    version:'6.1',\n    renderMode:'atomic-visibility',\n    runtimeCleanup:true,\n",
+    "    version:'6.2',\n    renderMode:'atomic-placeholder',\n    runtimeCleanup:true,\n",
     1,
 )
 
