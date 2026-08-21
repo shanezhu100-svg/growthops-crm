@@ -30,6 +30,7 @@ bridge = bridge_path.read_text(encoding='utf-8')
 
 # The browser keeps only a non-secret in-memory marker indicating that a cookie-backed
 # session may exist. The real CRM bearer token is never readable by JavaScript.
+# Remove the legacy localStorage value once on startup without ever reading it.
 adapter = replace_once(
     adapter,
     """  const SUPABASE_URL=window.__GROWTHOPS_SUPABASE_URL__||'';
@@ -37,6 +38,8 @@ adapter = replace_once(
   const TOKEN_KEY='growthops_crm_token_v2';
   let token=localStorage.getItem(TOKEN_KEY)||'';""",
     """  const SESSION_MARKER='cookie';
+  const LEGACY_SESSION_KEY=['growthops','crm','token','v2'].join('_');
+  try{localStorage.removeItem(LEGACY_SESSION_KEY)}catch{}
   let token=SESSION_MARKER;""",
     'adapter browser token bootstrap',
 )
@@ -182,6 +185,8 @@ if "crm_reveal_client_secret_field_v4" not in security or "crm_unlock_credential
     raise SystemExit('Credential v4 safety path was damaged by HttpOnly migration')
 if "localStorage.getItem(TOKEN_KEY)" in bridge or "const TOKEN_KEY=" in bridge:
     raise SystemExit('UI bridge still depends on browser-readable CRM bearer token')
+if "localStorage.removeItem(LEGACY_SESSION_KEY)" not in adapter:
+    raise SystemExit('Legacy browser CRM token scrub is missing')
 
 index_path.write_text(html, encoding='utf-8')
 adapter_path.write_text(adapter, encoding='utf-8')
@@ -193,5 +198,5 @@ print(
     'HTTP_ONLY_SESSION_FINALIZE_OK: '
     f'index={sha(index_path)}; adapter={sha(adapter_path)}; security={sha(security_path)}; '
     f'p1={sha(p1_path)}; bridge={sha(bridge_path)}; '
-    f'credential_token_reads={token_read_count}; p1_token_reads={p1_token_reads}'
+    f'credential_token_reads={token_read_count}; p1_token_reads={p1_token_reads}; legacy_token_scrub=enabled'
 )
