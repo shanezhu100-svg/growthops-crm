@@ -3,26 +3,38 @@ import hashlib, re
 
 root=Path(__file__).resolve().parent
 index_path=root/'dist'/'index.html'
-bridge_path=root/'dist'/'cloud-ui-action-bridge.js'
 html=index_path.read_text(encoding='utf-8')
-bridge=bridge_path.read_text(encoding='utf-8')
 
-# Module-home reset is deliberately separate from navigateTo(). Internal navigation
-# (for example client-detail -> assets) must preserve the selected client.
+# One authoritative module-home entry point. Internal calls to navigateTo() remain
+# untouched so client-detail returns and other in-module navigation keep context.
 method_marker="    navigateTo(page){"
-if html.count("    showAllClientsForModule(page){"):
-    raise SystemExit('Module-home reset already installed')
+if html.count("    navigateToModuleHome(page){"):
+    raise SystemExit('Module-home navigation already installed')
 if html.count(method_marker)!=1:
     raise SystemExit(f'Unexpected navigateTo method count: {html.count(method_marker)}')
-method=r'''    showAllClientsForModule(page){
+method=r'''    navigateToModuleHome(page){
       if(page==='assets')this.selectedAssetsClientId=0;
       else if(page==='ads')this.selectedAdsClientId=0;
       else if(page==='analytics')this.selectedAnalyticsClientId=0;
+      this.navigateTo(page);
     },
     navigateTo(page){'''
 html=html.replace(method_marker,method,1)
 
-# The visible module title is a direct "back to this module's all-client home" action.
+# Patch the real canonical desktop and mobile sidebar bindings directly. Do not
+# add a second document/bridge click listener that can race with Vue navigation.
+desktop_old='@click="navigateTo(item.key)"'
+desktop_new='@click="navigateToModuleHome(item.key)"'
+mobile_old='@click="navigateTo(item.key); mobileMenuOpen=false"'
+mobile_new='@click="navigateToModuleHome(item.key); mobileMenuOpen=false"'
+if html.count(desktop_old)!=1:
+    raise SystemExit(f'Unexpected desktop sidebar binding count: {html.count(desktop_old)}')
+if html.count(mobile_old)!=1:
+    raise SystemExit(f'Unexpected mobile sidebar binding count: {html.count(mobile_old)}')
+html=html.replace(desktop_old,desktop_new,1)
+html=html.replace(mobile_old,mobile_new,1)
+
+# The visible module title is also an explicit return to that module's all-client home.
 title_specs=(
     ('投放数据分析','analytics','所有客户投放数据'),
     ('广告管理','ads','所有客户广告管理'),
@@ -40,9 +52,9 @@ for title,page,home_label in title_specs:
     extra=(
         f' data-growthops-module-home="{page}" role="button" tabindex="0" '
         f'title="返回{home_label}" '
-        f'@click="showAllClientsForModule(\'{page}\')" '
-        f'@keydown.enter.prevent="showAllClientsForModule(\'{page}\')" '
-        f'@keydown.space.prevent="showAllClientsForModule(\'{page}\')"'
+        f'@click="navigateToModuleHome(\'{page}\')" '
+        f'@keydown.enter.prevent="navigateToModuleHome(\'{page}\')" '
+        f'@keydown.space.prevent="navigateToModuleHome(\'{page}\')"'
     )
     replacement=f'<{m.group("tag")}{attrs}{extra}>{title}</{m.group("tag")}>'
     html=html[:m.start()]+replacement+html[m.end():]
@@ -58,37 +70,8 @@ if html.count('</head>')!=1:
     raise SystemExit('Unexpected HTML head ending')
 html=html.replace('</head>',style+'</head>',1)
 
-# Sidebar navigation is rendered by the canonical app with runtime bindings that are
-# not source-stable. Use a non-blocking capture listener in the existing UI bridge:
-# let the native/Vue navigation finish, then reset only the three module selectors.
-bridge_marker="  const protectPendingSave=event=>{"
-if bridge.count('const MODULE_HOME_NAV_LABELS=')!=0:
-    raise SystemExit('Module-home bridge listener already installed')
-if bridge.count(bridge_marker)!=1:
-    raise SystemExit(f'Unexpected UI bridge insertion marker count: {bridge.count(bridge_marker)}')
-bridge_runtime=r"""  const MODULE_HOME_NAV_LABELS=new Map([
-    ['账号与商业资产','assets'],
-    ['广告管理','ads'],
-    ['投放数据分析','analytics'],
-  ]);
-  document.addEventListener('click',event=>{
-    const control=event.target?.closest?.('button,a,[role="button"]');
-    if(!control||!control.closest('aside'))return;
-    const page=MODULE_HOME_NAV_LABELS.get(text(control));
-    if(!page)return;
-    queueMicrotask(()=>{
-      if(vm.currentPage!==page)return;
-      vm.showAllClientsForModule?.(page);
-    });
-  },true);
-
-"""
-bridge=bridge.replace(bridge_marker,bridge_runtime+bridge_marker,1)
-
 index_path.write_text(html,encoding='utf-8')
-bridge_path.write_text(bridge,encoding='utf-8')
 print(
-    'MODULE_HOME_NAVIGATION_FINALIZE_OK: '
-    f'index={hashlib.sha256(index_path.read_bytes()).hexdigest()}; '
-    f'bridge={hashlib.sha256(bridge_path.read_bytes()).hexdigest()}'
+    'MODULE_HOME_NAVIGATION_FINALIZE_OK: authoritative=vue-sidebar; '
+    f'index={hashlib.sha256(index_path.read_bytes()).hexdigest()}'
 )
