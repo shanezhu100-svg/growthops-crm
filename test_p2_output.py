@@ -17,6 +17,11 @@ require(old_status not in html, 'P2 old hard-coded client-detail status still pr
 require('statusStyle(selectedClient.status)' not in html, 'P2 client-detail still calls missing statusStyle()')
 require('statusText(selectedClient.status)' not in html, 'P2 client-detail still calls missing statusText()')
 
+# Production must not expose or retain the destructive demo-reset feature.
+require('resetDemoData' not in html, 'P2 resetDemoData implementation or binding still present')
+require('重置演示' not in html, 'P2 reset-demo button label still present')
+require('恢复初始演示数据' not in html, 'P2 reset-demo confirmation/copy still present')
+
 require(html.count('浏览器本地缓存占用 {{ storageUsageText }}') == 1, 'P2 browser-cache usage heading missing')
 require('本地存储容量 {{ storageUsageText }}' not in html, 'P2 misleading local storage heading remains')
 require('尽快迁移到数据库' not in html, 'P2 misleading migration warning remains')
