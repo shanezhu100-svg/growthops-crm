@@ -1,9 +1,0 @@
-lue-700 disabled:opacity-40" :disabled="clampedAssetPagerIndex('detail','FB',(selectedClient.fbAccounts||[]).length)>=(selectedClient.fbAccounts||[]).length-1"><i class="fa-solid fa-chevron-right text-[10px]"></i></button>
-                        </div>
-                      </div>
-                    </div>
-                    <div v-if="selectedClient.fbAccounts && selectedClient.fbAccounts.length" class="mt-4 space-y-3">
-                      <template v-for="(account,idx) in [getPagedItem(selectedClient.fbAccounts,'detail','FB')]" :key="account?.id || 'fb-single'">
-                        <div v-if="account" class="rounded-xl bg-white border border-blue-100 p-3.5">
-                          <div class="flex items-center justify-between mb-3"><span class="text-[10px] font-extrabold text-blue-700">{{ account.accountName || `Facebook 账号 ${clampedAssetPagerIndex('detail','FB',(selectedClient.fbAccounts||[]).length) + 1}` }}</span><span class="text-[10px] text-slate-400 font-mono">{{ account.adAccountId || '未录入广告账号' }}</span></div>
-                          <div class="space-y-2.5 text-xs"><info-row label="账号名称" :value="account.accountName || `Facebook 账
