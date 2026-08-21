@@ -29,21 +29,23 @@ for forbidden in (
     "async function revealSelectedClient()",
     "cloud.rpc('crm_reveal_client_secrets'",
     "cloud.rpc('crm_reveal_client_secret_field_v3'",
+    "cloud.rpc('crm_reveal_client_secret_field_v4'",
 ):
-    require(forbidden not in security,f'legacy credential polling/reveal path restored: {forbidden}')
+    require(forbidden not in security,f'legacy/broader credential path restored: {forbidden}')
 
 for required in (
     "crm_client_account_safe_summary",
     "crm_unlock_credentials_v1",
-    "crm_reveal_client_secret_field_v4",
+    "crm_reveal_client_secret_value_v5",
+    "p_field:field",
     "row.accountCell.textContent=login||'未录入';",
     "row.passwordCell.textContent='••••••••';",
     "setTimeout(hide,10000)",
 ):
-    require(required in security,f'credential safe-summary/v4 path missing: {required}')
+    require(required in security,f'credential safe-summary/v5 path missing: {required}')
 
 print(
-    'CREDENTIAL_UI_V6_EVENT_OUTPUT_TESTS_OK: '
+    'CREDENTIAL_UI_V6_EVENT_OUTPUT_TESTS_OK: reveal_transport=v5-single-value; '
     f'index={hashlib.sha256((root/"dist"/"index.html").read_bytes()).hexdigest()}; '
     f'security={hashlib.sha256((root/"dist"/"cloud-security-hotfix.js").read_bytes()).hexdigest()}'
 )
