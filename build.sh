@@ -46,14 +46,12 @@ python3 ui_action_finalize.py
 python3 test_ui_action_output.py
 python3 remove_login_material_view_finalize.py
 python3 test_remove_login_material_view_output.py
+# Consolidated credential UI pipeline: controller includes memory-only safe-summary
+# prefetch; runtime includes v6 cleanup, atomic placeholder gate, and event liveness.
 python3 credential_ui_v5_finalize.py
 python3 test_credential_ui_v5_output.py
-python3 credential_ui_v51_prefetch_finalize.py
-python3 test_credential_ui_v51_prefetch_output.py
 python3 credential_ui_v6_finalize.py
-python3 credential_ui_v6_event_finalize.py
 python3 test_credential_ui_v6_output.py
-python3 test_credential_ui_v6_event_output.py
 python3 http_only_session_finalize.py
 python3 test_http_only_session_output.py
 python3 client_detail_return_finalize.py

@@ -7,11 +7,7 @@ security_path=root/'dist'/'cloud-security-hotfix.js'
 html=index_path.read_text(encoding='utf-8')
 security=security_path.read_text(encoding='utf-8')
 
-V5_ATTR='data-growthops-credential-v5-state'
-
-# Preboot observer starts in <head>, before the Vue body can paint credential fallback
-# values. It blanks only credential value cells that live inside platform credential
-# cards, and stops touching a cell once the v5 controller marks it ready/error.
+# Consolidated controller stage: historical v5 renderer + v5.1 memory-only prefetch.
 preboot=r'''<script id="growthops-credential-ui-v5-preboot">(()=>{
   'use strict';
   const ATTR='data-growthops-credential-v5-state';
@@ -61,11 +57,8 @@ if 'growthops-credential-ui-v5-preboot' in html:
 if html.count('</head>')!=1:
     raise SystemExit('Unexpected HTML head ending')
 html=html.replace('</head>',preboot+'</head>',1)
-# Earlier compatibility finalizers use this text as an internal marker. It must not
-# survive into browser output.
 html=html.replace('读取中…','')
 
-# Add v5 state without changing the underlying v4 Vault/unlock primitives.
 state_marker="  let accountSafeSummaryFetchedAt=0;\n"
 if security.count(state_marker)!=1:
     raise SystemExit(f'Unexpected safe-summary state marker count: {security.count(state_marker)}')
@@ -79,9 +72,6 @@ security=security.replace(
     1,
 )
 
-# Replace the legacy safe-summary renderer with the single v5 renderer. The old
-# helpers remain available for account matching and the v4 per-field reveal control,
-# but no other runtime path is allowed to own credential cell rendering.
 apply_start=security.find("  const applyAccountSafeSummaryToCards=()=>{")
 apply_end=security.find("  const markAccountSafeSummaryUnavailable=()=>{",apply_start)
 if apply_start<0 or apply_end<0:
@@ -184,15 +174,12 @@ v5_renderer=r'''  const credentialUiV5ResetCell=cell=>{
 '''
 security=security[:apply_start]+v5_renderer+security[apply_end:]
 
-# Error writer is also owned by v5.
 err_start=security.find("  const markAccountSafeSummaryUnavailable=()=>{")
 err_end=security.find("  const clearAccountSafeSummary=()=>{",err_start)
 if err_start<0 or err_end<0:
     raise SystemExit('Unable to locate safe-summary error renderer')
 security=security[:err_start]+"  const markAccountSafeSummaryUnavailable=credentialUiV5Error;\n"+security[err_end:]
 
-# Replace safe-summary orchestration with an explicit state machine and request
-# generation guard. A late response for client A can never overwrite client B.
 ensure_start=security.find("  const ensureAccountSafeSummary=()=>{")
 ensure_end=security.find("  const assetClientForProtectedField=()=>",ensure_start)
 if ensure_start<0 or ensure_end<0:
@@ -264,15 +251,12 @@ v5_ensure=r'''  const ensureAccountSafeSummary=()=>{
 '''
 security=security[:ensure_start]+v5_ensure+security[ensure_end:]
 
-# The plural legacy installer is retired. v5 alone calls the singular v4-protected
-# installProtectedFieldControl after the safe summary has decided a password exists.
 plural_start=security.find("  const installProtectedFieldControls=()=>{")
 plural_end=security.find("  const applyCredentialLoadingToCards=()=>{",plural_start)
 if plural_start<0 or plural_end<0:
     raise SystemExit('Unable to locate legacy protected-field installer')
 security=security[:plural_start]+"  const installProtectedFieldControls=()=>{};\n\n"+security[plural_end:]
 
-# Retire all old credential-status DOM paths and the boolean status network request.
 def no_op_block(start_marker,end_marker,replacement,label):
     global security
     start=security.find(start_marker)
@@ -281,32 +265,11 @@ def no_op_block(start_marker,end_marker,replacement,label):
         raise SystemExit(f'Unable to locate {label}')
     security=security[:start]+replacement+security[end:]
 
-no_op_block(
-    "  const applyCredentialLoadingToCards=()=>{",
-    "  const applyCredentialStatusUnavailable=()=>{",
-    "  const applyCredentialLoadingToCards=()=>{};\n",
-    'legacy loading renderer',
-)
-no_op_block(
-    "  const applyCredentialStatusUnavailable=()=>{",
-    "  const applyCredentialStatusToCards=()=>{",
-    "  const applyCredentialStatusUnavailable=()=>{};\n",
-    'legacy status error renderer',
-)
-no_op_block(
-    "  const applyCredentialStatusToCards=()=>{",
-    "  const ensureCredentialStatus=()=>{",
-    "  const applyCredentialStatusToCards=()=>{};\n",
-    'legacy boolean status renderer',
-)
-no_op_block(
-    "  const ensureCredentialStatus=()=>{",
-    "  const prepareInlineCell=(cell,kind)=>{",
-    "  const ensureCredentialStatus=()=>{};\n",
-    'legacy boolean status requester',
-)
+no_op_block("  const applyCredentialLoadingToCards=()=>{","  const applyCredentialStatusUnavailable=()=>{","  const applyCredentialLoadingToCards=()=>{};\n",'legacy loading renderer')
+no_op_block("  const applyCredentialStatusUnavailable=()=>{","  const applyCredentialStatusToCards=()=>{","  const applyCredentialStatusUnavailable=()=>{};\n",'legacy status error renderer')
+no_op_block("  const applyCredentialStatusToCards=()=>{","  const ensureCredentialStatus=()=>{","  const applyCredentialStatusToCards=()=>{};\n",'legacy boolean status renderer')
+no_op_block("  const ensureCredentialStatus=()=>{","  const prepareInlineCell=(cell,kind)=>{","  const ensureCredentialStatus=()=>{};\n",'legacy boolean status requester')
 
-# Periodic UI scan now only asks the v5 controller to ensure the final summary state.
 periodic_variants=(
     "    if(isAccountAssetPage()){ensureCredentialStatus();ensureAccountSafeSummary();installProtectedFieldControls();}\n    else ensureAccountSafeSummary();\n",
     "    if(isAccountAssetPage()){ensureCredentialStatus();ensureAccountSafeSummary();}\n    else ensureAccountSafeSummary();\n",
@@ -319,8 +282,6 @@ for old in periodic_variants:
 if periodic_count!=1:
     raise SystemExit(f'Unexpected periodic credential scan replacement count: {periodic_count}')
 
-# Expose only non-secret diagnostics so future debugging can confirm one controller
-# owns rendering without inspecting credentials.
 export_marker="  window.__GROWTHOPS_SECURITY_HOTFIX__={\n"
 if security.count(export_marker)!=1:
     raise SystemExit(f'Unexpected security export marker count: {security.count(export_marker)}')
@@ -334,10 +295,156 @@ export=r'''  window.__GROWTHOPS_CREDENTIAL_UI_V5__={
 '''
 security=security.replace(export_marker,export+export_marker,1)
 
+# Fold the former v5.1 prefetch stage into the controller before writing dist.
+state_marker="  let credentialUiV5LastErrorAt=0;\n"
+if security.count(state_marker)!=1:
+    raise SystemExit(f'Unexpected v5 state marker count: {security.count(state_marker)}')
+security=security.replace(
+    state_marker,
+    state_marker+
+    "  const credentialUiV51PrefetchCache=new Map();\n"
+    "  let credentialUiV51PrefetchPromise=null;\n"
+    "  let credentialUiV51PrefetchClientId='';\n",
+    1,
+)
+
+ensure_marker="  const ensureAccountSafeSummary=()=>{\n"
+if security.count(ensure_marker)!=1:
+    raise SystemExit(f'Unexpected v5 ensure marker count: {security.count(ensure_marker)}')
+helpers=r'''  const credentialUiV51CandidateClientId=()=>{
+    const role=String(vm.currentUser?.role||'');
+    if(!['ADMIN','OPS'].includes(role))return '';
+    const assetsId=vm.selectedAssetsClientId;
+    const assetsValue=assetsId==null?'':String(assetsId);
+    if(assetsValue&&assetsValue!=='0'&&assetsValue.toUpperCase()!=='ALL')return assetsValue;
+    if(vm.currentPage==='client-detail'){
+      const detailId=vm.selectedClientId??vm.selectedClient?.id;
+      const detailValue=detailId==null?'':String(detailId);
+      if(detailValue&&detailValue!=='0'&&detailValue.toUpperCase()!=='ALL')return detailValue;
+    }
+    return '';
+  };
+  const credentialUiV51Cached=clientId=>{
+    const key=String(clientId||'');
+    if(!key)return null;
+    const cached=credentialUiV51PrefetchCache.get(key)||null;
+    if(!cached)return null;
+    if(Date.now()-Number(cached.savedAt||0)>60000){
+      credentialUiV51PrefetchCache.delete(key);
+      return null;
+    }
+    return cached;
+  };
+  const credentialUiV51Remember=(clientId,data)=>{
+    const key=String(clientId||'');
+    if(!key||!data||typeof data!=='object')return;
+    credentialUiV51PrefetchCache.set(key,{savedAt:Date.now(),data});
+  };
+  const credentialUiV51Prefetch=()=>{
+    if(isCredentialSummaryContext())return;
+    const clientId=credentialUiV51CandidateClientId();
+    if(!clientId||credentialUiV51Cached(clientId))return;
+    if(credentialUiV51PrefetchPromise&&credentialUiV51PrefetchClientId===clientId)return;
+    const token=localStorage.getItem(TOKEN_KEY)||'';
+    if(!token)return;
+    credentialUiV51PrefetchClientId=clientId;
+    const request=cloud.rpc('crm_client_account_safe_summary',{p_token:token,p_client_id:String(clientId)});
+    credentialUiV51PrefetchPromise=request;
+    request.then(data=>{
+      if(data&&typeof data==='object')credentialUiV51Remember(clientId,data);
+    }).catch(()=>{}).finally(()=>{
+      if(credentialUiV51PrefetchPromise===request){
+        credentialUiV51PrefetchPromise=null;
+        credentialUiV51PrefetchClientId='';
+      }
+    });
+  };
+  const credentialUiV51ClearPrefetch=()=>{
+    credentialUiV51PrefetchCache.clear();
+    credentialUiV51PrefetchPromise=null;
+    credentialUiV51PrefetchClientId='';
+  };
+
+'''
+security=security.replace(ensure_marker,helpers+ensure_marker,1)
+
+ensure_start=security.find(ensure_marker)
+ensure_end=security.find("  const assetClientForProtectedField=()=>",ensure_start)
+if ensure_start<0 or ensure_end<0:
+    raise SystemExit('Unable to bound v5 ensure block')
+ensure_block=security[ensure_start:ensure_end]
+
+non_context_old="""      }
+      return;
+    }
+    const role=String(vm.currentUser?.role||'');
+"""
+non_context_new="""      }
+      credentialUiV51Prefetch();
+      return;
+    }
+    const role=String(vm.currentUser?.role||'');
+"""
+if ensure_block.count(non_context_old)!=1:
+    raise SystemExit(f'Unexpected v5 non-context return count: {ensure_block.count(non_context_old)}')
+ensure_block=ensure_block.replace(non_context_old,non_context_new,1)
+
+client_marker="""    const clientId=resolveCredentialClientId();
+    if(!['ADMIN','OPS'].includes(role)||!clientId){
+"""
+hydrate="""    const clientId=resolveCredentialClientId();
+    const prefetched=credentialUiV51Cached(clientId);
+    if(prefetched&&(!accountSafeSummaryData||accountSafeSummaryClientId!==clientId)){
+      accountSafeSummaryClientId=clientId;
+      accountSafeSummaryData=prefetched.data;
+      accountSafeSummaryFetchedAt=Number(prefetched.savedAt||Date.now());
+    }
+    if(!['ADMIN','OPS'].includes(role)||!clientId){
+"""
+if ensure_block.count(client_marker)!=1:
+    raise SystemExit(f'Unexpected v5 client marker count: {ensure_block.count(client_marker)}')
+ensure_block=ensure_block.replace(client_marker,hydrate,1)
+
+success_marker="""      accountSafeSummaryData=data&&typeof data==='object'?data:{};
+      accountSafeSummaryFetchedAt=Date.now();
+      credentialUiV5LastErrorAt=0;
+"""
+success_new="""      accountSafeSummaryData=data&&typeof data==='object'?data:{};
+      accountSafeSummaryFetchedAt=Date.now();
+      credentialUiV51Remember(clientId,accountSafeSummaryData);
+      credentialUiV5LastErrorAt=0;
+"""
+if ensure_block.count(success_marker)!=1:
+    raise SystemExit(f'Unexpected v5 success marker count: {ensure_block.count(success_marker)}')
+ensure_block=ensure_block.replace(success_marker,success_new,1)
+security=security[:ensure_start]+ensure_block+security[ensure_end:]
+
+visibility_marker="  document.addEventListener('visibilitychange',()=>{\n"
+if security.count(visibility_marker)!=1:
+    raise SystemExit(f'Unexpected visibility marker count: {security.count(visibility_marker)}')
+security=security.replace(visibility_marker,"  document.addEventListener('visibilitychange',()=>{\n    if(document.hidden)credentialUiV51ClearPrefetch();\n",1)
+
+beforeunload_marker="  window.addEventListener('beforeunload',clearCredentialUnlock);\n"
+if security.count(beforeunload_marker)!=1:
+    raise SystemExit(f'Unexpected beforeunload unlock marker count: {security.count(beforeunload_marker)}')
+security=security.replace(beforeunload_marker,beforeunload_marker+"  window.addEventListener('beforeunload',credentialUiV51ClearPrefetch);\n  window.addEventListener('pagehide',credentialUiV51ClearPrefetch);\n",1)
+
+version_old="    version:'5.0',\n"
+if security.count(version_old)!=1:
+    raise SystemExit(f'Unexpected v5 diagnostic version count: {security.count(version_old)}')
+security=security.replace(version_old,"    version:'5.1',\n",1)
+refresh_old="    refresh:()=>{accountSafeSummaryFetchedAt=0;credentialUiV5LastErrorAt=0;ensureAccountSafeSummary();}\n"
+refresh_new="    prefetch:()=>credentialUiV51Prefetch(),\n    refresh:()=>{accountSafeSummaryFetchedAt=0;credentialUiV5LastErrorAt=0;ensureAccountSafeSummary();}\n"
+if security.count(refresh_old)!=1:
+    raise SystemExit(f'Unexpected v5 refresh marker count: {security.count(refresh_old)}')
+security=security.replace(refresh_old,refresh_new,1)
+
 index_path.write_text(html,encoding='utf-8')
 security_path.write_text(security,encoding='utf-8')
-print(
-    'CREDENTIAL_UI_V5_FINALIZE_OK: '
-    f'index={hashlib.sha256(index_path.read_bytes()).hexdigest()}; '
-    f'security={hashlib.sha256(security_path.read_bytes()).hexdigest()}'
-)
+index_hash=hashlib.sha256(index_path.read_bytes()).hexdigest()
+security_hash=hashlib.sha256(security_path.read_bytes()).hexdigest()
+if index_hash!='3fb5874a43264d74e55222be7c19fa2a0abaa516a0b3fe480e6bcf327cdbe11e':
+    raise SystemExit('Consolidated credential controller changed the v5.1 index baseline: '+index_hash)
+if security_hash!='c47e0ebc7c5c09fdee1f542974ec4e560e5d46987f523d1995f2a4d34d51976c':
+    raise SystemExit('Consolidated credential controller changed the v5.1 security baseline: '+security_hash)
+print('CREDENTIAL_UI_CONTROLLER_FINALIZE_OK: reveal_transport=v5-single-value; index='+index_hash+'; security='+security_hash)
