@@ -73,9 +73,11 @@ new_enter = """  async function enter(d){
   }"""
 adapter = replace_once(adapter, old_enter, new_enter, 'cookie-backed cloud enter')
 
-old_logout = """  vm.logout=async()=>{const old=vm.currentUser;if(old){vm.logAudit('退出系统',old.name||'');try{await saveNow();}catch{}}try{if(token)await rpc('crm_logout',{p_token:token});}catch{}token='';revision=0;localStorage.removeItem(TOKEN_KEY);emptyState();vm.currentUser=null;vm.loginForm={username:'',password:''};vm.currentPage='dashboard';};"""
-new_logout = """  vm.logout=async()=>{const old=vm.currentUser;if(old){vm.logAudit('退出系统',old.name||'');try{await saveNow();}catch{}}try{if(token)await rpc('crm_logout',{p_token:SESSION_MARKER});}catch{}token='';revision=0;emptyState();vm.currentUser=null;vm.loginForm={username:'',password:''};vm.currentPage='dashboard';};"""
-adapter = replace_once(adapter, old_logout, new_logout, 'cookie-backed logout')
+# cloud_save_queue_finalize.py runs earlier and upgrades logout to flushSave(). Keep
+# that serialization intact while removing the browser bearer-token storage path.
+old_logout = """  vm.logout=async()=>{const old=vm.currentUser;if(old){vm.logAudit('退出系统',old.name||'');try{await flushSave();}catch{}}try{if(token)await rpc('crm_logout',{p_token:token});}catch{}token='';revision=0;localStorage.removeItem(TOKEN_KEY);emptyState();vm.currentUser=null;vm.loginForm={username:'',password:''};vm.currentPage='dashboard';};"""
+new_logout = """  vm.logout=async()=>{const old=vm.currentUser;if(old){vm.logAudit('退出系统',old.name||'');try{await flushSave();}catch{}}try{if(token)await rpc('crm_logout',{p_token:SESSION_MARKER});}catch{}token='';revision=0;emptyState();vm.currentUser=null;vm.loginForm={username:'',password:''};vm.currentPage='dashboard';};"""
+adapter = replace_once(adapter, old_logout, new_logout, 'cookie-backed serialized logout')
 
 old_boot = """    try{await rpc('crm_public_status');if(token){try{const d=await rpc('crm_load_state_v3',{p_token:token});await enter(d);return;}catch{token='';localStorage.removeItem(TOKEN_KEY);}}}
 """
