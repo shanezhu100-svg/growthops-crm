@@ -4,9 +4,11 @@ import re
 
 root = Path(__file__).resolve().parent
 dist = root / 'dist'
+index_path = dist / 'index.html'
 adapter_path = dist / 'cloud-adapter.js'
 security_path = dist / 'cloud-security-hotfix.js'
 p1_path = dist / 'cloud-p1-overrides.js'
+bridge_path = dist / 'cloud-ui-action-bridge.js'
 
 
 def replace_once(text, old, new, label):
@@ -20,9 +22,11 @@ def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+html = index_path.read_text(encoding='utf-8')
 adapter = adapter_path.read_text(encoding='utf-8')
 security = security_path.read_text(encoding='utf-8')
 p1 = p1_path.read_text(encoding='utf-8')
+bridge = bridge_path.read_text(encoding='utf-8')
 
 # The browser keeps only a non-secret in-memory marker indicating that a cookie-backed
 # session may exist. The real CRM bearer token is never readable by JavaScript.
@@ -69,6 +73,7 @@ new_enter = """  async function enter(d){
       vm.updateStorageUsage();
     }finally{
       hydrating=false;
+      document.documentElement.classList.remove('growthops-session-restoring');
     }
   }"""
 adapter = replace_once(adapter, old_enter, new_enter, 'cookie-backed cloud enter')
@@ -80,8 +85,11 @@ new_logout = """  vm.logout=async()=>{const old=vm.currentUser;if(old){vm.logAud
 adapter = replace_once(adapter, old_logout, new_logout, 'cookie-backed serialized logout')
 
 old_boot = """    try{await rpc('crm_public_status');if(token){try{const d=await rpc('crm_load_state_v3',{p_token:token});await enter(d);return;}catch{token='';localStorage.removeItem(TOKEN_KEY);}}}
+    catch(e){vm.notify(`Supabase 连接失败：${e.message}`);}
 """
 new_boot = """    try{await rpc('crm_public_status');if(token){try{const d=await rpc('crm_load_state_v3',{p_token:SESSION_MARKER});await enter(d);return;}catch{token='';}}}
+    catch(e){vm.notify(`Supabase 连接失败：${e.message}`);}
+    finally{document.documentElement.classList.remove('growthops-session-restoring');}
 """
 adapter = replace_once(adapter, old_boot, new_boot, 'cookie-backed boot restore')
 
@@ -120,12 +128,42 @@ p1 = re.sub(
     p1,
 )
 
-# Fail closed if the old bearer-token storage path survives in any of these shipped
-# auth-bearing assets.
+# The UI action bridge used the old localStorage bearer merely to decide whether to
+# remove the preboot restore cover. With HttpOnly cookies JS cannot and should not
+# inspect session presence; boot/enter now remove the cover explicitly.
+bridge = replace_once(
+    bridge,
+    "  const TOKEN_KEY='growthops_crm_token_v2';\n",
+    '',
+    'UI bridge legacy token constant',
+)
+bridge = replace_once(
+    bridge,
+    """  const clearSessionRestoreCover=()=>{
+    const hasToken=!!localStorage.getItem(TOKEN_KEY);
+    if(vm.currentUser||!hasToken)document.documentElement.classList.remove('growthops-session-restoring');
+  };""",
+    """  const clearSessionRestoreCover=()=>{
+    if(vm.currentUser)document.documentElement.classList.remove('growthops-session-restoring');
+  };""",
+    'UI bridge cookie restore cover',
+)
+
+# ui_action_finalize.py injects a localStorage-token-dependent preboot guard. Replace
+# it in final HTML with an unconditional short restore cover; adapter boot/enter owns
+# the authoritative removal, and the timeout remains a fail-safe only.
+old_restore_guard = """<script id=\"growthops-session-restore-guard\">(()=>{try{if(localStorage.getItem('growthops_crm_token_v2')){document.documentElement.classList.add('growthops-session-restoring');setTimeout(()=>document.documentElement.classList.remove('growthops-session-restoring'),10000)}}catch{}})();</script>"""
+new_restore_guard = """<script id=\"growthops-session-restore-guard\">(()=>{document.documentElement.classList.add('growthops-session-restoring');setTimeout(()=>document.documentElement.classList.remove('growthops-session-restoring'),10000)})();</script>"""
+html = replace_once(html, old_restore_guard, new_restore_guard, 'HttpOnly session restore guard')
+
+# Fail closed if the old bearer-token storage path survives in any auth-bearing
+# shipped asset touched by this migration.
 for name, text in (
+    ('index.html', html),
     ('cloud-adapter.js', adapter),
     ('cloud-security-hotfix.js', security),
     ('cloud-p1-overrides.js', p1),
+    ('cloud-ui-action-bridge.js', bridge),
 ):
     for forbidden in (
         'growthops_crm_token_v2',
@@ -142,13 +180,18 @@ if "fetch('/api/crm'" not in adapter or "credentials:'same-origin'" not in adapt
     raise SystemExit('Same-origin CRM BFF transport missing from final cloud adapter')
 if "crm_reveal_client_secret_field_v4" not in security or "crm_unlock_credentials_v1" not in security:
     raise SystemExit('Credential v4 safety path was damaged by HttpOnly migration')
+if "localStorage.getItem(TOKEN_KEY)" in bridge or "const TOKEN_KEY=" in bridge:
+    raise SystemExit('UI bridge still depends on browser-readable CRM bearer token')
 
+index_path.write_text(html, encoding='utf-8')
 adapter_path.write_text(adapter, encoding='utf-8')
 security_path.write_text(security, encoding='utf-8')
 p1_path.write_text(p1, encoding='utf-8')
+bridge_path.write_text(bridge, encoding='utf-8')
 
 print(
     'HTTP_ONLY_SESSION_FINALIZE_OK: '
-    f'adapter={sha(adapter_path)}; security={sha(security_path)}; p1={sha(p1_path)}; '
+    f'index={sha(index_path)}; adapter={sha(adapter_path)}; security={sha(security_path)}; '
+    f'p1={sha(p1_path)}; bridge={sha(bridge_path)}; '
     f'credential_token_reads={token_read_count}; p1_token_reads={p1_token_reads}'
 )
