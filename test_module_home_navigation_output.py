@@ -70,9 +70,9 @@ require("selectedAnalyticsClient(){if(Number(this.selectedAnalyticsClientId)===0
 require("selectedAdsClient(){if(Number(this.selectedAdsClientId)===0)return null;" in html,
         'ads all-client sentinel must remain supported')
 
-# SOP must now be a real all-client landing page, not just an empty "请选择客户"
-# state. It keeps the existing account-level execution workflow after a client is
-# selected from the aggregate table.
+# SOP must be a real all-client landing page and, after choosing one client,
+# expose all executable FB/TikTok accounts directly in the page. The account
+# dropdown remains only as a fast switch, not the only way to discover accounts.
 for marker in (
     '<option :value="0">所有客户</option><option v-for="c in activeClients" :value="c.id" :key="c.id">{{ c.name }}</option>',
     'v-if="selectedSopClientId===0"',
@@ -83,10 +83,19 @@ for marker in (
     'sopAllTodayTaskCount(){',
     '@click="selectedSopClientId=row.client.id; syncSopAccountSelection(true)"',
     '<div v-else-if="selectedSopClient && selectedSopAccount" class="space-y-5">',
+    '<div class="font-extrabold text-sm text-slate-900">选择执行账号</div>',
+    'v-for="item in selectedSopAccounts"',
+    '@click="selectedSopAccountKey=item.key; onSopAccountChange()"',
+    "item.platform==='FB'?'fa-brands fa-facebook':'fa-brands fa-tiktok'",
+    "{{ item.platform==='FB' ? 'BM ID' : 'BC ID' }}",
+    '进入 Checklist',
+    '@click="openClientDetail(selectedSopClient.id,\'sop\')"',
 ):
-    require(marker in html,f'SOP all-client marker missing: {marker}')
+    require(marker in html,f'SOP all-client/account-option marker missing: {marker}')
 require('<option :value="null">请选择客户</option>' not in html,
         'SOP selector still exposes legacy blank landing state')
+require('请在右上角明确选择本次执行账号。' not in html,
+        'SOP still contains legacy dropdown-only account chooser')
 require("selectedSopClient(){return this.clients.find(c=>!c.archived&&String(c.id)===String(this.selectedSopClientId))||null}" in html,
         'SOP concrete-client computed behavior changed unexpectedly')
 require('prepareScopedPageClient(page)' not in html,
@@ -135,7 +144,7 @@ require("this.selectedSopClientId=this.clients[0]" not in block,
         'SOP navigateTo must not replace all-client sentinel with first client')
 
 print(
-    'MODULE_HOME_NAVIGATION_OUTPUT_TESTS_OK: authority=navigateTo; sentinel-zero=valid-through-navigation; wrappers=removed; sop=all-clients; '
+    'MODULE_HOME_NAVIGATION_OUTPUT_TESTS_OK: authority=navigateTo; sentinel-zero=valid-through-navigation; wrappers=removed; sop=all-clients+account-options; '
     f'index={hashlib.sha256(index_path.read_bytes()).hexdigest()}; '
     f'bridge={hashlib.sha256(bridge_path.read_bytes()).hexdigest()}'
 )
