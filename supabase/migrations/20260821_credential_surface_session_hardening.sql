@@ -106,7 +106,7 @@ with ranked as (
     and r.rn>4
   returning s.user_id,s.workspace_id
 ), grouped as (
-  select user_id,min(workspace_id) as workspace_id,count(*)::integer as removed_count
+  select user_id,max(workspace_id::text)::uuid as workspace_id,count(*)::integer as removed_count
   from deleted
   group by user_id
 )
