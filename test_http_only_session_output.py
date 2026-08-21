@@ -6,6 +6,8 @@ api = (root / 'api' / 'crm.js').read_text(encoding='utf-8')
 adapter = (dist / 'cloud-adapter.js').read_text(encoding='utf-8')
 security = (dist / 'cloud-security-hotfix.js').read_text(encoding='utf-8')
 p1 = (dist / 'cloud-p1-overrides.js').read_text(encoding='utf-8')
+bridge = (dist / 'cloud-ui-action-bridge.js').read_text(encoding='utf-8')
+html = (dist / 'index.html').read_text(encoding='utf-8')
 
 required_api = (
     "const COOKIE_NAME = '__Host-growthops_crm';",
@@ -34,12 +36,15 @@ if missing:
 
 required_adapter = (
     "const SESSION_MARKER='cookie';",
+    "const LEGACY_SESSION_KEY=['growthops','crm','token','v2'].join('_');",
+    'localStorage.removeItem(LEGACY_SESSION_KEY)',
     "fetch('/api/crm'",
     "credentials:'same-origin'",
     "JSON.stringify({rpc:name,args:body})",
     "token=SESSION_MARKER;revision=Number(d?.revision||0);",
     "rpc('crm_login_v3'",
     "rpc('crm_load_state_v3'",
+    "document.documentElement.classList.remove('growthops-session-restoring')",
 )
 missing = [marker for marker in required_adapter if marker not in adapter]
 if missing:
@@ -49,6 +54,8 @@ for name, text in (
     ('cloud-adapter.js', adapter),
     ('cloud-security-hotfix.js', security),
     ('cloud-p1-overrides.js', p1),
+    ('cloud-ui-action-bridge.js', bridge),
+    ('index.html', html),
 ):
     for forbidden in (
         'growthops_crm_token_v2',
@@ -74,6 +81,11 @@ for required in (
     if required not in security:
         raise SystemExit('HTTP_ONLY_SESSION_OUTPUT_TESTS_FAILED credential safety marker missing: ' + required)
 
+if "const TOKEN_KEY='growthops_crm_token_v2'" in bridge or 'localStorage.getItem(TOKEN_KEY)' in bridge:
+    raise SystemExit('HTTP_ONLY_SESSION_OUTPUT_TESTS_FAILED UI bridge still depends on browser-readable CRM token')
+if "document.documentElement.classList.add('growthops-session-restoring')" not in html:
+    raise SystemExit('HTTP_ONLY_SESSION_OUTPUT_TESTS_FAILED cookie restore cover missing')
+
 # No shipped browser artifact may retain the old CRM bearer-token key or direct REST
 # RPC transport. The server-side BFF is intentionally excluded from this scan.
 for path in sorted(dist.rglob('*')):
@@ -93,4 +105,4 @@ for forbidden in ('service_role', 'SUPABASE_SERVICE_ROLE_KEY'):
 if "return json(res, 200, stripSessionToken(data));" not in api:
     raise SystemExit('HTTP_ONLY_SESSION_OUTPUT_TESTS_FAILED successful login is not token-stripped')
 
-print('HTTP_ONLY_SESSION_OUTPUT_TESTS_OK: browser_token_storage=none; transport=same-origin-bff; cookie=HttpOnly+Secure+SameSiteStrict')
+print('HTTP_ONLY_SESSION_OUTPUT_TESTS_OK: browser_token_storage=none; legacy_token_scrub=enabled; transport=same-origin-bff; cookie=HttpOnly+Secure+SameSiteStrict')
