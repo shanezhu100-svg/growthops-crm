@@ -9,14 +9,11 @@ def require(condition,message):
     if not condition:
         raise SystemExit(message)
 
-# Preboot must suppress template/Vue fallback text before the credential controller
-# has a chance to fetch the final safe summary.
 require('id="growthops-credential-ui-v5-preboot"' in html,'credential UI v5 preboot missing')
 require('data-growthops-credential-v5-state' in html,'credential UI v5 preboot state marker missing')
 require('读取中…' not in html,'loading text must not survive into final HTML')
 require('growthops-secure-credential-button' not in html,'removed top-level credential action must stay removed')
 
-# v5 is the only final credential renderer.
 for marker in (
     "let credentialUiV5RequestSeq=0;",
     "let credentialUiV5State='idle';",
@@ -36,14 +33,12 @@ for marker in (
 ):
     require(marker in security,f'credential UI v5 marker missing: {marker}')
 
-# The safe summary is the only source of login identifier + password-presence display.
 require("row.accountCell.textContent=login||'未录入';" in security,'v5 login identifier final writer missing')
 require("row.passwordCell.textContent='••••••••';" in security,'v5 masked password final writer missing')
 require("row.passwordCell.textContent='未录入';" in security,'v5 true-empty password final writer missing')
 require("row.accountCell.textContent='已录入'" not in security,'legacy boolean login status writer must be absent')
 require("cell.textContent='读取中…'" not in security,'legacy loading text writer must be absent')
 
-# Request generation guards prevent an older client response from repainting a newer client.
 for marker in (
     'const requestId=++credentialUiV5RequestSeq;',
     'requestId!==credentialUiV5RequestSeq||resolveCredentialClientId()!==clientId',
@@ -52,30 +47,34 @@ for marker in (
 ):
     require(marker in security,f'credential UI v5 request-state marker missing: {marker}')
 
-# Password eye remains v4 protected: ADMIN unlock, single-field Vault read, 10s hide,
-# and background-tab cleanup. v5 must never restore the legacy full-client reveal.
+# Password eye remains protected by ADMIN unlock, but its network transport is now v5
+# scalar-only. v3/v4 bundle calls and browser-side bundle flattening are forbidden.
 for marker in (
     'installProtectedFieldControl(row,summary);',
     "crm_unlock_credentials_v1",
-    "crm_reveal_client_secret_field_v4",
+    "crm_reveal_client_secret_value_v5",
+    "p_field:field",
     "toggle.innerHTML='<i class=\"fa-regular fa-eye\"></i>';",
     "toggle.innerHTML='<i class=\"fa-regular fa-eye-slash\"></i>';",
     'setTimeout(hide,10000)',
     "if(document.hidden){clearReveal();clearCredentialUnlock();}",
 ):
-    require(marker in security,f'credential v4 eye marker missing after v5: {marker}')
-require("cloud.rpc('crm_reveal_client_secrets'" not in security,'legacy full-client reveal must remain absent')
-require("cloud.rpc('crm_reveal_client_secret_field_v3'" not in security,'browser must not bypass v4 unlock')
+    require(marker in security,f'credential v5 eye marker missing after v5 renderer: {marker}')
+for forbidden in (
+    "cloud.rpc('crm_reveal_client_secrets'",
+    "cloud.rpc('crm_reveal_client_secret_field_v3'",
+    "cloud.rpc('crm_reveal_client_secret_field_v4'",
+    'flattenSecretFields(bundle',
+):
+    require(forbidden not in security,f'broader reveal path survived v5 renderer: {forbidden}')
 
-# The periodic scan must no longer call the retired boolean status requester or the
-# plural legacy eye installer.
 require('ensureCredentialStatus();ensureAccountSafeSummary()' not in security,
         'periodic scan must not run the legacy credential status path')
 require('ensureAccountSafeSummary();installProtectedFieldControls();' not in security,
         'periodic scan must not run the legacy plural eye installer')
 
 print(
-    'CREDENTIAL_UI_V5_OUTPUT_TESTS_OK: '
+    'CREDENTIAL_UI_V5_OUTPUT_TESTS_OK: reveal_transport=v5-single-value; '
     f'index={hashlib.sha256((root/"dist"/"index.html").read_bytes()).hexdigest()}; '
     f'security={hashlib.sha256((root/"dist"/"cloud-security-hotfix.js").read_bytes()).hexdigest()}'
 )
