@@ -1,5 +1,0 @@
-号 ${clampedAssetPagerIndex('detail','FB',(selectedClient.fbAccounts||[]).length) + 1}`"></info-row><info-row label="BM ID" :value="account.bmId"></info-row><info-row label="广告账号" :value="account.adAccountId"></info-row><info-row label="返点类型" :value="accountRebateModeText(account)"></info-row><template v-if="canViewCredentials()"><info-row label="登录账号" :value="credentialsVisible?account.loginAccount:'••••••••'"></info-row><info-row label="密码 / 2FA" :value="credentialsVisible?account.loginPassword:'••••••••'"></info-row></template></div>
-                        </div>
-                      </template>
-                    </div>
-                    <div v-else class="mt-4 rounded-xl bg-white border border-dashed border-blue-200 p-5 
