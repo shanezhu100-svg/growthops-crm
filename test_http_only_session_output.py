@@ -21,7 +21,7 @@ required_api = (
     "'crm_delete_user'",
     "'crm_client_account_safe_summary'",
     "'crm_unlock_credentials_v1'",
-    "'crm_reveal_client_secret_field_v4'",
+    "'crm_reveal_client_secret_value_v5'",
     'if (!ALL_RPCS.has(rpc))',
     'if (!sameOrigin(req))',
     'args.p_token = sessionToken;',
@@ -33,6 +33,14 @@ required_api = (
 missing = [marker for marker in required_api if marker not in api]
 if missing:
     raise SystemExit('HTTP_ONLY_SESSION_OUTPUT_TESTS_FAILED missing API markers: ' + ', '.join(missing))
+
+for forbidden in (
+    "'crm_reveal_client_secret_field_v4'",
+    "'crm_reveal_client_secret_field_v3'",
+    "'crm_reveal_client_secrets'",
+):
+    if forbidden in api:
+        raise SystemExit('HTTP_ONLY_SESSION_OUTPUT_TESTS_FAILED broader reveal RPC allowlisted: ' + forbidden)
 
 required_adapter = (
     "const SESSION_MARKER='cookie';",
@@ -75,19 +83,25 @@ for required in (
     "const SESSION_MARKER='cookie';",
     "crm_client_account_safe_summary",
     "crm_unlock_credentials_v1",
-    "crm_reveal_client_secret_field_v4",
+    "crm_reveal_client_secret_value_v5",
+    "p_field:field",
     "setTimeout(hide,10000)",
 ):
     if required not in security:
         raise SystemExit('HTTP_ONLY_SESSION_OUTPUT_TESTS_FAILED credential safety marker missing: ' + required)
+for forbidden in (
+    "cloud.rpc('crm_reveal_client_secret_field_v4'",
+    "cloud.rpc('crm_reveal_client_secret_field_v3'",
+    "flattenSecretFields(bundle",
+):
+    if forbidden in security:
+        raise SystemExit('HTTP_ONLY_SESSION_OUTPUT_TESTS_FAILED broader reveal browser path survived: ' + forbidden)
 
 if "const TOKEN_KEY='growthops_crm_token_v2'" in bridge or 'localStorage.getItem(TOKEN_KEY)' in bridge:
     raise SystemExit('HTTP_ONLY_SESSION_OUTPUT_TESTS_FAILED UI bridge still depends on browser-readable CRM token')
 if "document.documentElement.classList.add('growthops-session-restoring')" not in html:
     raise SystemExit('HTTP_ONLY_SESSION_OUTPUT_TESTS_FAILED cookie restore cover missing')
 
-# No shipped browser artifact may retain the old CRM bearer-token key or direct REST
-# RPC transport. The server-side BFF is intentionally excluded from this scan.
 for path in sorted(dist.rglob('*')):
     if not path.is_file() or path.suffix not in {'.js', '.html'}:
         continue
@@ -97,12 +111,10 @@ for path in sorted(dist.rglob('*')):
     if '/rest/v1/rpc/' in text:
         raise SystemExit(f'HTTP_ONLY_SESSION_OUTPUT_TESTS_FAILED direct Supabase RPC transport survived in {path.relative_to(root)}')
 
-# Defensive API checks: the BFF may use the public/publishable key but must never
-# embed a service-role secret or echo a login token back to JavaScript.
 for forbidden in ('service_role', 'SUPABASE_SERVICE_ROLE_KEY'):
     if forbidden in api:
         raise SystemExit('HTTP_ONLY_SESSION_OUTPUT_TESTS_FAILED privileged Supabase key marker present in API source')
 if "return json(res, 200, stripSessionToken(data));" not in api:
     raise SystemExit('HTTP_ONLY_SESSION_OUTPUT_TESTS_FAILED successful login is not token-stripped')
 
-print('HTTP_ONLY_SESSION_OUTPUT_TESTS_OK: browser_token_storage=none; legacy_token_scrub=enabled; transport=same-origin-bff; cookie=HttpOnly+Secure+SameSiteStrict')
+print('HTTP_ONLY_SESSION_OUTPUT_TESTS_OK: browser_token_storage=none; legacy_token_scrub=enabled; transport=same-origin-bff; cookie=HttpOnly+Secure+SameSiteStrict; credential_reveal=v5-single-value')
