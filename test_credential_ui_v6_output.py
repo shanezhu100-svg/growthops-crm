@@ -11,12 +11,16 @@ def require(condition,message):
 
 # First-paint visual gate: show a stable non-secret placeholder immediately, then
 # replace it atomically with the safe-summary result. Credential rows must never be
-# hidden for the duration of the network request.
+# hidden for the duration of the network request. Placeholder writes are idempotent
+# so the preboot MutationObserver cannot trigger itself indefinitely.
 for marker in (
     "growthops-credential-v6-placeholder-style",
     "data-growthops-credential-v6-gate",
     "data-growthops-credential-v6-placeholder-kind",
-    "cell.textContent=kind==='password'?'••••••••':'\\u00a0';",
+    "const placeholder=kind==='password'?'••••••••':'\\u00a0';",
+    "const alreadyPlaceholder=",
+    "if(!alreadyPlaceholder){",
+    "cell.textContent=placeholder;",
     "row.style.visibility='visible'",
     "const clearPlaceholder=()=>{",
     "window.__GROWTHOPS_CREDENTIAL_V6_GATE__={hide,reveal}",
@@ -31,8 +35,8 @@ require('读取中…' not in html,'legacy textual loading placeholder must not 
 for marker in (
     "window.__GROWTHOPS_CREDENTIAL_V6_GATE__?.hide?.();",
     "window.__GROWTHOPS_CREDENTIAL_V6_GATE__?.reveal?.();",
-    "version:'6.2'",
-    "renderMode:'atomic-placeholder'",
+    "version:'6.3'",
+    "renderMode:'atomic-placeholder-idempotent'",
     "runtimeCleanup:true",
     "crm_client_account_safe_summary",
     "crm_unlock_credentials_v1",
