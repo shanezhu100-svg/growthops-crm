@@ -12,55 +12,72 @@ def require(condition,message):
         raise SystemExit(message)
 
 for marker in (
-    "showAllClientsForModule(page){",
+    "navigateToModuleHome(page){",
     "if(page==='assets')this.selectedAssetsClientId=0;",
     "else if(page==='ads')this.selectedAdsClientId=0;",
     "else if(page==='analytics')this.selectedAnalyticsClientId=0;",
+    "this.navigateTo(page);",
+    '@click="navigateToModuleHome(item.key)"',
+    '@click="navigateToModuleHome(item.key); mobileMenuOpen=false"',
     'id="growthops-module-home-navigation-style"',
     'data-growthops-module-home="analytics"',
     'data-growthops-module-home="ads"',
     'data-growthops-module-home="assets"',
-    '@click="showAllClientsForModule(\'analytics\')"',
-    '@click="showAllClientsForModule(\'ads\')"',
-    '@click="showAllClientsForModule(\'assets\')"',
-    '@keydown.enter.prevent="showAllClientsForModule(\'analytics\')"',
-    '@keydown.enter.prevent="showAllClientsForModule(\'ads\')"',
-    '@keydown.enter.prevent="showAllClientsForModule(\'assets\')"',
+    '@click="navigateToModuleHome(\'analytics\')"',
+    '@click="navigateToModuleHome(\'ads\')"',
+    '@click="navigateToModuleHome(\'assets\')"',
+    '@keydown.enter.prevent="navigateToModuleHome(\'analytics\')"',
+    '@keydown.enter.prevent="navigateToModuleHome(\'ads\')"',
+    '@keydown.enter.prevent="navigateToModuleHome(\'assets\')"',
 ):
     require(marker in html,f'module-home marker missing: {marker}')
 
-for marker in (
-    "const MODULE_HOME_NAV_LABELS=new Map([",
-    "['账号与商业资产','assets']",
-    "['广告管理','ads']",
-    "['投放数据分析','analytics']",
-    "control.closest('aside')",
-    "const page=MODULE_HOME_NAV_LABELS.get(text(control));",
-    "queueMicrotask(()=>{",
-    "if(vm.currentPage!==page)return;",
-    "vm.showAllClientsForModule?.(page);",
-):
-    require(marker in bridge,f'module-home bridge marker missing: {marker}')
+# The canonical sidebar bindings must no longer bypass the module-home method.
+require('@click="navigateTo(item.key)"' not in html,
+        'desktop sidebar still bypasses module-home navigation')
+require('@click="navigateTo(item.key); mobileMenuOpen=false"' not in html,
+        'mobile sidebar still bypasses module-home navigation')
 
-bridge_start=bridge.find("const MODULE_HOME_NAV_LABELS=new Map([")
-bridge_end=bridge.find("  const protectPendingSave=event=>{",bridge_start)
-require(bridge_start>=0 and bridge_end>bridge_start,'unable to bound module-home bridge block')
-module_bridge=bridge[bridge_start:bridge_end]
-require('stopImmediatePropagation' not in module_bridge,
-        'module-home sidebar listener must not swallow native navigation')
-require('preventDefault' not in module_bridge,
-        'module-home sidebar listener must not cancel native navigation')
+# No second runtime bridge handler is allowed for this behavior. This avoids the
+# duplicate/capture-order problem that made the prior implementation unreliable.
+require('MODULE_HOME_NAV_LABELS' not in bridge,
+        'duplicate module-home runtime bridge listener must not survive')
+require('showAllClientsForModule' not in bridge,
+        'legacy module-home bridge callback must not survive')
 
+# All-client capability itself must remain intact, and previous scoped preselection
+# must stay reverted.
 require('<option :value="0">全部客户</option>' in html,
         'account-assets all-client option must remain available')
+require("selectedAnalyticsClient(){if(Number(this.selectedAnalyticsClientId)===0)return null;" in html,
+        'analytics all-client sentinel must remain supported')
+require("selectedAdsClient(){if(Number(this.selectedAdsClientId)===0)return null;" in html,
+        'ads all-client sentinel must remain supported')
 require('prepareScopedPageClient(page)' not in html,
         'reverted scoped preselection must not be restored')
+
+# Previously fixed client-detail source-aware return must remain intact.
 require("returnFromClientDetail(){" in html,'client-detail return logic missing')
 require("sessionStorage.getItem('growthops_client_detail_return_page')" in html,
         'client-detail source persistence missing')
 
+# Ordering guard: module selector is reset before normal navigation executes.
+start=html.find('    navigateToModuleHome(page){')
+end=html.find('    navigateTo(page){',start)
+require(start>=0 and end>start,'unable to bound module-home method')
+block=html[start:end]
+nav_pos=block.find('this.navigateTo(page);')
+for assignment in (
+    "this.selectedAssetsClientId=0;",
+    "this.selectedAdsClientId=0;",
+    "this.selectedAnalyticsClientId=0;",
+):
+    pos=block.find(assignment)
+    require(pos>=0 and pos<nav_pos,
+            f'module-home selector must reset before navigation: {assignment}')
+
 print(
-    'MODULE_HOME_NAVIGATION_OUTPUT_TESTS_OK: '
+    'MODULE_HOME_NAVIGATION_OUTPUT_TESTS_OK: authoritative=vue-sidebar; '
     f'index={hashlib.sha256(index_path.read_bytes()).hexdigest()}; '
     f'bridge={hashlib.sha256(bridge_path.read_bytes()).hexdigest()}'
 )
