@@ -36,6 +36,7 @@ required_hardening = (
     "'maxActiveSessions',4",
     'after insert on public.crm_sessions',
     "'reason','SECURITY_HARDENING'",
+    'max(workspace_id::text)::uuid as workspace_id',
     'revoke all on function public.crm_cap_session_expiry_v2() from public, anon, authenticated;',
     'revoke all on function public.crm_limit_active_sessions_per_user() from public, anon, authenticated;',
 )
@@ -52,5 +53,7 @@ if 'and r.rn>8' in hardening or "'maxActiveSessions',8" in hardening:
     raise SystemExit('SESSION_SECURITY_MIGRATIONS_TESTS_FAILED old eight-session limit survived final hardening')
 if "interval '30 days'" in hardening:
     raise SystemExit('SESSION_SECURITY_MIGRATIONS_TESTS_FAILED 30-day session lifetime survived final hardening')
+if 'min(workspace_id)' in hardening:
+    raise SystemExit('SESSION_SECURITY_MIGRATIONS_TESTS_FAILED unsupported min(uuid) aggregation returned')
 
-print('SESSION_SECURITY_MIGRATIONS_TESTS_OK: max_session_age=7d; max_active_sessions=4')
+print('SESSION_SECURITY_MIGRATIONS_TESTS_OK: max_session_age=7d; max_active_sessions=4; uuid_aggregation=valid')
