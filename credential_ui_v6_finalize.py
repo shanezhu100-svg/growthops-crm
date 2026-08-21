@@ -57,15 +57,19 @@ old_scrub="""      if(cell.textContent)cell.textContent='';
 """
 new_scrub=r"""      const row=label.parentElement;
       const kind=clean(label)==='密码 / 2FA'?'password':'account';
-      cell.textContent=kind==='password'?'••••••••':'\u00a0';
-      cell.setAttribute('data-growthops-credential-v6-placeholder-kind',kind);
-      cell.setAttribute('aria-busy','true');
+      const placeholder=kind==='password'?'••••••••':'\u00a0';
+      const alreadyPlaceholder=cell.getAttribute(ATTR)==='preboot'&&cell.getAttribute('data-growthops-credential-v6-placeholder-kind')===kind&&cell.textContent===placeholder;
+      if(!alreadyPlaceholder){
+        cell.textContent=placeholder;
+        cell.setAttribute('data-growthops-credential-v6-placeholder-kind',kind);
+        cell.setAttribute('aria-busy','true');
+        cell.setAttribute(ATTR,'preboot');
+      }
       if(row){
         row.style.visibility='visible';
         row.style.pointerEvents='none';
         row.setAttribute('data-growthops-credential-v6-gate','pending');
       }
-      cell.setAttribute(ATTR,'preboot');
 """
 if html.count(old_scrub)!=1:
     raise SystemExit(f'Unexpected v5 preboot scrub count: {html.count(old_scrub)}')
@@ -214,7 +218,7 @@ if version_count!=1:
     raise SystemExit(f'Unexpected v5.1 diagnostic version count: {version_count}')
 security=security.replace(
     version_marker,
-    "    version:'6.2',\n    renderMode:'atomic-placeholder',\n    runtimeCleanup:true,\n",
+    "    version:'6.3',\n    renderMode:'atomic-placeholder-idempotent',\n    runtimeCleanup:true,\n",
     1,
 )
 
