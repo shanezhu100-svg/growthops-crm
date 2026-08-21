@@ -13,6 +13,7 @@ def require(condition,message):
 
 for marker in (
     "navigateToModuleHome(page){",
+    "if(this.currentPage==='assets'&&page!=='assets')this.selectedAssetsClientId=0;",
     "if(page==='assets')this.selectedAssetsClientId=0;",
     "else if(page==='ads')this.selectedAdsClientId=0;",
     "else if(page==='analytics')this.selectedAnalyticsClientId=0;",
@@ -49,6 +50,8 @@ require('showAllClientsForModule' not in bridge,
 # must stay reverted.
 require('<option :value="0">全部客户</option>' in html,
         'account-assets all-client option must remain available')
+require('v-if="selectedAssetsClientId===0"' in html,
+        'account-assets aggregate view must remain keyed to sentinel 0')
 require("selectedAnalyticsClient(){if(Number(this.selectedAnalyticsClientId)===0)return null;" in html,
         'analytics all-client sentinel must remain supported')
 require("selectedAdsClient(){if(Number(this.selectedAdsClientId)===0)return null;" in html,
@@ -61,14 +64,20 @@ require("returnFromClientDetail(){" in html,'client-detail return logic missing'
 require("sessionStorage.getItem('growthops_client_detail_return_page')" in html,
         'client-detail source persistence missing')
 
-# Ordering guard: module selector is reset before normal navigation executes.
+# Ordering guard: leaving assets through top-level navigation first stores the
+# assets module back to all-client mode, and target-module selectors reset before
+# normal navigation executes.
 start=html.find('    navigateToModuleHome(page){')
 end=html.find('    navigateTo(page){',start)
 require(start>=0 and end>start,'unable to bound module-home method')
 block=html[start:end]
 nav_pos=block.find('this.navigateTo(page);')
+leave_reset="if(this.currentPage==='assets'&&page!=='assets')this.selectedAssetsClientId=0;"
+leave_pos=block.find(leave_reset)
+require(leave_pos>=0 and leave_pos<nav_pos,
+        'account-assets leave reset must execute before navigation')
 for assignment in (
-    "this.selectedAssetsClientId=0;",
+    "if(page==='assets')this.selectedAssetsClientId=0;",
     "this.selectedAdsClientId=0;",
     "this.selectedAnalyticsClientId=0;",
 ):
@@ -77,7 +86,7 @@ for assignment in (
             f'module-home selector must reset before navigation: {assignment}')
 
 print(
-    'MODULE_HOME_NAVIGATION_OUTPUT_TESTS_OK: authoritative=vue-sidebar; '
+    'MODULE_HOME_NAVIGATION_OUTPUT_TESTS_OK: authoritative=vue-sidebar; assets-return=all-clients; '
     f'index={hashlib.sha256(index_path.read_bytes()).hexdigest()}; '
     f'bridge={hashlib.sha256(bridge_path.read_bytes()).hexdigest()}'
 )
