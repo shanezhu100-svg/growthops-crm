@@ -22,7 +22,7 @@ const AUTH_RPCS = new Set([
   'crm_delete_user',
   'crm_client_account_safe_summary',
   'crm_unlock_credentials_v1',
-  'crm_reveal_client_secret_field_v4',
+  'crm_reveal_client_secret_value_v5',
 ]);
 
 const ALL_RPCS = new Set([...PUBLIC_RPCS, ...LOGIN_RPCS, ...AUTH_RPCS]);
