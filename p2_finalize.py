@@ -68,6 +68,40 @@ html = replace_once(
     'browser cache normal copy'
 )
 
+# Client management uses one mutually-exclusive view: current clients by
+# default, archived clients only after entering the archive view. Search,
+# platform filtering and counts continue to operate on the selected view.
+html = replace_once(
+    html,
+    '<h2 class="text-2xl font-extrabold tracking-tight">客户管理</h2>',
+    '<h2 class="text-2xl font-extrabold tracking-tight">{{ showArchivedClients?\'归档客户\':\'客户管理\' }}</h2>',
+    'client archive-aware heading'
+)
+html = replace_once(
+    html,
+    '<p class="text-xs text-slate-500 mt-1">统一管理客户资料、平台账号、合同周期和服务状态。</p>',
+    '<p class="text-xs text-slate-500 mt-1">{{ showArchivedClients?\'仅显示已归档客户；历史广告、开户、财务和回款数据继续保留。\':\'统一管理当前客户资料、平台账号、合同周期和服务状态。\' }}</p>',
+    'client archive-aware subtitle'
+)
+html = replace_once(
+    html,
+    "{{ showArchivedClients?'隐藏归档':'查看归档' }}",
+    "{{ showArchivedClients?'返回客户':'查看归档' }}",
+    'client archive toggle label'
+)
+html = replace_once(
+    html,
+    '<div class="text-xs text-slate-500">共 <strong class="text-slate-900">{{ filteredClients.length }}</strong> 家客户</div>',
+    '<div class="text-xs text-slate-500">共 <strong class="text-slate-900">{{ filteredClients.length }}</strong> 家{{ showArchivedClients?\'归档客户\':\'客户\' }}</div>',
+    'client archive-aware count'
+)
+html = replace_once(
+    html,
+    'if(c.archived&&!this.showArchivedClients)return false;',
+    'if(Boolean(c.archived)!==Boolean(this.showArchivedClients))return false;',
+    'exclusive active/archive client filter'
+)
+
 # P2 billing rule A: in the contract's first month, an automatic service-fee
 # invoice cannot be due before the contract start date. Later months keep the
 # configured monthly due day unchanged.
