@@ -1,7 +1,11 @@
 #!/bin/sh
 set -eu
 python3 verify_final_source.py
+python3 runtime_config_compat.py
+trap 'rm -f index.html' 0
 python3 build_final.py
+rm -f index.html
+trap - 0
 python3 p2_finalize.py
 python3 test_p2_output.py
 python3 security_finalize.py
