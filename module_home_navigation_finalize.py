@@ -7,9 +7,9 @@ html=index_path.read_text(encoding='utf-8')
 
 # One authoritative module-home entry point. Internal calls to navigateTo() remain
 # untouched so client-detail returns and other in-module navigation keep context.
-# When the user leaves Account Assets through top-level navigation, save that
-# module back to its aggregate sentinel so the next top-level return starts at
-# the all-client overview instead of the previously selected client.
+# When the user leaves Account Assets or Ads through top-level navigation, save
+# that module back to its aggregate sentinel so the next top-level return starts
+# at the all-client overview instead of the previously selected client.
 method_marker="    navigateTo(page){"
 if html.count("    navigateToModuleHome(page){"):
     raise SystemExit('Module-home navigation already installed')
@@ -17,6 +17,7 @@ if html.count(method_marker)!=1:
     raise SystemExit(f'Unexpected navigateTo method count: {html.count(method_marker)}')
 method=r'''    navigateToModuleHome(page){
       if(this.currentPage==='assets'&&page!=='assets')this.selectedAssetsClientId=0;
+      if(this.currentPage==='ads'&&page!=='ads')this.selectedAdsClientId=0;
       if(page==='assets')this.selectedAssetsClientId=0;
       else if(page==='ads')this.selectedAdsClientId=0;
       else if(page==='analytics')this.selectedAnalyticsClientId=0;
@@ -76,6 +77,6 @@ html=html.replace('</head>',style+'</head>',1)
 
 index_path.write_text(html,encoding='utf-8')
 print(
-    'MODULE_HOME_NAVIGATION_FINALIZE_OK: authoritative=vue-sidebar; assets-return=all-clients; '
+    'MODULE_HOME_NAVIGATION_FINALIZE_OK: authoritative=vue-sidebar; assets-return=all-clients; ads-return=all-clients; '
     f'index={hashlib.sha256(index_path.read_bytes()).hexdigest()}'
 )
