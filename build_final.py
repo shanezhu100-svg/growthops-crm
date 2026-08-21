@@ -89,12 +89,23 @@ copy_replacements = (
 for old, new, label in copy_replacements:
     replace_once(old, new, label)
 
-# P0 production hardening: remove the reset-demo UI control from production output.
-# Runtime access is independently disabled by cloud-p0-overrides.js.
-reset_button = re.compile(r'<button\b(?=[^>]*@click=["\']resetDemoData\(\)["\'])[^>]*>.*?</button>', re.S)
+# Production hardening: the demo-reset control and implementation must not ship.
+# The canonical button binds resetDemoData without parentheses, so match both
+# Vue binding styles defensively and require exactly one canonical control.
+reset_button = re.compile(r'<button\b(?=[^>]*@click=["\']resetDemoData(?:\(\))?["\'])[^>]*>.*?</button>', re.S)
 html, reset_count = reset_button.subn('', html)
-if reset_count not in (0, 1):
+if reset_count != 1:
     raise SystemExit(f'Unexpected reset-demo UI count: {reset_count}')
+
+# resetDemoData is the final Vue method immediately before the methods object
+# closes. Remove the entire implementation instead of leaving unreachable code.
+reset_method_start = html.find('\n    resetDemoData(){')
+reset_method_end = html.find('\n  },\n  mounted(){', reset_method_start)
+if reset_method_start < 0 or reset_method_end <= reset_method_start:
+    raise SystemExit('resetDemoData method boundary not found')
+html = html[:reset_method_start] + html[reset_method_end:]
+if 'resetDemoData' in html or '重置演示' in html or '恢复初始演示数据' in html:
+    raise SystemExit('Reset-demo functionality survived production hardening')
 
 # The canonical page's original mounted() loads seed/localStorage data. In production
 # it must initialize only UI state/listeners; cloud-adapter.js owns auth and business data.

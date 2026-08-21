@@ -9,6 +9,7 @@ p1_overrides = (dist / 'cloud-p1-overrides.js').read_text(encoding='utf-8')
 security = (dist / 'cloud-security-hotfix.js').read_text(encoding='utf-8')
 stage = (root / 'supabase/migrations/20260815_security_vault_stage.sql').read_text(encoding='utf-8')
 enforce = (root / 'supabase/migrations/20260815_security_vault_enforce.sql').read_text(encoding='utf-8')
+hardening = (root / 'supabase/migrations/20260816_credential_reveal_hardening.sql').read_text(encoding='utf-8')
 
 def require(condition, message):
     if not condition:
@@ -28,8 +29,6 @@ require("rpc('crm_load_state'" not in adapter, 'legacy crm_load_state endpoint r
 require("if(d?.error==='INVALID_CREDENTIALS'){vm.notify('账号或密码错误');return}" in adapter, 'P2 login guard lost')
 require("finally{vm.loginForm.password=''}" in adapter, 'P2 login password cleanup lost')
 
-# Opening/reloading cloud state must be read-only. Legacy normalization helpers can
-# invoke persist() during applyState(), so the adapter needs an explicit hydration guard.
 require('let hydrating=false;' in adapter, 'cloud hydration guard missing')
 require('let suppressPersist=false;' in adapter, 'nested persist suppression guard missing')
 require('hydrating=true;' in adapter and 'finally{\n      hydrating=false;' in adapter, 'enter() does not bracket hydration')
@@ -90,7 +89,10 @@ for key in (
     require(key in security, f'security redaction key missing: {key}')
 require("vm.createBackupSnapshot=(notifyUser=false)=>" in security, 'redacted cloud snapshot override missing')
 require("crm_reveal_client_secrets" in security, 'ADMIN on-demand reveal RPC missing')
-require("setTimeout(clearReveal,60000)" in security, '60-second reveal auto-clear missing')
+require("setTimeout(clearReveal,30000)" in security, '30-second reveal auto-clear missing')
+require("setTimeout(hide,10000)" in security, 'per-field 10-second secret reveal missing')
+require("window.addEventListener('blur',clearReveal)" in security, 'credential reveal must clear on window blur')
+require("window.addEventListener('pagehide',clearReveal)" in security, 'credential reveal must clear on page hide')
 require('navigator.clipboard' not in security, 'security reveal must not copy secrets to clipboard automatically')
 require('console.log' not in security and 'console.error' not in security, 'security hotfix must not log secret-bearing objects')
 
@@ -113,6 +115,17 @@ require("'backupSnapshots'" not in extract_live, 'backupSnapshots must not be co
 require("set data=v_public_saved" in enforce, 'enforce migration must persist redacted public state only')
 require("crm_redact_secrets(coalesce(data,'{}'::jsonb))" in enforce, 'enforce migration must purge residual workspace secrets')
 require("declare s jsonb:=public.crm_redact_secrets" in enforce, 'enforce role view must redact ADMIN too')
+
+for marker in (
+    "v_session_created < now() - interval '12 hours'",
+    "v_recent_5m >= 5",
+    "v_recent_1h >= 20",
+    "REVEAL_CLIENT_SECRETS_REAUTH_REQUIRED",
+    "REVEAL_CLIENT_SECRETS_THROTTLED",
+    "crm_server_audit_logs_reveal_user_created_idx",
+    "revoke all on function public.crm_reveal_client_secrets(text,text) from public",
+):
+    require(marker in hardening,f'credential reveal hardening marker missing: {marker}')
 
 print(
     'SECURITY_OUTPUT_TESTS_OK: '

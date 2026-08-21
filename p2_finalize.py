@@ -42,7 +42,11 @@ for name, size, digest in (
 html = index_path.read_text(encoding='utf-8')
 
 old_status = '<div class="bg-white border border-slate-200 rounded-2xl p-4"><div class="text-[11px] text-slate-400">合作状态</div><div class="mt-2"><span class="inline-flex px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700">合作中</span></div></div>'
-new_status = '<div class="bg-white border border-slate-200 rounded-2xl p-4"><div class="text-[11px] text-slate-400">合作状态</div><div class="mt-2"><span class="inline-flex px-2.5 py-1 rounded-full text-xs font-bold" :class="selectedClient.archived?\'bg-slate-100 text-slate-600\':statusStyle(selectedClient.status)">{{ selectedClient.archived?\'已归档\':statusText(selectedClient.status) }}</span></div></div>'
+# Keep the client-detail status self-contained. The canonical CRM has no
+# callable statusStyle()/statusText() methods; using them here breaks the Vue
+# render function as soon as client-detail is opened. Reuse the same inline
+# ACTIVE/PAUSED/archived mapping already used by the clients list instead.
+new_status = '<div class="bg-white border border-slate-200 rounded-2xl p-4"><div class="text-[11px] text-slate-400">合作状态</div><div class="mt-2"><span class="inline-flex px-2.5 py-1 rounded-full text-xs font-bold" :class="selectedClient.archived?\'bg-slate-200 text-slate-600\':selectedClient.status===\'ACTIVE\'?\'bg-emerald-50 text-emerald-700\':\'bg-slate-100 text-slate-600\'">{{ selectedClient.archived?\'已归档\':(selectedClient.status===\'ACTIVE\'?\'合作中\':\'暂停\') }}</span></div></div>'
 html = replace_once(html, old_status, new_status, 'client detail hard-coded status')
 
 html = replace_once(
@@ -62,6 +66,40 @@ html = replace_once(
     '当前本地数据容量正常。自动快照仅保留最近 5 份，避免浏览器空间被占满。',
     '当前浏览器本地缓存占用正常；这里只统计此浏览器的 localStorage，不代表 Supabase 数据库或存储配额。',
     'browser cache normal copy'
+)
+
+# Client management uses one mutually-exclusive view: current clients by
+# default, archived clients only after entering the archive view. Search,
+# platform filtering and counts continue to operate on the selected view.
+html = replace_once(
+    html,
+    '<h2 class="text-2xl font-extrabold tracking-tight">客户管理</h2>',
+    '<h2 class="text-2xl font-extrabold tracking-tight">{{ showArchivedClients?\'归档客户\':\'客户管理\' }}</h2>',
+    'client archive-aware heading'
+)
+html = replace_once(
+    html,
+    '<p class="text-xs text-slate-500 mt-1">统一管理客户资料、平台账号、合同周期和服务状态。</p>',
+    '<p class="text-xs text-slate-500 mt-1">{{ showArchivedClients?\'仅显示已归档客户；历史广告、开户、财务和回款数据继续保留。\':\'统一管理当前客户资料、平台账号、合同周期和服务状态。\' }}</p>',
+    'client archive-aware subtitle'
+)
+html = replace_once(
+    html,
+    "{{ showArchivedClients?'隐藏归档':'查看归档' }}",
+    "{{ showArchivedClients?'返回客户':'查看归档' }}",
+    'client archive toggle label'
+)
+html = replace_once(
+    html,
+    '<div class="text-xs text-slate-500">共 <strong class="text-slate-900">{{ filteredClients.length }}</strong> 家客户</div>',
+    '<div class="text-xs text-slate-500">共 <strong class="text-slate-900">{{ filteredClients.length }}</strong> 家{{ showArchivedClients?\'归档客户\':\'客户\' }}</div>',
+    'client archive-aware count'
+)
+html = replace_once(
+    html,
+    'if(c.archived&&!this.showArchivedClients)return false;',
+    'if(Boolean(c.archived)!==Boolean(this.showArchivedClients))return false;',
+    'exclusive active/archive client filter'
 )
 
 # P2 billing rule A: in the contract's first month, an automatic service-fee

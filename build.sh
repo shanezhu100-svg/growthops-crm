@@ -5,4 +5,59 @@ python3 build_final.py
 python3 p2_finalize.py
 python3 test_p2_output.py
 python3 security_finalize.py
+python3 backup_security_finalize.py
+python3 security_reveal_ui_finalize.py
+# Canonical compatibility scaffolding. These legacy credential UI stages are
+# stripped from the final browser runtime by credential_ui_v6_finalize.py.
+python3 credential_template_initial_finalize.py
+python3 credential_status_ui_finalize.py
+python3 account_asset_client_context_finalize.py
+python3 assets_all_clients_finalize.py
+python3 credential_status_loading_finalize.py
+python3 account_asset_value_typography_finalize.py
+python3 test_credential_status_ui_output.py
+python3 test_account_asset_client_context_output.py
+python3 test_credential_status_loading_output.py
+python3 test_account_asset_value_typography_output.py
+python3 account_login_identifier_v2_finalize.py
+python3 credential_field_reveal_v3_finalize.py
 python3 test_security_hotfix_output.py
+python3 test_security_reveal_ui_output.py
+python3 test_credential_template_initial_output.py
+python3 test_account_login_identifier_output.py
+python3 test_credential_field_reveal_v3_output.py
+python3 credential_unlock_v4_finalize.py
+python3 test_credential_unlock_v4_output.py
+python3 credential_client_detail_v4_finalize.py
+python3 test_credential_client_detail_v4_output.py
+python3 test_assets_all_clients_output.py
+python3 test_workspace_state_secret_hard_guard.py
+python3 test_backup_security_output.py
+python3 test_vercel_security_headers.py
+python3 test_rpc_surface_hardening.py
+python3 test_session_security_migrations.py
+python3 cloud_save_queue_finalize.py
+python3 test_cloud_save_queue_output.py
+python3 ui_action_finalize.py
+python3 test_ui_action_output.py
+python3 remove_login_material_view_finalize.py
+python3 test_remove_login_material_view_output.py
+python3 credential_ui_v5_finalize.py
+python3 test_credential_ui_v5_output.py
+python3 credential_ui_v51_prefetch_finalize.py
+python3 test_credential_ui_v51_prefetch_output.py
+python3 credential_ui_v6_finalize.py
+python3 credential_ui_v6_event_finalize.py
+python3 test_credential_ui_v6_output.py
+python3 test_credential_ui_v6_event_output.py
+python3 http_only_session_finalize.py
+python3 test_http_only_session_output.py
+python3 client_detail_return_finalize.py
+python3 test_client_detail_return_output.py
+python3 module_home_navigation_finalize.py
+python3 test_module_home_navigation_output.py
+node --check api/crm.js
+node test_http_only_session_api.js
+node --check dist/cloud-adapter.js
+node --check dist/cloud-security-hotfix.js
+node --check dist/cloud-ui-action-bridge.js
