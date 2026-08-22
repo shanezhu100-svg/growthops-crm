@@ -167,13 +167,11 @@ if security.count(success_old) != 1:
     raise SystemExit(f'Unexpected scalar reveal success block count: {security.count(success_old)}')
 security = security.replace(success_old, success_new, 1)
 
-rehydrate_old = """    cell.title='密码 / 2FA 安全保存在 Vault；点击眼睛时仅读取当前账号密码，10 秒后自动隐藏';
-    cell.__growthOpsVaultFieldClear=hide;
-    return true;
-"""
-rehydrate_new = """    cell.title='密码 / 2FA 安全保存在 Vault；点击眼睛时仅读取当前账号密码，10 秒后自动隐藏';
-    cell.__growthOpsVaultFieldClear=hide;
-    const activeReveal=revealKey?credentialEphemeralReveals.get(revealKey):null;
+# Anchor on the final-output property assignment only. Earlier finalizers can
+# rewrite nearby title text, but this assignment remains the stable ownership
+# hook for the per-field control.
+rehydrate_marker = "    cell.__growthOpsVaultFieldClear=hide;\n"
+rehydrate_insert = """    const activeReveal=revealKey?credentialEphemeralReveals.get(revealKey):null;
     const now=Date.now();
     if(activeReveal&&activeReveal.value&&activeReveal.expiresAt>now&&!document.hidden){
       visibleValue=String(activeReveal.value);
@@ -185,11 +183,10 @@ rehydrate_new = """    cell.title='密码 / 2FA 安全保存在 Vault；点击�
     }else if(activeReveal){
       credentialEphemeralReveals.delete(revealKey);
     }
-    return true;
 """
-if security.count(rehydrate_old) != 1:
-    raise SystemExit(f'Unexpected protected-field installer tail count: {security.count(rehydrate_old)}')
-security = security.replace(rehydrate_old, rehydrate_new, 1)
+if security.count(rehydrate_marker) != 1:
+    raise SystemExit(f'Unexpected protected-field ownership marker count: {security.count(rehydrate_marker)}')
+security = security.replace(rehydrate_marker, rehydrate_marker + rehydrate_insert, 1)
 
 for required in (
     "const existingRevealControl=cell.querySelector('button[aria-label=\"显示密码和 2FA\"],button[aria-label=\"隐藏密码和 2FA\"]');",
