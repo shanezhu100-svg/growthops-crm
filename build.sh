@@ -61,6 +61,7 @@ python3 test_module_home_navigation_output.py
 node --check api/crm.js
 GROWTHOPS_SUPABASE_SECRET_KEY=sb_secret_test_http_only_ci node test_http_only_session_api.js
 node test_cloudflare_p2b_api.mjs
+node test_cloudflare_p3p4_attack_regression.mjs
 node --check dist/cloud-adapter.js
 node --check dist/cloud-security-hotfix.js
 node --check dist/cloud-ui-action-bridge.js
