@@ -58,10 +58,16 @@ python3 client_detail_return_finalize.py
 python3 test_client_detail_return_output.py
 python3 module_home_navigation_finalize.py
 python3 test_module_home_navigation_output.py
+# Final DOM-liveness repair: a reveal marker is valid only when the real per-field
+# eye button still exists. This prevents placeholder scrubs from leaving stale
+# markers that suppress the v5 scalar reveal control.
+python3 credential_eye_self_heal_finalize.py
+python3 test_credential_eye_self_heal_output.py
 node --check api/crm.js
 GROWTHOPS_SUPABASE_SECRET_KEY=sb_secret_test_http_only_ci node test_http_only_session_api.js
 node test_cloudflare_p2b_api.mjs
 node test_cloudflare_p3p4_attack_regression.mjs
+python3 test_p5_sensitive_rpc_revocation.py
 node --check dist/cloud-adapter.js
 node --check dist/cloud-security-hotfix.js
 node --check dist/cloud-ui-action-bridge.js
