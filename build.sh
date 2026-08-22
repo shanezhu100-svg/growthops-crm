@@ -66,6 +66,7 @@ python3 test_p5_sensitive_rpc_revocation.py
 python3 test_p5_group2_legacy_status_candidate.py
 python3 test_p5_group3_admin_user_mgmt_candidate.py
 python3 test_p5_group4_safe_summary_candidate.py
+node test_p5_group4_safe_summary_bff.mjs
 node --check dist/cloud-adapter.js
 node --check dist/cloud-security-hotfix.js
 node --check dist/cloud-ui-action-bridge.js
