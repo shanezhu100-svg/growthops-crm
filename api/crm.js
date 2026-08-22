@@ -1,7 +1,6 @@
 'use strict';
 
-const SUPABASE_URL = process.env.GROWTHOPS_SUPABASE_URL || 'https://avahcwyxparbcjdfglzx.supabase.co';
-const SUPABASE_KEY = process.env.GROWTHOPS_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_5Wkk8Bb1zh5lB1YEnvJBPg_Uvmtv62w';
+const SUPABASE_URL_DEFAULT = 'https://avahcwyxparbcjdfglzx.supabase.co';
 const COOKIE_NAME = '__Host-growthops_crm';
 const COOKIE_MAX_AGE = 7 * 24 * 60 * 60;
 
@@ -59,6 +58,24 @@ function sameOrigin(req) {
   return origin === `${proto}://${host}`;
 }
 
+function requestId(req) {
+  const incoming = String(req.headers['x-request-id'] || '').trim();
+  if (/^[A-Za-z0-9._:-]{8,128}$/.test(incoming)) return incoming;
+  try {
+    if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  } catch {}
+  return `req-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function serverConfig() {
+  const key = String(process.env.GROWTHOPS_SUPABASE_SECRET_KEY || '').trim();
+  if (!/^sb_secret_[A-Za-z0-9_-]+$/.test(key)) return null;
+  return {
+    url: String(process.env.GROWTHOPS_SUPABASE_URL || SUPABASE_URL_DEFAULT).replace(/\/+$/, ''),
+    key,
+  };
+}
+
 function json(res, status, body) {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -75,11 +92,22 @@ function bodyObject(req) {
   return {};
 }
 
-async function supabaseRpc(name, args) {
-  const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${encodeURIComponent(name)}`, {
+function safeLog(event, requestIdValue, rpc, status) {
+  const safeRpc = ALL_RPCS.has(rpc) ? rpc : 'unknown';
+  console.error(JSON.stringify({
+    event,
+    platform: 'vercel',
+    requestId: requestIdValue,
+    rpc: safeRpc,
+    status: Number(status || 0),
+  }));
+}
+
+async function supabaseRpc(name, args, config) {
+  const response = await fetch(`${config.url}/rest/v1/rpc/${encodeURIComponent(name)}`, {
     method: 'POST',
     headers: {
-      apikey: SUPABASE_KEY,
+      apikey: config.key,
       'Content-Type': 'application/json',
       'Cache-Control': 'no-store',
     },
@@ -89,12 +117,23 @@ async function supabaseRpc(name, args) {
   let data = null;
   try { data = await response.json(); } catch {}
   if (!response.ok) {
-    const message = data?.message || data?.hint || `请求失败 ${response.status}`;
-    const error = new Error(message);
+    const error = new Error('UPSTREAM_RPC_FAILED');
     error.status = response.status;
+    error.sessionRelated = /SESSION|TOKEN|UNAUTHORIZED/i.test(String(data?.message || data?.hint || ''));
     throw error;
   }
   return data;
+}
+
+function sanitizeUpstreamError(error) {
+  const status = Number(error?.status || 0);
+  if (status === 400) return { status: 400, message: 'UPSTREAM_BAD_REQUEST' };
+  if (status === 401) return { status: 401, message: 'SESSION_INVALID' };
+  if (status === 403) return { status: 403, message: 'REQUEST_DENIED' };
+  if (status === 404) return { status: 404, message: 'UPSTREAM_NOT_FOUND' };
+  if (status === 409) return { status: 409, message: 'CONFLICT' };
+  if (status === 429) return { status: 429, message: 'RATE_LIMITED' };
+  return { status: 502, message: 'UPSTREAM_REQUEST_FAILED' };
 }
 
 function stripSessionToken(data) {
@@ -106,6 +145,9 @@ function stripSessionToken(data) {
 }
 
 module.exports = async function handler(req, res) {
+  const requestIdValue = requestId(req);
+  res.setHeader('X-Request-ID', requestIdValue);
+
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
     return json(res, 405, { message: 'METHOD_NOT_ALLOWED' });
@@ -119,14 +161,20 @@ module.exports = async function handler(req, res) {
   const args = body.args && typeof body.args === 'object' && !Array.isArray(body.args) ? { ...body.args } : {};
   if (!ALL_RPCS.has(rpc)) return json(res, 403, { message: 'RPC_NOT_ALLOWED' });
 
+  const config = serverConfig();
+  if (!config) {
+    safeLog('server_identity_missing', requestIdValue, rpc, 503);
+    return json(res, 503, { message: 'SERVER_IDENTITY_NOT_CONFIGURED' });
+  }
+
   const cookies = parseCookies(req.headers.cookie || '');
   const sessionToken = String(cookies[COOKIE_NAME] || '');
 
   try {
     if (LOGIN_RPCS.has(rpc)) {
       delete args.p_token;
-      const data = await supabaseRpc(rpc, args);
-      if (data?.error) return json(res, 401, { message: String(data.error) });
+      const data = await supabaseRpc(rpc, args, config);
+      if (data?.error) return json(res, 401, { message: 'LOGIN_FAILED' });
       const token = String(data?.token || '');
       if (!token) return json(res, 502, { message: 'LOGIN_SESSION_MISSING' });
       res.setHeader('Set-Cookie', sessionCookie(token));
@@ -135,7 +183,7 @@ module.exports = async function handler(req, res) {
 
     if (PUBLIC_RPCS.has(rpc)) {
       delete args.p_token;
-      return json(res, 200, stripSessionToken(await supabaseRpc(rpc, args)));
+      return json(res, 200, stripSessionToken(await supabaseRpc(rpc, args, config)));
     }
 
     if (!sessionToken) {
@@ -147,7 +195,7 @@ module.exports = async function handler(req, res) {
 
     if (rpc === 'crm_logout') {
       try {
-        const data = await supabaseRpc(rpc, args);
+        const data = await supabaseRpc(rpc, args, config);
         res.setHeader('Set-Cookie', clearSessionCookie());
         return json(res, 200, stripSessionToken(data));
       } catch (error) {
@@ -156,14 +204,15 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    const data = await supabaseRpc(rpc, args);
+    const data = await supabaseRpc(rpc, args, config);
     return json(res, 200, stripSessionToken(data));
   } catch (error) {
-    const message = String(error?.message || 'REQUEST_FAILED');
-    const status = Number(error?.status || 500);
-    if (status === 401 || /SESSION|TOKEN|UNAUTHORIZED/i.test(message)) {
+    const upstreamStatus = Number(error?.status || 0);
+    if (upstreamStatus === 401 || error?.sessionRelated) {
       res.setHeader('Set-Cookie', clearSessionCookie());
     }
-    return json(res, status >= 400 && status < 600 ? status : 500, { message });
+    const safe = sanitizeUpstreamError(error);
+    safeLog('upstream_rpc_error', requestIdValue, rpc, upstreamStatus || safe.status);
+    return json(res, safe.status, { message: safe.message });
   }
 };
