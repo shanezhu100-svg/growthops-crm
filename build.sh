@@ -60,6 +60,7 @@ python3 module_home_navigation_finalize.py
 python3 test_module_home_navigation_output.py
 node --check api/crm.js
 node test_http_only_session_api.js
+node test_cloudflare_p2a_api.mjs
 node --check dist/cloud-adapter.js
 node --check dist/cloud-security-hotfix.js
 node --check dist/cloud-ui-action-bridge.js
