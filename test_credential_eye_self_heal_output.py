@@ -9,6 +9,15 @@ required = (
     "if(cell.getAttribute(FIELD_REVEAL_ATTR)==='1')cell.removeAttribute(FIELD_REVEAL_ATTR);",
     "const installedRevealControl=row.passwordCell.querySelector('button[aria-label=\"显示密码和 2FA\"],button[aria-label=\"隐藏密码和 2FA\"]');",
     "row.passwordCell.getAttribute(FIELD_REVEAL_ATTR)==='1'&&installedRevealControl",
+    "const targetAccountId=accountIdForProtectedField(row)||null;",
+    "if(!cell.isConnected||!toggle.isConnected||!cell.contains(toggle))",
+    "requestAnimationFrame(()=>{",
+    "credentialUiV5Render();",
+    "const liveRows=locateCredentialRows().filter(candidate=>candidate.platform===row.platform&&String(accountIdForProtectedField(candidate)||'')===targetId);",
+    "const liveRow=liveRows.length===1?liveRows[0]:null;",
+    "if(liveToggle){liveToggle.click();return;}",
+    "管理员验证成功；凭证区域已刷新，请再次点击眼睛查看",
+    "const accountId=targetAccountId;",
     "crm_unlock_credentials_v1",
     "crm_reveal_client_secret_value_v5",
     "setTimeout(hide,10000)",
@@ -27,4 +36,4 @@ for forbidden in (
     if forbidden in security:
         raise SystemExit(f'Unsafe/stale credential eye path survived: {forbidden}')
 
-print('CREDENTIAL_EYE_SELF_HEAL_OUTPUT_OK: marker-alone=no-longer-trusted; real-eye-required; v5-scalar-preserved')
+print('CREDENTIAL_EYE_SELF_HEAL_OUTPUT_OK: marker-alone=no-longer-trusted; unlock-rerender=reacquires-live-row; ambiguous-row=no-auto-reveal; v5-scalar-preserved')
