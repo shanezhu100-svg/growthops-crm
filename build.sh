@@ -62,6 +62,7 @@ node --check api/crm.js
 GROWTHOPS_SUPABASE_SECRET_KEY=sb_secret_test_http_only_ci node test_http_only_session_api.js
 node test_cloudflare_p2b_api.mjs
 node test_cloudflare_p3p4_attack_regression.mjs
+python3 test_p5_sensitive_rpc_revocation.py
 node --check dist/cloud-adapter.js
 node --check dist/cloud-security-hotfix.js
 node --check dist/cloud-ui-action-bridge.js
