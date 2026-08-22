@@ -72,6 +72,125 @@ if security.count(account_old) != 1:
     raise SystemExit(f'Unexpected scalar reveal account marker count: {security.count(account_old)}')
 security = security.replace(account_old, account_new, 1)
 
+# A second DOM replacement can happen after the scalar v5 calls complete. Keep the
+# visible value only in this page's memory for the same 10-second window already
+# used by the field control. The cache is scoped by client + platform + account,
+# never persisted, and is cleared on hide/background/navigation. A newly rendered
+# matching cell can therefore rehydrate the same short-lived display without
+# re-fetching or exposing a different account's secret.
+ephemeral_insert = "  const installProtectedFieldControl=(row,summary)=>{\n"
+if security.count(ephemeral_insert) != 1:
+    raise SystemExit(f'Unexpected protected-field installer insertion count: {security.count(ephemeral_insert)}')
+ephemeral_helpers = r'''  const credentialEphemeralReveals=new Map();
+  const credentialEphemeralRevealKey=row=>{
+    const clientId=String(resolveCredentialClientId()||'');
+    const platform=String(row?.platform||'');
+    const accountId=String(accountIdForProtectedField(row)||'');
+    return clientId&&platform&&accountId?JSON.stringify([clientId,platform,accountId]):'';
+  };
+  const clearCredentialEphemeralReveals=()=>{
+    for(const cell of document.querySelectorAll(`[${FIELD_REVEAL_ATTR}="1"]`)){
+      try{if(typeof cell.__growthOpsVaultFieldClear==='function')cell.__growthOpsVaultFieldClear();}catch{}
+    }
+    credentialEphemeralReveals.clear();
+  };
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)clearCredentialEphemeralReveals();});
+  window.addEventListener('pagehide',clearCredentialEphemeralReveals);
+  window.addEventListener('beforeunload',clearCredentialEphemeralReveals);
+
+'''
+security = security.replace(ephemeral_insert, ephemeral_helpers + ephemeral_insert, 1)
+
+cell_guard_old = """    const cell=row?.passwordCell;
+    if(!cell||!protectedFieldRecorded(row,summary))return false;
+"""
+cell_guard_new = """    const cell=row?.passwordCell;
+    if(!cell||!protectedFieldRecorded(row,summary))return false;
+    const revealKey=credentialEphemeralRevealKey(row);
+"""
+if security.count(cell_guard_old) != 1:
+    raise SystemExit(f'Unexpected protected-field cell guard count: {security.count(cell_guard_old)}')
+security = security.replace(cell_guard_old, cell_guard_new, 1)
+
+hide_old = """    const hide=()=>{
+      clearTimeout(fieldTimer);
+      fieldTimer=null;
+      visibleValue='';
+      display.textContent='••••••••';
+"""
+hide_new = """    const hide=()=>{
+      clearTimeout(fieldTimer);
+      fieldTimer=null;
+      if(revealKey)credentialEphemeralReveals.delete(revealKey);
+      visibleValue='';
+      display.textContent='••••••••';
+      if(cell.isConnected)cell.setAttribute('data-growthops-credential-v5-state','ready');
+"""
+if security.count(hide_old) != 1:
+    raise SystemExit(f'Unexpected protected-field hide block count: {security.count(hide_old)}')
+security = security.replace(hide_old, hide_new, 1)
+
+success_old = """        if(!visibleValue){
+          vm.notify('该账号当前没有可显示的密码 / 2FA');
+          hide();
+          return;
+        }
+        display.textContent=visibleValue;
+        toggle.innerHTML='<i class=\"fa-regular fa-eye-slash\"></i>';
+        toggle.setAttribute('aria-label','隐藏密码和 2FA');
+        toggle.disabled=false;
+        loading=false;
+        fieldTimer=setTimeout(hide,10000);
+"""
+success_new = """        if(!visibleValue){
+          vm.notify('该账号当前没有可显示的密码 / 2FA');
+          hide();
+          return;
+        }
+        if(document.hidden||!isCredentialSummaryContext()||resolveCredentialClientId()!==clientId){
+          visibleValue='';
+          hide();
+          return;
+        }
+        const revealExpiresAt=Date.now()+10000;
+        if(revealKey)credentialEphemeralReveals.set(revealKey,{value:visibleValue,expiresAt:revealExpiresAt});
+        display.textContent=visibleValue;
+        cell.setAttribute('data-growthops-credential-v5-state','revealed');
+        toggle.innerHTML='<i class=\"fa-regular fa-eye-slash\"></i>';
+        toggle.setAttribute('aria-label','隐藏密码和 2FA');
+        toggle.disabled=false;
+        loading=false;
+        fieldTimer=setTimeout(hide,10000);
+        requestAnimationFrame(()=>credentialUiV5Render());
+"""
+if security.count(success_old) != 1:
+    raise SystemExit(f'Unexpected scalar reveal success block count: {security.count(success_old)}')
+security = security.replace(success_old, success_new, 1)
+
+rehydrate_old = """    cell.title='密码 / 2FA 安全保存在 Vault；点击眼睛时仅读取当前账号密码，10 秒后自动隐藏';
+    cell.__growthOpsVaultFieldClear=hide;
+    return true;
+"""
+rehydrate_new = """    cell.title='密码 / 2FA 安全保存在 Vault；点击眼睛时仅读取当前账号密码，10 秒后自动隐藏';
+    cell.__growthOpsVaultFieldClear=hide;
+    const activeReveal=revealKey?credentialEphemeralReveals.get(revealKey):null;
+    const now=Date.now();
+    if(activeReveal&&activeReveal.value&&activeReveal.expiresAt>now&&!document.hidden){
+      visibleValue=String(activeReveal.value);
+      display.textContent=visibleValue;
+      cell.setAttribute('data-growthops-credential-v5-state','revealed');
+      toggle.innerHTML='<i class=\"fa-regular fa-eye-slash\"></i>';
+      toggle.setAttribute('aria-label','隐藏密码和 2FA');
+      fieldTimer=setTimeout(hide,Math.max(1,Math.min(10000,activeReveal.expiresAt-now)));
+    }else if(activeReveal){
+      credentialEphemeralReveals.delete(revealKey);
+    }
+    return true;
+"""
+if security.count(rehydrate_old) != 1:
+    raise SystemExit(f'Unexpected protected-field installer tail count: {security.count(rehydrate_old)}')
+security = security.replace(rehydrate_old, rehydrate_new, 1)
+
 for required in (
     "const existingRevealControl=cell.querySelector('button[aria-label=\"显示密码和 2FA\"],button[aria-label=\"隐藏密码和 2FA\"]');",
     "if(cell.getAttribute(FIELD_REVEAL_ATTR)==='1'&&existingRevealControl)return true;",
@@ -80,12 +199,17 @@ for required in (
     "row.passwordCell.getAttribute(FIELD_REVEAL_ATTR)==='1'&&installedRevealControl",
     "const targetAccountId=accountIdForProtectedField(row)||null;",
     "if(!cell.isConnected||!toggle.isConnected||!cell.contains(toggle))",
-    "requestAnimationFrame(()=>{",
-    "credentialUiV5Render();",
     "const liveRows=locateCredentialRows().filter(candidate=>candidate.platform===row.platform&&String(accountIdForProtectedField(candidate)||'')===targetId);",
     "const liveRow=liveRows.length===1?liveRows[0]:null;",
     "if(liveToggle){liveToggle.click();return;}",
     "const accountId=targetAccountId;",
+    "const credentialEphemeralReveals=new Map();",
+    "return clientId&&platform&&accountId?JSON.stringify([clientId,platform,accountId]):'';",
+    "credentialEphemeralReveals.set(revealKey,{value:visibleValue,expiresAt:revealExpiresAt});",
+    "const activeReveal=revealKey?credentialEphemeralReveals.get(revealKey):null;",
+    "fieldTimer=setTimeout(hide,Math.max(1,Math.min(10000,activeReveal.expiresAt-now)));",
+    "document.addEventListener('visibilitychange',()=>{if(document.hidden)clearCredentialEphemeralReveals();});",
+    "window.addEventListener('pagehide',clearCredentialEphemeralReveals);",
     "crm_unlock_credentials_v1",
     "crm_reveal_client_secret_value_v5",
     "setTimeout(hide,10000)",
@@ -97,9 +221,11 @@ for forbidden in (
     "cloud.rpc('crm_reveal_client_secrets'",
     "cloud.rpc('crm_reveal_client_secret_field_v3'",
     "cloud.rpc('crm_reveal_client_secret_field_v4'",
+    "localStorage.setItem('growthops_credential",
+    "sessionStorage.setItem('growthops_credential",
 ):
     if forbidden in security:
-        raise SystemExit(f'Legacy credential reveal path unexpectedly present: {forbidden}')
+        raise SystemExit(f'Legacy/persistent credential reveal path unexpectedly present: {forbidden}')
 
 security_path.write_text(security, encoding='utf-8')
-print('CREDENTIAL_EYE_SELF_HEAL_FINALIZE_OK: stale-marker=repair; unlock-rerender=reacquire-live-row; reveal=v5-scalar; account-binding=pre-unlock')
+print('CREDENTIAL_EYE_SELF_HEAL_FINALIZE_OK: stale-marker=repair; unlock-rerender=reacquire-live-row; post-reveal-rerender=ephemeral-10s-rehydrate; persistence=none; reveal=v5-scalar')
