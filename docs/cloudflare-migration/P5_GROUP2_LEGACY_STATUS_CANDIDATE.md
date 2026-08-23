@@ -1,4 +1,4 @@
-# P5 Group 2 Candidate — Retire Legacy Credential Status RPC
+# P5 Group 2 — Retire Legacy Credential Status RPC
 
 Last updated: 2026-08-23
 
@@ -6,7 +6,7 @@ Last updated: 2026-08-23
 
 Group 1 predecessor gate is complete and merged to `main` at `e5314a3c4cdf33c5bc2a42bb380fe029321d153e`.
 
-This Group 2 branch is now rebased by reconstruction onto that accepted `main`. It remains preparation-only at this checkpoint: no Group 2 Production privilege change, forward revoke migration, rollback migration, or database DDL/DML is included yet.
+Group 2 preflight is PASS. The branch is reconstructed onto accepted Group 1 `main` and contains the exact forward revoke, inverse rollback, read-only post-check, and repository gate. **The Group 2 Production privilege change has not been applied yet at this checkpoint.**
 
 ## Candidate scope
 
@@ -14,55 +14,87 @@ The only Group 2 candidate is:
 
 - `crm_client_credential_status(text, text)`
 
-## Why this RPC is a strong next candidate
-
 The shipped browser runtime no longer depends on it:
 
-- the final credential UI uses `crm_client_account_safe_summary` for the controlled non-secret account/credential summary;
-- `credential_ui_v6_finalize.py` explicitly forbids `crm_client_credential_status` from surviving into shipped runtime;
-- `test_credential_ui_v6_output.py` likewise requires the legacy RPC to be absent from final runtime output;
-- neither the Vercel nor Cloudflare `/api/crm` BFF allowlist contains `crm_client_credential_status`.
-
-The older credential-status finalizer files remain build-time compatibility scaffolding only. The v6 finalizer strips the legacy request/cache/rendering path before shipped artifacts are produced.
+- final credential UI uses `crm_client_account_safe_summary`;
+- `credential_ui_v6_finalize.py` explicitly forbids `crm_client_credential_status` from final runtime output;
+- `test_credential_ui_v6_output.py` also forbids it;
+- neither the Vercel nor Cloudflare `/api/crm` BFF allowlist contains it.
 
 ## Accepted predecessor baseline
 
-Group 1 is complete with:
+Before Group 2 execution, Production is verified as:
 
 - merged `main`: `e5314a3c4cdf33c5bc2a42bb380fe029321d153e`;
-- Production CRM functions: `40`;
-- Production anon EXECUTE: `10`;
-- Production authenticated EXECUTE: `0`;
-- Production service_role EXECUTE: `40`;
+- CRM functions: `40`;
+- anon EXECUTE: `10`;
+- authenticated EXECUTE: `0`;
+- service_role EXECUTE: `40`;
 - CRM tables with RLS: `9/9`;
-- latest accepted Production migration: `20260823045642 / credential_unlock_reauth_bridge`;
-- canonical Production security fingerprint: `258 / beb4efcaa8d85d13fc826cf98a66ea8981c3d4f3f4ff2c930acca3df196ef07e`.
+- latest migration: `20260823045642 / credential_unlock_reauth_bridge`;
+- canonical security fingerprint: `258 / beb4efcaa8d85d13fc826cf98a66ea8981c3d4f3f4ff2c930acca3df196ef07e`.
 
-## Group 2 preflight gate
+Target ACL preflight:
 
-Before creating or applying a revoke migration, require all of the following against the current branch and live Production state:
+- target count: `1`;
+- `anon=true`;
+- `authenticated=false`;
+- `service_role=true`;
+- `PUBLIC EXECUTE=false`;
+- anon EXECUTE is an explicit grant;
+- service_role EXECUTE is an explicit grant;
+- function remains `SECURITY DEFINER` with existing session and ADMIN/OPS guards.
 
-- `crm_client_credential_status` remains absent from both BFF allowlists;
-- `crm_client_credential_status` remains forbidden from final browser runtime output;
-- `crm_client_account_safe_summary` remains present in both BFF allowlists and final credential runtime;
-- Production shows `anon=true`, `authenticated=false`, `service_role=true` for `crm_client_credential_status` before Group 2;
-- no current shipped browser path depends on this legacy RPC;
-- P3/P4 hard security gates remain PASS;
-- Group 1 privilege counts and the accepted 258-line fingerprint remain stable before the Group 2 privilege change.
+## Exact Group 2 change
 
-## Intended Group 2 change
+Forward migration:
 
-If the preflight gate passes, Group 2 may revoke only:
+`supabase/migrations/20260823_p5_group2_revoke_legacy_credential_status_anon_exec.sql`
 
-`EXECUTE ON FUNCTION public.crm_client_credential_status(text, text) FROM anon`
+It contains exactly:
 
-The actual forward migration must be created through the project’s normal Supabase migration workflow, paired with an exact inverse rollback and a read-only post-change privilege check.
+```sql
+revoke execute on function public.crm_client_credential_status(text, text) from anon;
+```
 
-Expected privilege shape after Group 2:
+Emergency rollback:
 
-- `crm_client_credential_status`: `anon=false`, `authenticated=false`, `service_role=true`;
-- total anon-executable CRM RPC count: `10 -> 9`;
-- total service_role-executable CRM RPC count remains `40`.
+`supabase/rollback/20260823_p5_group2_restore_legacy_credential_status_anon_exec.sql`
+
+It restores exactly:
+
+```sql
+grant execute on function public.crm_client_credential_status(text, text) to anon;
+```
+
+Read-only post-change check:
+
+`supabase/baseline/p5_group2_legacy_status_anon_exec_check.sql`
+
+Expected after execution:
+
+- target `anon=false`;
+- target `authenticated=false`;
+- target `service_role=true`;
+- total anon CRM EXECUTE: `10 -> 9`;
+- total authenticated CRM EXECUTE: `0`;
+- total service_role CRM EXECUTE remains `40`;
+- total CRM functions remains `40`.
+
+## Automated gate
+
+`test_p5_group2_legacy_status_revocation.py` requires:
+
+- exactly one forward revoke and no other mutation in the Group 2 migration;
+- exactly one inverse rollback grant;
+- post-check remains read-only;
+- legacy RPC remains absent from both BFFs;
+- legacy RPC remains explicitly forbidden by the final credential runtime generator;
+- safe-summary replacement remains present in both BFFs and final runtime generation.
+
+Success marker:
+
+`P5_GROUP2_LEGACY_STATUS_REVOCATION_OK: revoke=1-legacy-anon-only; rollback=1-exact-grant; post-check=read-only; expected-anon=9; service-role=40`
 
 ## Non-goals
 
@@ -73,6 +105,7 @@ Group 2 does not alter:
 - user-management RPCs;
 - `crm_client_account_safe_summary`;
 - credential unlock or scalar reveal behavior;
+- any function body;
 - tables, RLS, policies, Vault, Session duration, CSP, WAF, Access, DNS, UI, or CRM business behavior.
 
-Keeping this as a one-RPC group preserves deterministic rollback and attribution.
+Keeping this as a one-RPC privilege-only group preserves deterministic rollback and attribution.
