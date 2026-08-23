@@ -78,21 +78,27 @@ expected_files = (
 for path in expected_files:
     require(path.exists(), f'Group 3 execution-package file missing: {path.name}')
 
-require('Group 1 and Group 2 predecessor gates are complete' in doc,
-        'Group 3 doc does not record completed predecessor chain')
+# Predecessor baseline and final Group 3 Production evidence must both remain frozen.
 require('92e7ed7ed6fadbbe2ba1ff5a5e029715a323964b' in doc,
         'Group 3 doc missing accepted Group2 main SHA')
-require('20260823062545 / p5_group2_revoke_legacy_credential_status_anon_exec' in doc,
-        'Group 3 doc missing accepted Group2 migration')
 require('258 / 03efe21f9345b9d01a362873b0eaf63834ab641dd0e7c8eee2ab6efa80607224' in doc,
         'Group 3 doc missing accepted Group2 fingerprint')
-require('Execution package is prepared but not applied to Production.' in doc,
-        'Group 3 doc lost pre-apply Production guard')
-require('`9 -> 6`' in doc, 'Group 3 doc lost expected anon transition')
+require('803ae738d059071b0f906732af2e45a257e8ec63' in doc,
+        'Group 3 doc missing execution-package exact head')
+require('dpl_A57fwk1g9HUyW7FTn9LTeXFiANVG' in doc,
+        'Group 3 doc missing Vercel execution-package evidence')
+require('5e9ddffb-582b-4d7c-b514-1ca3e8e8fba6' in doc,
+        'Group 3 doc missing Cloudflare execution-package evidence')
+require('20260823064535 / p5_group3_revoke_admin_user_mgmt_anon_exec' in doc,
+        'Group 3 doc missing applied Production migration')
+require('anon EXECUTE: `6` (`9 -> 6`)' in doc,
+        'Group 3 doc missing post-change anon total')
+require('258 / 5d43f0f65f80f24aab35d5e60d6c66cb86166f303743a5c9274509625e0c71b3' in doc,
+        'Group 3 doc missing post-Group3 fingerprint')
 
 print(
     'P5_GROUP3_ADMIN_USER_MGMT_CANDIDATE_OK: '
     'admin-rpcs=auth-only-bff; cookie-token=authoritative; '
     'server-identity=required; db-guards=covered; '
-    'group2=accepted; production-change=none'
+    'group2=accepted; production-change=applied+verified'
 )
