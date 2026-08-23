@@ -32,13 +32,14 @@ require("request.headers.get('cf-connecting-ip')" in cloudflare,'Cloudflare must
 for source,label in ((vercel,'Vercel'),(cloudflare,'Cloudflare')):
     require("headers['x-growthops-source-bucket']" in source,f'{label} missing outbound bucket header')
     require("/^[0-9a-f]{24}$/" in source,f'{label} missing outbound bucket validation')
-    require(source.count("x-growthops-source-bucket") >= 1,f'{label} missing trusted bucket marker')
 
 for expected,label in (
     ('c803ccd5945d05434a592c2d3f1d2da9100d3db8','accepted predecessor main'),
     ('20260823123328 / post_p5_revoke_service_role_relation_acl','accepted predecessor migration'),
     ('195 / edfcd23e20985252ca529aaeeb8a2cb1d22821c70202888806c5773c20df516b','pre-change canonical'),
-    ('195 / a69eba751a24ffbc98e5f47628c09c7b271b89d55ee7518d89cf3620391bd56e','expected post-change canonical'),
+    ('20260823131002 / post_p5_login_trusted_source_bucket','applied Production migration'),
+    ('195 / a69eba751a24ffbc98e5f47628c09c7b271b89d55ee7518d89cf3620391bd56e','verified post-change canonical'),
+    ('Production hardening is applied and verified','Production acceptance status'),
     ('12','pair threshold'),
     ('50','source threshold'),
 ):
@@ -47,4 +48,4 @@ for expected,label in (
 require(build.count('node test_post_p5_login_trusted_source_bucket.mjs')==1,'build must run trusted-source BFF test once')
 require(build.count('python3 test_post_p5_login_trusted_source_bucket.py')==1,'build must run trusted-source package gate once')
 
-print('POST_P5_LOGIN_TRUSTED_SOURCE_PACKAGE_OK: bff=trusted-edge-ip-to-sha256-24hex; db=custom-bucket-first+legacy-fallback; raw-ip=persist-none; thresholds=12-pair+50-source; fingerprint=a69eba75; production-change=none')
+print('POST_P5_LOGIN_TRUSTED_SOURCE_PACKAGE_OK: bff=trusted-edge-ip-to-sha256-24hex; db=custom-bucket-first+legacy-fallback; raw-ip=persist-none; thresholds=12-pair+50-source; fingerprint=a69eba75; production-change=applied+verified')
