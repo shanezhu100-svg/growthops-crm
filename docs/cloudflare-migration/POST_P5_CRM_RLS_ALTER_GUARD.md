@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Close a future RLS drift gap discovered after the fail-closed CRM ACL DDL guard was installed.
+Close the remaining RLS drift path when a CRM table enters `public` through `ALTER TABLE` (SET SCHEMA / rename-to-`crm_*`).
 
 Accepted predecessor:
 - `main@c22750d639d1b08a6e6f387f889d6de62b5c2ca7`;
@@ -12,68 +12,99 @@ Accepted predecessor:
 - CRM tables with RLS = `9/9`;
 - canonical `195 / a69eba751a24ffbc98e5f47628c09c7b271b89d55ee7518d89cf3620391bd56e`.
 
-Production change: **not applied** in this preparation commit.
+Production change: **applied + verified**.
 
 ## Risk found
 
 The existing `ensure_rls` event trigger listens only to `CREATE TABLE`, `CREATE TABLE AS`, and `SELECT INTO`. A transaction probe showed that a table created outside `public` can later be moved into `public` with a `crm_*` name and remain `relrowsecurity=false`.
 
-The already-installed CRM ACL guard correctly revoked browser/service-role direct access on that moved table, so this was not an immediate browser exposure. However, it breaks the long-term invariant that every CRM table has RLS enabled and could become relevant to future SECURITY DEFINER or maintenance code.
+The already-installed CRM ACL guard correctly revoked browser/service-role direct access on that moved table, so this was not an immediate browser exposure. It did, however, break the long-term `RLS=on for every CRM table` invariant.
 
-## Proposed guard
+## Guard behavior
 
 Infrastructure function: `public.growthops_crm_rls_guard_ddl()`.
 
-- SECURITY DEFINER;
 - owner `postgres`;
+- SECURITY DEFINER;
 - fixed `search_path=pg_catalog`;
 - external EXECUTE revoked from PUBLIC/anon/authenticated/service_role;
 - event trigger listens only to `ALTER TABLE`;
 - only `public.crm_*` tables / partitioned tables are considered;
-- if `relrowsecurity=false`, the guard issues `ALTER TABLE ... ENABLE ROW LEVEL SECURITY`;
-- nested invocation is naturally bounded because the second invocation observes `relrowsecurity=true` and performs no further ALTER.
+- when `relrowsecurity=false`, it issues `ALTER TABLE ... ENABLE ROW LEVEL SECURITY`;
+- nested invocation is bounded because the second invocation sees RLS already enabled and performs no further ALTER.
 
-The existing `ensure_rls` create-time guard and `growthops_crm_acl_guard_ddl` ACL guard remain unchanged.
+The existing create-time `ensure_rls` guard and `growthops_crm_acl_guard_ddl` ACL guard remain unchanged.
 
-## Deterministic transaction rehearsal
+## Pre-apply rehearsal
 
 The candidate guard was installed inside an explicit transaction and rolled back. Verified:
 - external-schema `crm_*` table moved into public -> RLS true;
 - public non-CRM table renamed to `crm_*` -> RLS true;
-- normal public `crm_*` table creation -> RLS true through existing `ensure_rls`;
-- service-role direct access remained false because the ACL guard still ran;
+- normal public `crm_*` create -> RLS true through existing `ensure_rls`;
+- service-role direct access remained false through the ACL guard;
 - guard owner was postgres and service-role EXECUTE was false.
 
-After rollback, Production residue check confirmed no `growthops_crm_rls_guard_ddl` function/event and no probe relation remained. Existing ACL guard stayed installed. Latest migration remained `20260823135410`.
+Residue after rollback: no RLS guard function/event and no probe relation remained; existing ACL guard stayed installed.
 
-## Migration package
+## Preparation evidence
 
-Forward migration:
-`supabase/migrations/20260823_post_p5_crm_rls_alter_guard.sql`
+Preparation initially failed only because the static test incorrectly rejected an `ensure_rls` mention in a migration comment. SQL/rollback were unchanged; the gate was corrected to forbid replacement/drop of the existing create-time guard rather than textual mention.
 
-Rollback:
-`supabase/rollback/20260823_post_p5_crm_rls_alter_guard.sql`
+Verified preparation head:
+`663f57885d23a0c2b892dc47dea4fc2b76bb0955`
 
-Read-only checks:
-- `supabase/baseline/post_p5_crm_rls_alter_guard_preflight.sql`
-- `supabase/baseline/post_p5_crm_rls_alter_guard_check.sql`
+Vercel:
+- deployment `dpl_F9TKf9b9yfU1qQ9WBRZVvBgg3Zri`;
+- READY;
+- exact commit `663f5788...`;
+- `POST_P5_CRM_RLS_ALTER_GUARD_OK` PASS with `production-change=none`;
+- predecessor security gates PASS.
 
-Static gate:
-`test_post_p5_crm_rls_alter_guard.py`
+Cloudflare:
+- deployment `668940c2-9d1d-4e21-b3e7-b826bfbbd6d3`;
+- exact URL `https://668940c2.growthops-crm.pages.dev/`;
+- success;
+- exact commit `663f5788...`;
+- RLS ALTER guard gate PASS;
+- `CLOUDFLARE_P1_OUTPUT_PARITY_OK` PASS.
 
-Expected marker:
-`POST_P5_CRM_RLS_ALTER_GUARD_OK`
+Fresh pre-apply Production freeze confirmed zero drift: functions `40`, anon/auth/service `0/0/12`, CRM tables `9`, RLS `9/9`, direct table grants `0`, existing create-time RLS + ACL guards present, ALTER-table RLS guard absent, migration `20260823135410`, canonical `195 / a69eba751a24ffbc98e5f47628c09c7b271b89d55ee7518d89cf3620391bd56e`. PR #34 remained mergeable with exact preparation head.
 
-## Expected invariant
+## Production result
 
-Installing this infrastructure guard must not change any current CRM object definition or privilege. Therefore canonical inventory remains exactly:
+Applied migration:
+`20260823143620 / post_p5_crm_rls_alter_guard`
 
-`195 / a69eba751a24ffbc98e5f47628c09c7b271b89d55ee7518d89cf3620391bd56e`
+Immediate post-check verified:
+- CRM functions `40`;
+- anon/authenticated/service-role function EXECUTE `0/0/12`;
+- CRM tables `9`, RLS `9/9`;
+- direct table grants `0`;
+- new event trigger enabled with exact tag `ALTER TABLE`;
+- event/function owner `postgres`;
+- guard is SECURITY DEFINER with `search_path=pg_catalog`;
+- anon/authenticated/service_role EXECUTE on guard all false;
+- existing `ensure_rls` and ACL guard remain present;
+- canonical remains exactly `195 / a69eba751a24ffbc98e5f47628c09c7b271b89d55ee7518d89cf3620391bd56e`.
 
-and current boundary remains `40 functions / service-role EXECUTE 12 / direct relation ACL 0 / RLS 9/9`.
+## Installed-guard transaction probe
 
-## Hard gate
+After apply, the installed Production guard was exercised inside a transaction and rolled back:
+- external-schema CRM table moved into public -> RLS true;
+- public table renamed to `crm_*` -> RLS true;
+- anon/service direct SELECT on both remained false through the ACL guard.
 
-Do not apply Production DDL until the exact preparation head passes Vercel and Cloudflare, predecessor security gates remain green, Cloudflare P1 parity remains green, and a fresh Production freeze confirms zero drift.
+A residue check confirmed no probe relation remained and the installed guard remained present.
 
-After apply, require an installed-guard transaction probe covering SET SCHEMA and rename-to-`crm_*`, zero probe residue, final exact-head dual-platform green, final Production freeze, then expected-head merge.
+## Rollback
+
+Rollback drops only `growthops_crm_rls_guard_ddl` event trigger and infrastructure function. It does not alter `ensure_rls`, `growthops_crm_acl_guard_ddl`, table ACLs, or existing RLS state.
+
+## Final acceptance
+
+Before merge:
+1. final evidence-only head must differ from verified preparation only in this document and static gate status;
+2. final exact head must pass Vercel and Cloudflare;
+3. predecessor gates and Cloudflare P1 parity must remain green;
+4. final Production freeze must confirm both RLS guards + ACL guard present, boundary `40 / 0/0/12`, RLS `9/9`, direct relation ACL `0`, migration `20260823143620`, canonical `195 / a69eba751a24ffbc98e5f47628c09c7b271b89d55ee7518d89cf3620391bd56e`;
+5. merge only with the exact verified head SHA.

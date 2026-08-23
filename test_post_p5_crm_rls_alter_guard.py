@@ -57,10 +57,13 @@ for sql,label in ((preflight.lower(),'preflight'),(postcheck.lower(),'post-check
 for expected,label in (
     ('c22750d639d1b08a6e6f387f889d6de62b5c2ca7','accepted predecessor main'),
     ('20260823135410 / post_p5_crm_acl_event_guard','accepted predecessor migration'),
+    ('20260823143620 / post_p5_crm_rls_alter_guard','applied Production migration'),
     ('195 / a69eba751a24ffbc98e5f47628c09c7b271b89d55ee7518d89cf3620391bd56e','stable canonical'),
-    ('Production change: **not applied**','preparation status'),
-    ('SET SCHEMA','schema-move rehearsal'),
-    ('rename-to-`crm_*`','rename rehearsal'),
+    ('Production change: **applied + verified**','Production status'),
+    ('663f57885d23a0c2b892dc47dea4fc2b76bb0955','verified preparation head'),
+    ('dpl_F9TKf9b9yfU1qQ9WBRZVvBgg3Zri','Vercel preparation evidence'),
+    ('668940c2-9d1d-4e21-b3e7-b826bfbbd6d3','Cloudflare preparation evidence'),
+    ('Installed-guard transaction probe','installed guard probe'),
 ):
     require(expected in doc, f'doc missing {label}')
 
@@ -71,5 +74,5 @@ print(
     'POST_P5_CRM_RLS_ALTER_GUARD_OK: '
     'scope=public.crm_*+ALTER_TABLE; set-schema=covered; rename=covered; '
     'create-rls-guard=preserved; acl-guard=preserved; fingerprint=a69eba75; '
-    'production-change=none'
+    'production-change=applied+verified'
 )
