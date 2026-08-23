@@ -69,11 +69,14 @@ for rpc in admin_rpcs:
 require('admin-user-rpcs=session-gated' in p2b_test,
         'cross-platform P2-B success marker lost admin-user RPC coverage')
 
-for folder in (root / 'supabase' / 'migrations', root / 'supabase' / 'rollback'):
-    for path in folder.glob('*'):
-        lowered = path.name.lower()
-        require(not ('p5' in lowered and 'group3' in lowered),
-                f'Group 3 SQL appeared during preparation stage: {path.name}')
+expected_files = (
+    root / 'supabase' / 'migrations' / '20260823_p5_group3_revoke_admin_user_mgmt_anon_exec.sql',
+    root / 'supabase' / 'rollback' / '20260823_p5_group3_restore_admin_user_mgmt_anon_exec.sql',
+    root / 'supabase' / 'baseline' / 'p5_group3_admin_user_mgmt_anon_exec_check.sql',
+    root / 'test_p5_group3_admin_user_mgmt_revocation.py',
+)
+for path in expected_files:
+    require(path.exists(), f'Group 3 execution-package file missing: {path.name}')
 
 require('Group 1 and Group 2 predecessor gates are complete' in doc,
         'Group 3 doc does not record completed predecessor chain')
@@ -83,10 +86,8 @@ require('20260823062545 / p5_group2_revoke_legacy_credential_status_anon_exec' i
         'Group 3 doc missing accepted Group2 migration')
 require('258 / 03efe21f9345b9d01a362873b0eaf63834ab641dd0e7c8eee2ab6efa80607224' in doc,
         'Group 3 doc missing accepted Group2 fingerprint')
-require('No forward `REVOKE` migration is included yet.' in doc,
-        'Group 3 doc lost no-forward-migration guard')
-require('No rollback migration is included yet.' in doc,
-        'Group 3 doc lost no-rollback guard')
+require('Execution package is prepared but not applied to Production.' in doc,
+        'Group 3 doc lost pre-apply Production guard')
 require('`9 -> 6`' in doc, 'Group 3 doc lost expected anon transition')
 
 print(
