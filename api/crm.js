@@ -1,5 +1,7 @@
 'use strict';
 
+const { createHash } = require('node:crypto');
+
 const SUPABASE_URL_DEFAULT = 'https://avahcwyxparbcjdfglzx.supabase.co';
 const COOKIE_NAME = '__Host-growthops_crm';
 const COOKIE_MAX_AGE = 7 * 24 * 60 * 60;
@@ -76,6 +78,20 @@ function requestId(req) {
   return `req-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function normalizeTrustedIp(raw) {
+  const ip = String(raw || '').split(',')[0].trim().toLowerCase();
+  if (!ip || ip.length > 64 || !/^[0-9a-f:.]+$/.test(ip)) return '';
+  return ip;
+}
+
+function loginSourceBucket(req) {
+  // Vercel overwrites the incoming x-forwarded-for value at its edge, so the
+  // browser cannot choose this trust input. Only a truncated hash is forwarded.
+  const ip = normalizeTrustedIp(req.headers['x-forwarded-for']);
+  if (!ip) return '';
+  return createHash('sha256').update(ip, 'utf8').digest('hex').slice(0, 24);
+}
+
 function serverConfig() {
   const key = String(process.env.GROWTHOPS_SUPABASE_SECRET_KEY || '').trim();
   if (!/^sb_secret_[A-Za-z0-9_-]+$/.test(key)) return null;
@@ -117,14 +133,19 @@ function safeUpstreamMessage(data) {
   return SAFE_UPSTREAM_MESSAGES.has(message) ? message : '';
 }
 
-async function supabaseRpc(name, args, config) {
+async function supabaseRpc(name, args, config, sourceBucket = '') {
+  const headers = {
+    apikey: config.key,
+    'Content-Type': 'application/json',
+    'Cache-Control': 'no-store',
+  };
+  if (/^[0-9a-f]{24}$/.test(String(sourceBucket))) {
+    headers['x-growthops-source-bucket'] = String(sourceBucket);
+  }
+
   const response = await fetch(`${config.url}/rest/v1/rpc/${encodeURIComponent(name)}`, {
     method: 'POST',
-    headers: {
-      apikey: config.key,
-      'Content-Type': 'application/json',
-      'Cache-Control': 'no-store',
-    },
+    headers,
     body: JSON.stringify(args || {}),
   });
 
@@ -194,7 +215,7 @@ module.exports = async function handler(req, res) {
   try {
     if (LOGIN_RPCS.has(rpc)) {
       delete args.p_token;
-      const data = await supabaseRpc(rpc, args, config);
+      const data = await supabaseRpc(rpc, args, config, loginSourceBucket(req));
       if (data?.error) return json(res, 401, { message: 'LOGIN_FAILED' });
       const token = String(data?.token || '');
       if (!token) return json(res, 502, { message: 'LOGIN_SESSION_MISSING' });

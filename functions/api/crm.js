@@ -24,12 +24,26 @@ function sessionCookie(token){return `${COOKIE_NAME}=${encodeURIComponent(token)
 function clearSessionCookie(){return `${COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict`;}
 function sameOrigin(request){ const site=String(request.headers.get('sec-fetch-site')||'').toLowerCase(); if(site&&site!=='same-origin'&&site!=='none') return false; const origin=String(request.headers.get('origin')||''); if(!origin) return true; try{return origin===new URL(request.url).origin;}catch{return false;} }
 function requestId(request){ const incoming=String(request.headers.get('x-request-id')||'').trim(); if(/^[A-Za-z0-9._:-]{8,128}$/.test(incoming)) return incoming; try{if(globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();}catch{} return `req-${Date.now()}-${Math.random().toString(16).slice(2)}`; }
+function normalizeTrustedIp(raw){ const ip=String(raw||'').split(',')[0].trim().toLowerCase(); if(!ip||ip.length>64||!/^[0-9a-f:.]+$/.test(ip)) return ''; return ip; }
+async function loginSourceBucket(request){
+  // Cloudflare supplies CF-Connecting-IP at the edge. Ignore any browser-chosen
+  // source-bucket header and forward only a truncated SHA-256 of the trusted IP.
+  const ip=normalizeTrustedIp(request.headers.get('cf-connecting-ip'));
+  if(!ip||!globalThis.crypto?.subtle) return '';
+  const digest=await globalThis.crypto.subtle.digest('SHA-256',new TextEncoder().encode(ip));
+  return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('').slice(0,24);
+}
 function serverConfig(env={}){ const key=String(env.GROWTHOPS_SUPABASE_SECRET_KEY||'').trim(); if(!/^sb_secret_[A-Za-z0-9_-]+$/.test(key)) return null; return {url:String(env.GROWTHOPS_SUPABASE_URL||SUPABASE_URL_DEFAULT).replace(/\/+$/,''),key}; }
 function json(status,body,requestIdValue,extraHeaders={}){ const headers=new Headers({'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store, max-age=0','Pragma':'no-cache','X-Request-ID':requestIdValue,...extraHeaders}); return new Response(JSON.stringify(body),{status,headers}); }
 async function bodyObject(request){ const text=await request.text(); if(!text) return {}; try{return JSON.parse(text);}catch{return null;} }
 function safeLog(event,requestIdValue,rpc,status){ console.error(JSON.stringify({event,platform:'cloudflare',requestId:requestIdValue,rpc:ALL_RPCS.has(rpc)?rpc:'unknown',status:Number(status||0)})); }
 function safeUpstreamMessage(data){ const message=String(data?.message||'').trim(); return SAFE_UPSTREAM_MESSAGES.has(message)?message:''; }
-async function supabaseRpc(name,args,config){ const response=await fetch(`${config.url}/rest/v1/rpc/${encodeURIComponent(name)}`,{method:'POST',headers:{apikey:config.key,'Content-Type':'application/json','Cache-Control':'no-store'},body:JSON.stringify(args||{})}); let data=null; try{data=await response.json();}catch{} if(!response.ok){ const error=new Error('UPSTREAM_RPC_FAILED'); error.status=response.status; error.safeMessage=safeUpstreamMessage(data); error.sessionRelated=/SESSION|TOKEN|UNAUTHORIZED/i.test(String(data?.message||data?.hint||'')); throw error;} return data; }
+async function supabaseRpc(name,args,config,sourceBucket=''){
+  const headers={apikey:config.key,'Content-Type':'application/json','Cache-Control':'no-store'};
+  if(/^[0-9a-f]{24}$/.test(String(sourceBucket))) headers['x-growthops-source-bucket']=String(sourceBucket);
+  const response=await fetch(`${config.url}/rest/v1/rpc/${encodeURIComponent(name)}`,{method:'POST',headers,body:JSON.stringify(args||{})});
+  let data=null; try{data=await response.json();}catch{} if(!response.ok){ const error=new Error('UPSTREAM_RPC_FAILED'); error.status=response.status; error.safeMessage=safeUpstreamMessage(data); error.sessionRelated=/SESSION|TOKEN|UNAUTHORIZED/i.test(String(data?.message||data?.hint||'')); throw error;} return data;
+}
 function sanitizeUpstreamError(error){ const safeMessage=String(error?.safeMessage||''); if(safeMessage){ if(safeMessage.endsWith('_THROTTLED'))return{status:429,message:safeMessage}; if(safeMessage==='FORBIDDEN')return{status:403,message:safeMessage}; return{status:400,message:safeMessage}; } const s=Number(error?.status||0); if(s===400)return{status:400,message:'UPSTREAM_BAD_REQUEST'}; if(s===401)return{status:401,message:'SESSION_INVALID'}; if(s===403)return{status:403,message:'REQUEST_DENIED'}; if(s===404)return{status:404,message:'UPSTREAM_NOT_FOUND'}; if(s===409)return{status:409,message:'CONFLICT'}; if(s===429)return{status:429,message:'RATE_LIMITED'}; return{status:502,message:'UPSTREAM_REQUEST_FAILED'}; }
 function stripSessionToken(data){ if(!data||typeof data!=='object'||Array.isArray(data)||!Object.prototype.hasOwnProperty.call(data,'token')) return data; const safe={...data}; delete safe.token; return safe; }
 
@@ -43,7 +57,7 @@ export async function onRequest(context){
   const config=serverConfig(env); if(!config){ safeLog('server_identity_missing',requestIdValue,rpc,503); return respond(503,{message:'SERVER_IDENTITY_NOT_CONFIGURED'}); }
   const cookies=parseCookies(request.headers.get('cookie')||''); const sessionToken=String(cookies[COOKIE_NAME]||'');
   try{
-    if(LOGIN_RPCS.has(rpc)){ delete args.p_token; const data=await supabaseRpc(rpc,args,config); if(data?.error) return respond(401,{message:'LOGIN_FAILED'}); const token=String(data?.token||''); if(!token) return respond(502,{message:'LOGIN_SESSION_MISSING'}); return respond(200,stripSessionToken(data),{'Set-Cookie':sessionCookie(token)}); }
+    if(LOGIN_RPCS.has(rpc)){ delete args.p_token; const data=await supabaseRpc(rpc,args,config,await loginSourceBucket(request)); if(data?.error) return respond(401,{message:'LOGIN_FAILED'}); const token=String(data?.token||''); if(!token) return respond(502,{message:'LOGIN_SESSION_MISSING'}); return respond(200,stripSessionToken(data),{'Set-Cookie':sessionCookie(token)}); }
     if(PUBLIC_RPCS.has(rpc)){ delete args.p_token; return respond(200,stripSessionToken(await supabaseRpc(rpc,args,config))); }
     if(!sessionToken) return respond(401,{message:'SESSION_REQUIRED'},{'Set-Cookie':clearSessionCookie()});
     args.p_token=sessionToken;
