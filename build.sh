@@ -82,6 +82,7 @@ python3 test_p5_group6_public_boundary_candidate.py
 node test_p5_group6_public_boundary_bff.mjs
 python3 test_p5_group6_public_boundary_revocation.py
 python3 test_post_p5_audit_sequence_acl.py
+python3 test_post_p5_service_role_rpc_minimization.py
 node --check dist/cloud-adapter.js
 node --check dist/cloud-security-hotfix.js
 node --check dist/cloud-ui-action-bridge.js
