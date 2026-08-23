@@ -2,6 +2,19 @@ const SUPABASE_URL_DEFAULT = 'https://avahcwyxparbcjdfglzx.supabase.co';
 const COOKIE_NAME = '__Host-growthops_crm';
 const COOKIE_MAX_AGE = 7 * 24 * 60 * 60;
 
+// Cloudflare Pages `_headers` rules do not apply to Pages Functions. Keep these
+// dynamic-response headers byte-for-byte aligned with vercel.json; the build gate
+// in cloudflare_headers_finalize.py verifies every key/value on every build.
+const SECURITY_HEADERS = Object.freeze({
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "no-referrer",
+  "X-Frame-Options": "DENY",
+  "X-Permitted-Cross-Domain-Policies": "none",
+  "Cross-Origin-Opener-Policy": "same-origin",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+  "Content-Security-Policy": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; frame-src 'none'; form-action 'self'; connect-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://unpkg.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: blob:; media-src 'self' data: blob:; worker-src 'self' blob:; manifest-src 'self'; upgrade-insecure-requests",
+});
+
 const PUBLIC_RPCS = new Set(['crm_public_status']);
 const LOGIN_RPCS = new Set(['crm_login_v3']);
 const AUTH_RPCS = new Set([
@@ -34,7 +47,7 @@ async function loginSourceBucket(request){
   return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('').slice(0,24);
 }
 function serverConfig(env={}){ const key=String(env.GROWTHOPS_SUPABASE_SECRET_KEY||'').trim(); if(!/^sb_secret_[A-Za-z0-9_-]+$/.test(key)) return null; return {url:String(env.GROWTHOPS_SUPABASE_URL||SUPABASE_URL_DEFAULT).replace(/\/+$/,''),key}; }
-function json(status,body,requestIdValue,extraHeaders={}){ const headers=new Headers({'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store, max-age=0','Pragma':'no-cache','X-Request-ID':requestIdValue,...extraHeaders}); return new Response(JSON.stringify(body),{status,headers}); }
+function json(status,body,requestIdValue,extraHeaders={}){ const headers=new Headers({...extraHeaders,...SECURITY_HEADERS,'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store, max-age=0','Pragma':'no-cache','X-Request-ID':requestIdValue}); return new Response(JSON.stringify(body),{status,headers}); }
 async function bodyObject(request){ const text=await request.text(); if(!text) return {}; try{return JSON.parse(text);}catch{return null;} }
 function safeLog(event,requestIdValue,rpc,status){ console.error(JSON.stringify({event,platform:'cloudflare',requestId:requestIdValue,rpc:ALL_RPCS.has(rpc)?rpc:'unknown',status:Number(status||0)})); }
 function safeUpstreamMessage(data){ const message=String(data?.message||'').trim(); return SAFE_UPSTREAM_MESSAGES.has(message)?message:''; }

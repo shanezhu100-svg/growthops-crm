@@ -39,6 +39,7 @@ python3 test_workspace_state_secret_hard_guard.py
 python3 test_backup_security_output.py
 python3 test_vercel_security_headers.py
 python3 cloudflare_headers_finalize.py
+node test_cloudflare_function_security_headers.mjs
 python3 test_rpc_surface_hardening.py
 python3 test_session_security_migrations.py
 python3 cloud_save_queue_finalize.py
