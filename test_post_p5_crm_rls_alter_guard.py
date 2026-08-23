@@ -32,9 +32,13 @@ require('create event trigger growthops_crm_rls_guard_ddl' in low and "when tag 
         'RLS guard must listen exactly to ALTER TABLE')
 require('alter default privileges' not in low,
         'RLS guard must not alter global/default privileges')
-require('growthops_crm_acl_guard_ddl' not in low,
+require('create event trigger growthops_crm_acl_guard_ddl' not in low and
+        'drop event trigger if exists growthops_crm_acl_guard_ddl' not in low and
+        'create or replace function public.growthops_crm_acl_guard_ddl()' not in low,
         'RLS guard migration must not replace the ACL guard')
-require('ensure_rls' not in low,
+require('create event trigger ensure_rls' not in low and
+        'drop event trigger if exists ensure_rls' not in low and
+        'create or replace function public.rls_auto_enable()' not in low,
         'RLS guard migration must not replace the create-time RLS guard')
 
 rb = rollback.lower()
