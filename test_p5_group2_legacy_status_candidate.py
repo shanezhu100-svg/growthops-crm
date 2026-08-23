@@ -31,18 +31,21 @@ require(f'"{legacy_rpc}"' in v6_test, 'v6 output test does not explicitly forbid
 require(safe_summary in v6_finalizer, 'v6 finalizer no longer requires safe-summary RPC')
 require(safe_summary in v6_test, 'v6 output test no longer requires safe-summary RPC')
 
-# Group 1 must be recorded as accepted before Group 2 can advance.
+# Group 1 predecessor and frozen baseline must remain recorded.
 require('Group 1 predecessor gate is complete' in doc, 'candidate doc does not record completed Group1 predecessor gate')
 require('e5314a3c4cdf33c5bc2a42bb380fe029321d153e' in doc, 'candidate doc missing accepted Group1 main SHA')
 require('258 / beb4efcaa8d85d13fc826cf98a66ea8981c3d4f3f4ff2c930acca3df196ef07e' in doc, 'candidate doc missing accepted Group1 fingerprint')
 
-# The execution package may be present, but it must still record that Group 2 has
-# not yet changed Production at this pre-apply checkpoint.
-require('Production privilege change has not been applied yet' in doc, 'candidate doc lost pre-apply Production guard')
-require('10 -> 9' in doc, 'candidate doc lost expected Group2 anon transition')
+# Final Group 2 evidence must record the exact Production migration and post-change baseline.
+require('20260823062545 / p5_group2_revoke_legacy_credential_status_anon_exec' in doc, 'candidate doc missing applied Group2 migration record')
+require('target `anon=false`' in doc, 'candidate doc missing post-change anon=false evidence')
+require('anon EXECUTE: `9` (`10 -> 9`)' in doc, 'candidate doc missing post-change anon total')
+require('258 / 03efe21f9345b9d01a362873b0eaf63834ab641dd0e7c8eee2ab6efa80607224' in doc, 'candidate doc missing post-Group2 fingerprint')
+require('77d5cfdd-ec0b-4305-b555-2ee275e98318' in doc, 'candidate doc missing Cloudflare exact-head evidence')
+require('dpl_A2pkY3p3HksUa4G3W974kMQ54TGy' in doc, 'candidate doc missing Vercel exact-head evidence')
 
 print(
     'P5_GROUP2_LEGACY_STATUS_CANDIDATE_OK: '
     'legacy-status=absent-from-bffs+forbidden-in-final-runtime; '
-    'safe-summary=preserved; group1=accepted; production-change=none'
+    'safe-summary=preserved; group1=accepted; production-change=applied+verified'
 )
