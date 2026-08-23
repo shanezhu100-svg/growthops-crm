@@ -4,23 +4,23 @@ Last updated: 2026-08-23
 
 ## Status
 
-Preparation only. Production currently remains at accepted `main@615d2c966a89d093b62492879b28cd86423ae684` with 40 CRM functions, direct function EXECUTE boundary `PUBLIC/anon/authenticated/service_role = 0/0/0/12`, RLS `9/9`, latest migration `20260823120150 / post_p5_minimize_service_role_rpc_exec`, and canonical fingerprint `258 / 625be29b82c3dfac4282313c4c32558ed3d1acebf878325959cad97fc8dc6691`.
+Production hardening is applied and verified. Accepted predecessor was `main@615d2c966a89d093b62492879b28cd86423ae684` with 40 CRM functions, function EXECUTE boundary `PUBLIC/anon/authenticated/service_role = 0/0/0/12`, RLS `9/9`, latest migration `20260823120150 / post_p5_minimize_service_role_rpc_exec`, and canonical fingerprint `258 / 625be29b82c3dfac4282313c4c32558ed3d1acebf878325959cad97fc8dc6691`.
 
-## Goal
+## Goal and exact scope
 
 Remove direct `service_role` relation access to CRM data while keeping the 12 controlled SECURITY DEFINER function entries intact.
 
-Current direct relation authority:
+Pre-change direct relation authority:
 - 9 CRM tables;
 - 7 table privileges per table (`SELECT`, `INSERT`, `UPDATE`, `DELETE`, `TRUNCATE`, `REFERENCES`, `TRIGGER`);
 - 63 service-role table grant rows total;
 - audit identity sequence `SELECT`, `UPDATE`, `USAGE`.
 
-Proposed direct relation authority after hardening:
+Post-change direct relation authority:
 - service-role CRM table grants: 0;
 - service-role CRM sequence grants: 0;
 - browser-role CRM table/sequence grants: remain 0;
-- direct CRM function EXECUTE remains exactly 12 for service_role and 0 for browser roles.
+- direct CRM function EXECUTE remains exactly 12 for service_role and 0 for PUBLIC/anon/authenticated.
 
 ## Dependency proof
 
@@ -36,7 +36,7 @@ Rehearsal result:
 - direct `crm_users` read: `42501 permission denied`;
 - direct Vault-table read: `42501 permission denied`;
 - direct audit sequence `nextval`: `42501 permission denied`;
-- transaction rolled back; Production restored to 63 table grants + sequence privileges.
+- transaction rolled back; Production restored to 63 table grants + sequence privileges before the real apply.
 
 A second net-zero transaction computed the deterministic expected post-hardening canonical and rolled back:
 - inventory lines: `195`;
@@ -44,9 +44,9 @@ A second net-zero transaction computed the deterministic expected post-hardening
 - service-role CRM table grant rows: `0`;
 - service-role audit-sequence direct privileges: none.
 
-The canonical line count drops from 258 to 195 because the repository-frozen fingerprint includes one `TPRIV` line for each of the 63 current service-role table grants. Sequence ACL is outside that legacy canonical inventory, so it is checked separately by the post-check.
+The canonical line count drops from 258 to 195 because the frozen fingerprint includes one `TPRIV` line for each of the 63 prior service-role table grants. Sequence ACL is outside that legacy canonical inventory and is checked separately.
 
-## Exact package
+## Package
 
 Forward migration:
 `supabase/migrations/20260823_post_p5_revoke_service_role_relation_acl.sql`
@@ -63,19 +63,56 @@ Read-only post-check:
 Static build gate:
 `test_post_p5_service_role_relation_acl.py`
 
-## Hard gate
+## Pre-apply evidence
 
-No Production relation ACL change is allowed until the exact preparation head passes Vercel and Cloudflare previews, predecessor security gates remain green, and a fresh Production freeze confirms:
-- functions `40`, service-role function EXECUTE `12`, browser/PUBLIC function EXECUTE `0`;
-- service-role CRM table grant rows `63` across 9 tables;
+Preparation head:
+`703e11a8cfdd1c7d276b919607213ad7ace2b2f1`
+
+Vercel:
+- deployment `dpl_JQHLuiZMEvY2SAS311n5MeEv32mB`;
+- READY;
+- relation ACL gate PASS;
+- predecessor/P3P4 gates PASS.
+
+Cloudflare:
+- deployment `353009e3-24f4-4742-8ddf-c8b3f9a5246b`;
+- exact URL `https://353009e3.growthops-crm.pages.dev/`;
+- success;
+- relation ACL gate PASS;
+- P1 output parity PASS.
+
+Fresh Production freeze immediately before apply confirmed:
+- functions 40;
+- function EXECUTE `0 / 0 / 0 / 12`;
+- service-role CRM table grant rows 63 across 9 tables;
 - service-role audit sequence SELECT/UPDATE/USAGE all present;
+- browser relation grants absent;
 - RLS `9/9`;
-- latest migration `20260823120150`;
+- latest migration `20260823120150 / post_p5_minimize_service_role_rpc_exec`;
 - canonical `258 / 625be29b82c3dfac4282313c4c32558ed3d1acebf878325959cad97fc8dc6691`.
 
-Expected post-change state:
+## Production result
+
+Applied migration:
+
+`20260823123328 / post_p5_revoke_service_role_relation_acl`
+
+Verified state:
 - function boundary unchanged at `0 / 0 / 0 / 12`;
 - service-role CRM table grants `63 -> 0`;
 - service-role CRM sequence privileges `3 -> 0`;
+- browser CRM table grants: 0;
+- browser audit-sequence privileges: 0;
 - RLS `9/9`;
-- expected canonical `195 / edfcd23e20985252ca529aaeeb8a2cb1d22821c70202888806c5773c20df516b`.
+- canonical `195 / edfcd23e20985252ca529aaeeb8a2cb1d22821c70202888806c5773c20df516b`.
+
+Post-apply transaction smoke test:
+- preserved RPC permission-denied count: 0;
+- public/login/logout entries enter normally;
+- session-bound RPCs reach expected `INVALID_SESSION`;
+- bootstrap reaches expected `ALREADY_INITIALIZED`;
+- direct users-table read, Vault-table read, and audit-sequence `nextval` each return `42501 permission denied`.
+
+## Final merge gate
+
+The final evidence-only head must pass Vercel and Cloudflare with this relation ACL gate, predecessor/P3P4 gates, and Cloudflare P1 parity green. Immediately before merge, re-confirm Production at `40 funcs / 0 PUBLIC / 0 anon / 0 authenticated / 12 service_role`, 0 service-role CRM table grants, 0 service-role audit-sequence direct privileges, RLS `9/9`, migration `20260823123328`, and canonical `195 / edfcd23e20985252ca529aaeeb8a2cb1d22821c70202888806c5773c20df516b`.

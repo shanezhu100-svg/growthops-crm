@@ -64,9 +64,11 @@ for expected, label in (
     ('615d2c966a89d093b62492879b28cd86423ae684', 'accepted predecessor main'),
     ('20260823120150 / post_p5_minimize_service_role_rpc_exec', 'accepted predecessor migration'),
     ('258 / 625be29b82c3dfac4282313c4c32558ed3d1acebf878325959cad97fc8dc6691', 'pre-change canonical'),
-    ('195 / edfcd23e20985252ca529aaeeb8a2cb1d22821c70202888806c5773c20df516b', 'expected post-change canonical'),
+    ('20260823123328 / post_p5_revoke_service_role_relation_acl', 'applied Production migration'),
+    ('195 / edfcd23e20985252ca529aaeeb8a2cb1d22821c70202888806c5773c20df516b', 'verified post-change canonical'),
     ('63 -> 0', 'table-grant transition'),
     ('3 -> 0', 'sequence-privilege transition'),
+    ('preserved RPC permission-denied count: 0', 'post-apply wrapper smoke'),
 ):
     require(expected in doc, f'doc missing {label}')
 
@@ -76,6 +78,7 @@ require(build.count('python3 test_post_p5_service_role_relation_acl.py') == 1,
 print(
     'POST_P5_SERVICE_ROLE_RELATION_ACL_OK: '
     'tables=9x7-service-role-direct-revoke; sequence=3-direct-revoke; '
-    'rpc-entry=security-definer-preserved; rehearsal=zero-rpc-permission-denied; '
-    'direct-relation=42501; expected-fingerprint=edfcd23e; production-change=none'
+    'rpc-entry=security-definer-preserved; direct-relation=42501; '
+    'service-table-grants=0; service-sequence=0; fingerprint=edfcd23e; '
+    'production-change=applied+verified'
 )
