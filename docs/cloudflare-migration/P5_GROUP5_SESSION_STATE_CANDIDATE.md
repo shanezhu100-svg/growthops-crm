@@ -1,125 +1,112 @@
-# P5 Group 5 Candidate — Session / Workspace State RPCs
+# P5 Group 5 — Session / Workspace State Privilege Hardening
 
 Last updated: 2026-08-23
 
 ## Status
 
-Groups 1–4 predecessor gates are complete. Group 5 preflight is complete and the exact three-RPC execution package is prepared. Production has not been changed by Group 5 yet.
+Groups 1–4 predecessor gates are complete. Group 5 Production execution is complete and verified. The only Production privilege change was removal of `anon` EXECUTE from exactly three server-mediated session/workspace-state RPCs.
 
-This branch is reconstructed directly onto accepted `main@385bff8e0316bf8b1460b12202ea88f8c880a2c4`.
+This branch is based directly on accepted `main@385bff8e0316bf8b1460b12202ea88f8c880a2c4` pending final evidence-head merge.
 
-## Candidate scope
-
-Exactly three live authenticated RPCs:
+## Exact scope
 
 - `crm_load_state_v3(text)`
 - `crm_save_state(text,jsonb,bigint)`
 - `crm_logout(text)`
 
-These are core runtime operations, so the later anon revoke must preserve the same-origin BFF session boundary and each RPC's distinct database-side semantics.
-
 ## Accepted predecessor baseline
 
-Group 4 is complete and merged. Accepted Production baseline immediately before Group 5:
+Immediately before Group 5, Production was verified as:
 
 - `main`: `385bff8e0316bf8b1460b12202ea88f8c880a2c4`;
 - CRM functions: `40`;
 - anon EXECUTE: `5`;
 - authenticated EXECUTE: `0`;
 - service_role EXECUTE: `40`;
-- CRM tables with RLS: `9/9`;
+- RLS: `9/9`;
 - latest migration: `20260823071407 / p5_group4_revoke_safe_summary_anon_exec`;
-- canonical security fingerprint: `258 / c3a5ef7bdd5c5d7c347d8155224ae4cc299e80917fccc8a622096c35e6e1bf4b`.
+- canonical fingerprint: `258 / c3a5ef7bdd5c5d7c347d8155224ae4cc299e80917fccc8a622096c35e6e1bf4b`.
 
-## Distinct database invariants
+All three exact targets were `anon=true`, `authenticated=false`, `service_role=true`, and `PUBLIC EXECUTE=false`.
+
+## Preserved runtime/database invariants
 
 ### `crm_load_state_v3`
 
-- wraps `crm_load_state(p_token)`;
-- the underlying state load resolves `crm_session_context(p_token)` and scopes reads by the session workspace;
-- the v3 wrapper performs an additional `crm_redact_secrets` pass;
-- returned state must remain free of live credential plaintext.
+The function still wraps state load and applies secret redaction. The underlying state path remains session/workspace scoped.
 
 ### `crm_save_state`
 
-- resolves `crm_session_context(p_token)` and locks the current workspace state row;
-- enforces optimistic revision conflict detection;
-- redacts incoming/public state and restores role-restricted fields;
-- only ADMIN may contribute extracted live-secret updates;
-- prunes/writes Vault-backed secret state separately from public workspace state;
-- records a server audit event.
+The live function still contains session-context enforcement, optimistic revision handling, state redaction, role-aware secret handling, Vault-backed secret extraction/write safeguards, and server audit logging.
 
 ### `crm_logout`
 
-- deliberately does not require `crm_session_context`;
-- deletes only the session row whose stored hash matches `crm_token_hash(p_token)`;
-- the BFF clears the `__Host-growthops_crm` cookie on success and upstream failure.
+The function deliberately does not require `crm_session_context`; it hashes `p_token` and deletes only the matching CRM session. Both BFFs clear `__Host-growthops_crm` on logout success and upstream failure.
 
-The logout difference is intentional and must not be incorrectly normalized into a direct-session-context requirement.
+No CRM business data, session token, or Vault plaintext was read during Group 5 preflight/post-checks.
 
-## BFF invariants
+## BFF boundary
 
-For all three RPCs on both Vercel and Cloudflare:
+Both Vercel and Cloudflare continue to classify all three RPCs as authenticated-only. Missing HttpOnly session cookie returns `401 SESSION_REQUIRED` before upstream contact. Browser-supplied `p_token` is replaced by the server-read cookie token. Same-origin enforcement and server `sb_secret_` identity remain mandatory.
 
-- they are authenticated-only, never public/login;
-- no HttpOnly cookie means `401 SESSION_REQUIRED` before upstream RPC contact;
-- with a cookie, any browser-supplied `p_token` is overwritten with the server-read cookie token;
-- same-origin enforcement remains active;
-- only server `GROWTHOPS_SUPABASE_SECRET_KEY` / `sb_secret_` identity is accepted;
-- error responses remain sanitized and request args/tokens are not logged.
-
-For logout specifically, the browser cookie is cleared on both success and upstream failure.
-
-## Preparation exact-head evidence
+## Preparation evidence
 
 Preparation head:
 
 `6a19a63fc39a1536617dec6db33710342bbdd035`
 
+Vercel preparation deployment:
+
+- `dpl_Bcc1evu3q5LqNosYwm2yPLZVdY7k`
+- READY
+- Group 5 candidate/BFF PASS
+- predecessor and P3/P4 gates PASS
+
+Cloudflare preparation deployment:
+
+- `4905e9f1-0957-4cfc-a332-79af7279e40e`
+- `https://4905e9f1.growthops-crm.pages.dev/`
+- success
+- Group 5 candidate/BFF PASS
+- P3/P4 attack regression PASS
+- P1 parity PASS
+
+## Execution-package exact-head evidence
+
+Execution-package head:
+
+`1068d5ba4c603f64b34ca99c6257718e268f9e1e`
+
 Vercel:
 
-- deployment `dpl_Bcc1evu3q5LqNosYwm2yPLZVdY7k`;
+- deployment `dpl_HWTZvqWfWW4gCGX8RjrMLwEMxPqt`;
 - state `READY`;
-- Group 1–4 gates PASS;
 - `P5_GROUP5_SESSION_STATE_CANDIDATE_OK` PASS;
 - `P5_GROUP5_SESSION_STATE_BFF_OK` PASS;
-- P3/P4 attack regression PASS, including logout upstream-failure cookie clearing.
+- `P5_GROUP5_SESSION_STATE_REVOCATION_OK` PASS;
+- predecessor Group 1–4 gates and P3/P4 attack regression PASS.
 
 Cloudflare Pages:
 
-- deployment `4905e9f1-0957-4cfc-a332-79af7279e40e`;
-- URL `https://4905e9f1.growthops-crm.pages.dev/`;
+- deployment `b5b3919a-9d3d-49a7-b2c9-b45fa2df8d05`;
+- URL `https://b5b3919a.growthops-crm.pages.dev/`;
 - status `success`;
-- same exact commit `6a19a63fc39a1536617dec6db33710342bbdd035`;
-- Group 5 candidate/BFF gates PASS;
+- same exact commit `1068d5ba4c603f64b34ca99c6257718e268f9e1e`;
+- Group 5 candidate/BFF/revocation gates PASS;
 - P3/P4 attack regression PASS;
 - P1 output parity PASS.
 
-## Live Production preflight
+## Production migration
 
-Read-only database inspection confirmed every target is currently:
-
-- `anon=true`;
-- `authenticated=false`;
-- `service_role=true`;
-- `PUBLIC EXECUTE=false`.
-
-It also confirmed:
-
-- `crm_load_state_v3` still wraps the state loader and applies secret redaction;
-- `crm_save_state` still contains session context, revision, redaction, live-secret extraction/Vault handling, and server-audit safeguards;
-- `crm_logout` still intentionally omits session-context resolution and deletes only the token-hash-matched session;
-- global state remains `40 / 5 / 0 / 40`, RLS `9/9`, latest migration `20260823071407`.
-
-No CRM business state, session token, or Vault plaintext was read during this preflight.
-
-## Prepared execution package
-
-Forward migration:
+Forward migration file:
 
 `supabase/migrations/20260823_p5_group5_revoke_session_state_anon_exec.sql`
 
-It contains exactly three anon EXECUTE revocations:
+Applied Production migration record:
+
+`20260823085810 / p5_group5_revoke_session_state_anon_exec`
+
+Exact privilege changes:
 
 ```sql
 revoke execute on function public.crm_load_state_v3(text) from anon;
@@ -135,35 +122,49 @@ Read-only post-check:
 
 `supabase/baseline/p5_group5_session_state_anon_exec_check.sql`
 
-Static package gate:
+## Production post-change verification
 
-`test_p5_group5_session_state_revocation.py`
+All three targets now have:
 
-Expected transition if no unrelated privilege change occurs:
+- `anon=false`;
+- `authenticated=false`;
+- `service_role=true`;
+- `PUBLIC EXECUTE=false`.
 
-- anon CRM EXECUTE: `5 -> 2`;
-- authenticated CRM EXECUTE: remains `0`;
-- service_role CRM EXECUTE: remains `40`;
-- total CRM functions: remains `40`.
+Global Production state is now:
 
-The two remaining anon-executable browser-boundary RPCs must be exactly `crm_login_v3` and `crm_public_status`; they belong to Group 6 and must not be changed by Group 5.
+- CRM functions: `40`;
+- anon EXECUTE: `2` (`5 -> 2`);
+- authenticated EXECUTE: `0`;
+- service_role EXECUTE: `40`;
+- RLS: `9/9`;
+- latest migration: `20260823085810 / p5_group5_revoke_session_state_anon_exec`;
+- canonical fingerprint: `258 / 50522a7a3029da6a81a094241e804cb540987616e0f8622dc6606e2fab39e3cb`.
 
-## Pre-apply hard gate
+The only remaining anon-executable CRM RPCs are exactly:
 
-Do not apply the Group 5 migration until the current execution-package head independently passes both Vercel and Cloudflare with:
+- `crm_login_v3(text,text)`;
+- `crm_public_status()`.
 
-- Group 5 candidate gate;
-- Group 5 BFF gate;
-- Group 5 revocation package gate;
-- predecessor Group 1–4 gates;
-- P3/P4 attack regression;
-- Cloudflare P1 output parity.
+Those belong to Group 6 and were not modified by Group 5.
 
-Immediately before apply, re-lock Production to the accepted `main`, exact three target grants, `40 / 5 / 0 / 40`, RLS `9/9`, migration `20260823071407`, and canonical fingerprint `258 / c3a5ef7bdd5c5d7c347d8155224ae4cc299e80917fccc8a622096c35e6e1bf4b`.
+The canonical 258-line algorithm is the repository-frozen `supabase/baseline/p0_schema_security_fingerprint.sql`; the fingerprint delta is expected from exactly three `FPRIV` transitions.
 
-## Rollback triggers
+## Automated gates
 
-Roll back if either exact-head platform loses authenticated state load, safe state save/revision handling, role/secret restrictions, logout cookie clearing, or expected invalid-session behavior. The inverse rollback restores only the three removed anon grants.
+Expected markers:
+
+`P5_GROUP5_SESSION_STATE_CANDIDATE_OK: load+save+logout=auth-only-bff; cookie-token=authoritative; save-secret-guard=covered; logout-distinction=preserved; group4=accepted; production-change=applied+verified`
+
+`P5_GROUP5_SESSION_STATE_BFF_OK: load+save+logout=no-session-zero-upstream; cookie-token=authoritative; logout-success=clears-cookie; both-platforms=pass`
+
+`P5_GROUP5_SESSION_STATE_REVOCATION_OK: revoke=3-session-state-anon-only; rollback=3-exact-grants; post-check=read-only; auth-bff=session-gated; expected-anon=2; service-role=40`
+
+## Final merge gate
+
+Before merging PR #25, the final evidence-only head must independently pass Vercel and Cloudflare with Group 1–5 gates, P3/P4 attack regression, and Cloudflare P1 parity green.
+
+After merge, verify `main`, Vercel Production, Cloudflare Production, Production `40 / 2 / 0 / 40`, RLS `9/9`, latest migration `20260823085810`, remaining anon boundary exactly login/status, and canonical fingerprint `258 / 50522a7a3029da6a81a094241e804cb540987616e0f8622dc6606e2fab39e3cb`.
 
 ## Non-goals
 
