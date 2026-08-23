@@ -39,7 +39,7 @@ require('crm_server_audit_logs_id_seq' in check, 'sequence post-check lost exact
 for role in ('public', 'anon', 'authenticated', 'service_role'):
     require(f"has_sequence_privilege('{role}'" in check, f'post-check lost {role} sequence privilege inspection')
 for privilege in ('select', 'update', 'usage'):
-    require(f"'{privilege.upper()}'" in check, f'post-check lost {privilege} privilege inspection')
+    require(f"'{privilege}'" in check, f'post-check lost {privilege} privilege inspection')
 require('total_crm_sequences' in check, 'post-check lost CRM sequence inventory count')
 for forbidden in (' revoke ', ' grant ', ' create ', ' alter ', ' drop ', ' insert ', ' update ', ' delete ', ' truncate '):
     require(forbidden not in f' {check} ', f'sequence post-check is not read-only: {forbidden.strip()}')
