@@ -36,8 +36,9 @@ require('Group 1 predecessor gate is complete' in doc, 'candidate doc does not r
 require('e5314a3c4cdf33c5bc2a42bb380fe029321d153e' in doc, 'candidate doc missing accepted Group1 main SHA')
 require('258 / beb4efcaa8d85d13fc826cf98a66ea8981c3d4f3f4ff2c930acca3df196ef07e' in doc, 'candidate doc missing accepted Group1 fingerprint')
 
-# This synchronized preparation checkpoint must still be non-mutating.
-require('no Group 2 Production privilege change' in doc, 'candidate doc lost preparation-only guard')
+# The execution package may be present, but it must still record that Group 2 has
+# not yet changed Production at this pre-apply checkpoint.
+require('Production privilege change has not been applied yet' in doc, 'candidate doc lost pre-apply Production guard')
 require('10 -> 9' in doc, 'candidate doc lost expected Group2 anon transition')
 
 print(
