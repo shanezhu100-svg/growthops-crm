@@ -45,6 +45,14 @@ function okJson(data) {
   });
 }
 
+function errorJson(status, message, hint = '') {
+  return Promise.resolve({
+    ok: false,
+    status,
+    async json() { return { message, hint }; },
+  });
+}
+
 (async () => {
   {
     const { res, json } = await invoke({ method: 'GET' });
@@ -180,6 +188,35 @@ function okJson(data) {
     assert.equal(Object.prototype.hasOwnProperty.call(json, 'accountSecrets'), false);
   }
 
+  // Known credential-control errors are safe UI codes and may cross the BFF so the
+  // browser can distinguish rate limiting from a generic backend failure.
+  {
+    const { res, json } = await invoke({
+      headers: { ...sameOriginHeaders, cookie: '__Host-growthops_crm=cookie-session-token' },
+      body: {
+        rpc: 'crm_reveal_client_secret_value_v5',
+        args: { p_unlock_token: 'unlock-example', p_client_id: 'client-1', p_platform: 'facebook', p_account_id: 'account-1', p_field: 'password' },
+      },
+    }, async () => errorJson(400, 'CREDENTIAL_REVEAL_THROTTLED'));
+    assert.equal(res.statusCode, 429);
+    assert.equal(json.message, 'CREDENTIAL_REVEAL_THROTTLED');
+    assert.equal(res.headers['set-cookie'], undefined);
+  }
+
+  // Arbitrary upstream text must remain hidden even when PostgREST returns 400.
+  {
+    const { res, json } = await invoke({
+      headers: { ...sameOriginHeaders, cookie: '__Host-growthops_crm=cookie-session-token' },
+      body: {
+        rpc: 'crm_reveal_client_secret_value_v5',
+        args: { p_unlock_token: 'unlock-example', p_client_id: 'client-1', p_platform: 'facebook', p_account_id: 'account-1', p_field: 'password' },
+      },
+    }, async () => errorJson(400, 'internal table name and sensitive detail'));
+    assert.equal(res.statusCode, 400);
+    assert.equal(json.message, 'UPSTREAM_BAD_REQUEST');
+    assert.equal(res.body.includes('internal table name'), false);
+  }
+
   {
     let requestBody = null;
     const { res } = await invoke({
@@ -198,7 +235,7 @@ function okJson(data) {
     assert.match(String(res.headers['set-cookie'] || ''), /SameSite=Strict/);
   }
 
-  console.log('HTTP_ONLY_SESSION_API_TESTS_OK: login-token-hidden; cookie-injection-enforced; csrf-origin-guard=active; credential-reveal=v5-only; logout-clears-cookie');
+  console.log('HTTP_ONLY_SESSION_API_TESTS_OK: login-token-hidden; cookie-injection-enforced; csrf-origin-guard=active; credential-reveal=v5-only; safe-credential-errors=allowlisted; unknown-errors=sanitized; logout-clears-cookie');
 })().catch(error => {
   console.error(error);
   process.exit(1);

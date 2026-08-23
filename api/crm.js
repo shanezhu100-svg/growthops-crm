@@ -25,6 +25,15 @@ const AUTH_RPCS = new Set([
 ]);
 
 const ALL_RPCS = new Set([...PUBLIC_RPCS, ...LOGIN_RPCS, ...AUTH_RPCS]);
+const SAFE_UPSTREAM_MESSAGES = new Set([
+  'CREDENTIAL_REAUTH_REQUIRED',
+  'CREDENTIAL_REVEAL_THROTTLED',
+  'CREDENTIAL_UNLOCK_REQUIRED',
+  'CREDENTIAL_UNLOCK_INVALID',
+  'CREDENTIAL_UNLOCK_THROTTLED',
+  'INVALID_CREDENTIAL_FIELD',
+  'FORBIDDEN',
+]);
 
 function parseCookies(header = '') {
   const out = {};
@@ -103,6 +112,11 @@ function safeLog(event, requestIdValue, rpc, status) {
   }));
 }
 
+function safeUpstreamMessage(data) {
+  const message = String(data?.message || '').trim();
+  return SAFE_UPSTREAM_MESSAGES.has(message) ? message : '';
+}
+
 async function supabaseRpc(name, args, config) {
   const response = await fetch(`${config.url}/rest/v1/rpc/${encodeURIComponent(name)}`, {
     method: 'POST',
@@ -119,6 +133,7 @@ async function supabaseRpc(name, args, config) {
   if (!response.ok) {
     const error = new Error('UPSTREAM_RPC_FAILED');
     error.status = response.status;
+    error.safeMessage = safeUpstreamMessage(data);
     error.sessionRelated = /SESSION|TOKEN|UNAUTHORIZED/i.test(String(data?.message || data?.hint || ''));
     throw error;
   }
@@ -126,6 +141,12 @@ async function supabaseRpc(name, args, config) {
 }
 
 function sanitizeUpstreamError(error) {
+  const safeMessage = String(error?.safeMessage || '');
+  if (safeMessage) {
+    if (safeMessage.endsWith('_THROTTLED')) return { status: 429, message: safeMessage };
+    if (safeMessage === 'FORBIDDEN') return { status: 403, message: safeMessage };
+    return { status: 400, message: safeMessage };
+  }
   const status = Number(error?.status || 0);
   if (status === 400) return { status: 400, message: 'UPSTREAM_BAD_REQUEST' };
   if (status === 401) return { status: 401, message: 'SESSION_INVALID' };
