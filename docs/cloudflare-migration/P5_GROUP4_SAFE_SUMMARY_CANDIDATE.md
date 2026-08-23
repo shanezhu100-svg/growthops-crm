@@ -1,24 +1,24 @@
-# P5 Group 4 Candidate — Credential Safe Summary
+# P5 Group 4 — Credential Safe Summary Privilege Hardening
 
 Last updated: 2026-08-23
 
 ## Status
 
-Preparation only. Groups 1–3 predecessor gates are complete. This Group 4 branch is reconstructed directly onto accepted `main@b78d3135f648de7f2c2abf417c0cd4f9cc2c6b89` and does **not** change Production database privileges at this checkpoint.
+Groups 1–3 predecessor gates are complete. Group 4 live database preflight is PASS. **Execution package is prepared but not applied to Production.** Cloudflare exact-head verification remains required before Production apply.
 
-## Candidate scope
+This branch is reconstructed directly onto accepted `main@b78d3135f648de7f2c2abf417c0cd4f9cc2c6b89`.
 
-Exactly one live RPC:
+## Exact scope
+
+Group 4 contains exactly one live credential safe-summary RPC:
 
 - `crm_client_account_safe_summary(text,text)`
 
 This is a real final-runtime dependency. The credential UI uses it to render login identifiers plus credential-presence booleans without returning password or 2FA plaintext.
 
-No Group 4 forward `REVOKE` migration is included yet. No Group 4 rollback migration is included yet. No Group 4 SQL has been applied to Production.
-
 ## Accepted predecessor baseline
 
-Group 3 is complete and merged. Current accepted Production baseline:
+Current accepted Production baseline after Group 3:
 
 - `main`: `b78d3135f648de7f2c2abf417c0cd4f9cc2c6b89`;
 - CRM functions: `40`;
@@ -29,55 +29,116 @@ Group 3 is complete and merged. Current accepted Production baseline:
 - latest migration: `20260823064535 / p5_group3_revoke_admin_user_mgmt_anon_exec`;
 - canonical security fingerprint: `258 / 5d43f0f65f80f24aab35d5e60d6c66cb86166f303743a5c9274509625e0c71b3`.
 
-## Required security shape
+## BFF/runtime security boundary
 
-Before any Group 4 privilege change, all of the following must remain true:
+Both Vercel and Cloudflare `/api/crm` BFFs:
 
-- both Vercel and Cloudflare `/api/crm` BFFs classify the RPC under `AUTH_RPCS`, never `PUBLIC_RPCS` or `LOGIN_RPCS`;
-- the BFF requires the `__Host-growthops_crm` HttpOnly, Secure, SameSite=Strict session cookie;
-- missing cookie returns `401 SESSION_REQUIRED` before any upstream RPC call;
-- any browser-supplied `p_token` is overwritten with the server-read cookie token;
-- both BFFs require `GROWTHOPS_SUPABASE_SECRET_KEY` with `sb_secret_` identity and no publishable-key fallback;
-- same-origin checks remain active before dispatch;
-- final shipped credential runtime still depends on `crm_client_account_safe_summary` and keeps retired `crm_client_credential_status` out of runtime;
-- the database function remains `SECURITY DEFINER`, calls `crm_session_context(p_token)`, is workspace-bound, and permits only ADMIN/OPS;
-- the return object remains limited to identifiers plus `hasPassword` / `has2FA` booleans;
-- the function does not call a reveal RPC and does not return password, 2FA, or generic secret plaintext;
-- service_role EXECUTE remains present and authenticated EXECUTE remains absent.
+- classify the RPC under `AUTH_RPCS`, never `PUBLIC_RPCS` or `LOGIN_RPCS`;
+- require the `__Host-growthops_crm` HttpOnly, Secure, SameSite=Strict session cookie;
+- reject missing cookie with `401 SESSION_REQUIRED` before any upstream call;
+- overwrite browser-supplied `p_token` with the server-read cookie token;
+- require `GROWTHOPS_SUPABASE_SECRET_KEY` with `sb_secret_` identity and have no publishable-key fallback;
+- enforce same-origin before dispatch.
 
-The function may inspect Vault-backed credential fields only to derive boolean presence flags. That internal read must never broaden the returned JSON surface.
+The final shipped credential runtime still depends on `crm_client_account_safe_summary` and keeps retired `crm_client_credential_status` out of runtime.
 
-## Group 4 preflight gate
+## Live Production function preflight
 
-Before creating a revoke migration, require exact-current-state evidence that:
+Read-only Production inspection confirms the exact function is currently:
 
-1. both exact-head Vercel and Cloudflare builds are green;
-2. the executable BFF harness proves no-session `401 + zero upstream` and cookie-token authority on both platforms;
-3. final runtime still uses the safe-summary path and excludes legacy credential-status;
-4. live Production implementation retains the session/workspace/ADMIN-or-OPS/Vault-presence-only contract and no reveal call;
-5. Production still shows `anon=true`, `authenticated=false`, `service_role=true` for this function;
-6. accepted global baseline remains `40 / 6 / 0 / 40`, RLS `9/9`, migration `20260823064535`, and fingerprint `258 / 5d43f0f65f80f24aab35d5e60d6c66cb86166f303743a5c9274509625e0c71b3`.
+- `SECURITY DEFINER`;
+- `anon=true`;
+- `authenticated=false`;
+- `service_role=true`;
+- `PUBLIC EXECUTE=false`.
 
-## Intended later privilege change
+Its live definition still:
 
-Only after the preflight passes may a dedicated Group 4 migration revoke `anon` EXECUTE from exactly:
+- calls `crm_session_context`;
+- remains workspace-scoped;
+- permits only ADMIN/OPS;
+- reads the workspace secret tree only to derive credential-presence flags;
+- does not call any `crm_reveal*` RPC;
+- returns identifiers plus `hasPassword` / `has2FA` booleans;
+- does not expose `password`, `2fa`, `loginPassword`, `login_password`, or generic `value` output keys.
 
-`public.crm_client_account_safe_summary(text,text)`
+No Vault plaintext was read or returned during this audit.
 
-Expected transition if no unrelated privilege change occurs:
+## Preparation exact-head evidence
+
+Preparation head: `84733db0d1659d97ca31ee781923658f57131fe4`.
+
+Vercel:
+
+- deployment `dpl_2EsAns1RU9TLZVNrWrEnffWgijrY`;
+- state `READY`;
+- `P5_GROUP4_SAFE_SUMMARY_CANDIDATE_OK` PASS;
+- `P5_GROUP4_SAFE_SUMMARY_BFF_OK` PASS;
+- Group 1–3 gates and P3/P4 attack regression remain PASS.
+
+Cloudflare:
+
+- the browser connector became unavailable before the rebuilt Group 4 exact-head deployment could be independently inspected;
+- therefore Cloudflare exact-head verification remains a hard pre-apply gate;
+- Production must not be changed while this evidence is missing.
+
+## Prepared execution package
+
+Forward migration:
+
+`supabase/migrations/20260823_p5_group4_revoke_safe_summary_anon_exec.sql`
+
+It contains exactly one statement:
+
+```sql
+revoke execute on function public.crm_client_account_safe_summary(text, text) from anon;
+```
+
+Exact inverse rollback:
+
+`supabase/rollback/20260823_p5_group4_restore_safe_summary_anon_exec.sql`
+
+Read-only post-check:
+
+`supabase/baseline/p5_group4_safe_summary_anon_exec_check.sql`
+
+Dedicated static gate:
+
+`test_p5_group4_safe_summary_revocation.py`
+
+Expected privilege transition after a later Production apply:
 
 - anon CRM EXECUTE: `6 -> 5`;
 - authenticated CRM EXECUTE: remains `0`;
 - service_role CRM EXECUTE: remains `40`;
 - total CRM functions: remains `40`.
 
-The later migration must ship with an exact inverse rollback and a read-only post-change privilege check. Any authenticated ADMIN/OPS safe-summary regression on either exact-head Preview is a rollback trigger.
+## Execution gate
 
-## Preparation-stage automated gates
+Before applying Production, the execution-package exact head must independently pass Vercel and Cloudflare builds, including:
 
-`test_p5_group4_safe_summary_candidate.py` enforces the authenticated-only BFF route, final-runtime dependency, narrow output contract, database definition guards, predecessor baseline, and preparation-only no-SQL rule.
+- all predecessor Group 1–3 gates;
+- P3/P4 attack regression;
+- `P5_GROUP4_SAFE_SUMMARY_CANDIDATE_OK`;
+- `P5_GROUP4_SAFE_SUMMARY_BFF_OK`;
+- `P5_GROUP4_SAFE_SUMMARY_REVOCATION_OK`;
+- Cloudflare P1 output parity.
+
+Immediately before apply, Production must still match:
+
+- target `anon=true`, `authenticated=false`, `service_role=true`, `PUBLIC=false`;
+- global `40 / 6 / 0 / 40`;
+- RLS `9/9`;
+- migration `20260823064535 / p5_group3_revoke_admin_user_mgmt_anon_exec`;
+- fingerprint `258 / 5d43f0f65f80f24aab35d5e60d6c66cb86166f303743a5c9274509625e0c71b3`.
+
+## Automated gates
+
+`test_p5_group4_safe_summary_candidate.py` enforces the authenticated-only BFF route, final-runtime dependency, narrow output contract, database definition guards, accepted Group 3 baseline, and exact execution-package presence.
 
 `test_p5_group4_safe_summary_bff.mjs` executes the path against both handlers and proves no-session rejection with zero upstream calls plus authoritative cookie-token substitution.
+
+`test_p5_group4_safe_summary_revocation.py` enforces the one-RPC forward migration, exact inverse rollback, read-only post-check, and preserved BFF/session boundary.
 
 Expected markers:
 
@@ -85,6 +146,8 @@ Expected markers:
 
 `P5_GROUP4_SAFE_SUMMARY_BFF_OK: no-session=401+zero-upstream; cookie-token=authoritative; both-platforms=pass`
 
+`P5_GROUP4_SAFE_SUMMARY_REVOCATION_OK: revoke=1-safe-summary-anon-only; rollback=1-exact-grant; post-check=read-only; auth-bff=session-gated; expected-anon=5; service-role=40`
+
 ## Non-goals
 
-This preparation branch does not change credential values, reveal/unlock behavior, login/state/user-management behavior, Vault contents, database function bodies, grants, tables, RLS, policies, session duration, CSP, DNS, WAF, CRM UI/business behavior, or Groups 5–6 Production privileges.
+Group 4 does not change credential values, reveal/unlock behavior, login/state/user-management behavior, Vault contents, database function bodies, tables, RLS, policies, session duration, CSP, DNS, WAF, CRM UI/business behavior, or Groups 5–6 privileges.
