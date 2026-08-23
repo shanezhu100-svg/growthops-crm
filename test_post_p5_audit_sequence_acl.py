@@ -28,10 +28,8 @@ reverse = (
     'grant select, update, usage on sequence public.crm_server_audit_logs_id_seq to anon; '
     'grant select, update, usage on sequence public.crm_server_audit_logs_id_seq to authenticated;'
 )
-
 require(migration == forward, f'residual sequence migration must contain exactly two browser-role revokes: {migration!r}')
 require(rollback == reverse, f'residual sequence rollback must contain exactly two inverse grants: {rollback!r}')
-
 for forbidden in (' create ', ' alter ', ' drop ', ' insert ', ' delete ', ' truncate ', ' grant '):
     require(forbidden not in f' {migration} ', f'forbidden mutation in residual sequence migration: {forbidden.strip()}')
 
@@ -51,15 +49,22 @@ for expected, message in (
     ('authenticated EXECUTE`: `0`', 'authenticated function boundary'),
     ('service_role EXECUTE`: `40`', 'service-role function boundary'),
     ('browser-role direct CRM table grants: `0`', 'table boundary'),
-    ('258 / 40aa990fdd83bf8a132b94df0e20e4a57af607a2c032980671ba94c0c6c1a8df', 'accepted P5 fingerprint'),
+    ('258 / 40aa990fdd83bf8a132b94df0e20e4a57af607a2c032980671ba94c0c6c1a8df', 'accepted/unchanged P5 fingerprint'),
     ('IDENTITY ALWAYS', 'sequence ownership relationship'),
     ('SECURITY DEFINER', 'audit writer dependency proof'),
     ('does **not** alter global `supabase_admin` defaults', 'global-default non-goal'),
     ('does not include sequence ACL rows', 'canonical fingerprint limitation'),
+    ('4cc49a68f18f7c896ac3d7021886488c5566901d', 'pre-apply exact head'),
+    ('dpl_9vVUr8zH5f6jJF8iGLw4AdGFZFEy', 'Vercel pre-apply evidence'),
+    ('575e0cac-a629-4c17-86dd-e593606995fc', 'Cloudflare pre-apply evidence'),
+    ('20260823104232 / post_p5_revoke_browser_audit_sequence_acl', 'applied Production migration'),
+    ('anon SELECT/UPDATE/USAGE = false', 'anon post-change ACL'),
+    ('authenticated SELECT/UPDATE/USAGE = false', 'authenticated post-change ACL'),
+    ('service_role SELECT/UPDATE/USAGE = true', 'service-role post-change ACL'),
 ):
     require(expected in doc, f'residual sequence doc missing {message}')
 
-# P5 must remain fully closed while this follow-up is prepared.
+# P5 must remain fully closed while this follow-up is accepted.
 for filename, marker in (
     ('test_p5_group6_public_boundary_candidate.py', 'production-change=applied+verified'),
     ('test_p5_group6_public_boundary_revocation.py', 'expected-anon=0'),
@@ -69,6 +74,6 @@ for filename, marker in (
 
 print(
     'POST_P5_AUDIT_SEQUENCE_ACL_OK: '
-    'target=crm_server_audit_logs_id_seq; browser-select-update-usage=revoke; '
-    'service-role=preserved; rollback=exact; post-check=read-only; p5=closed'
+    'target=crm_server_audit_logs_id_seq; browser-select-update-usage=revoked+verified; '
+    'service-role=preserved; rollback=exact; post-check=read-only; p5=closed; production=applied+verified'
 )
