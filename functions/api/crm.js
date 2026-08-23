@@ -9,6 +9,15 @@ const AUTH_RPCS = new Set([
   'crm_client_account_safe_summary','crm_unlock_credentials_v1','crm_reveal_client_secret_value_v5',
 ]);
 const ALL_RPCS = new Set([...PUBLIC_RPCS, ...LOGIN_RPCS, ...AUTH_RPCS]);
+const SAFE_UPSTREAM_MESSAGES = new Set([
+  'CREDENTIAL_REAUTH_REQUIRED',
+  'CREDENTIAL_REVEAL_THROTTLED',
+  'CREDENTIAL_UNLOCK_REQUIRED',
+  'CREDENTIAL_UNLOCK_INVALID',
+  'CREDENTIAL_UNLOCK_THROTTLED',
+  'INVALID_CREDENTIAL_FIELD',
+  'FORBIDDEN',
+]);
 
 function parseCookies(header='') { const out={}; for (const part of String(header).split(';')) { const i=part.indexOf('='); if(i<=0) continue; const k=part.slice(0,i).trim(); const raw=part.slice(i+1).trim(); try{out[k]=decodeURIComponent(raw);}catch{out[k]=raw;} } return out; }
 function sessionCookie(token){return `${COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; Max-Age=${COOKIE_MAX_AGE}; HttpOnly; Secure; SameSite=Strict`;}
@@ -19,8 +28,9 @@ function serverConfig(env={}){ const key=String(env.GROWTHOPS_SUPABASE_SECRET_KE
 function json(status,body,requestIdValue,extraHeaders={}){ const headers=new Headers({'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store, max-age=0','Pragma':'no-cache','X-Request-ID':requestIdValue,...extraHeaders}); return new Response(JSON.stringify(body),{status,headers}); }
 async function bodyObject(request){ const text=await request.text(); if(!text) return {}; try{return JSON.parse(text);}catch{return null;} }
 function safeLog(event,requestIdValue,rpc,status){ console.error(JSON.stringify({event,platform:'cloudflare',requestId:requestIdValue,rpc:ALL_RPCS.has(rpc)?rpc:'unknown',status:Number(status||0)})); }
-async function supabaseRpc(name,args,config){ const response=await fetch(`${config.url}/rest/v1/rpc/${encodeURIComponent(name)}`,{method:'POST',headers:{apikey:config.key,'Content-Type':'application/json','Cache-Control':'no-store'},body:JSON.stringify(args||{})}); let data=null; try{data=await response.json();}catch{} if(!response.ok){ const error=new Error('UPSTREAM_RPC_FAILED'); error.status=response.status; error.sessionRelated=/SESSION|TOKEN|UNAUTHORIZED/i.test(String(data?.message||data?.hint||'')); throw error;} return data; }
-function sanitizeUpstreamError(error){ const s=Number(error?.status||0); if(s===400)return{status:400,message:'UPSTREAM_BAD_REQUEST'}; if(s===401)return{status:401,message:'SESSION_INVALID'}; if(s===403)return{status:403,message:'REQUEST_DENIED'}; if(s===404)return{status:404,message:'UPSTREAM_NOT_FOUND'}; if(s===409)return{status:409,message:'CONFLICT'}; if(s===429)return{status:429,message:'RATE_LIMITED'}; return{status:502,message:'UPSTREAM_REQUEST_FAILED'}; }
+function safeUpstreamMessage(data){ const message=String(data?.message||'').trim(); return SAFE_UPSTREAM_MESSAGES.has(message)?message:''; }
+async function supabaseRpc(name,args,config){ const response=await fetch(`${config.url}/rest/v1/rpc/${encodeURIComponent(name)}`,{method:'POST',headers:{apikey:config.key,'Content-Type':'application/json','Cache-Control':'no-store'},body:JSON.stringify(args||{})}); let data=null; try{data=await response.json();}catch{} if(!response.ok){ const error=new Error('UPSTREAM_RPC_FAILED'); error.status=response.status; error.safeMessage=safeUpstreamMessage(data); error.sessionRelated=/SESSION|TOKEN|UNAUTHORIZED/i.test(String(data?.message||data?.hint||'')); throw error;} return data; }
+function sanitizeUpstreamError(error){ const safeMessage=String(error?.safeMessage||''); if(safeMessage){ if(safeMessage.endsWith('_THROTTLED'))return{status:429,message:safeMessage}; if(safeMessage==='FORBIDDEN')return{status:403,message:safeMessage}; return{status:400,message:safeMessage}; } const s=Number(error?.status||0); if(s===400)return{status:400,message:'UPSTREAM_BAD_REQUEST'}; if(s===401)return{status:401,message:'SESSION_INVALID'}; if(s===403)return{status:403,message:'REQUEST_DENIED'}; if(s===404)return{status:404,message:'UPSTREAM_NOT_FOUND'}; if(s===409)return{status:409,message:'CONFLICT'}; if(s===429)return{status:429,message:'RATE_LIMITED'}; return{status:502,message:'UPSTREAM_REQUEST_FAILED'}; }
 function stripSessionToken(data){ if(!data||typeof data!=='object'||Array.isArray(data)||!Object.prototype.hasOwnProperty.call(data,'token')) return data; const safe={...data}; delete safe.token; return safe; }
 
 export async function onRequest(context){
