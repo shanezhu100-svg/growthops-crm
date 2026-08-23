@@ -70,11 +70,19 @@ require("'has2fa'," in return_block.replace(' ', ''), 'safe-summary has2FA prese
 require('password / 2fa values are never returned by this rpc' in low,
         'safe-summary migration lost explicit no-plaintext contract')
 
+expected_forward = root / 'supabase' / 'migrations' / '20260823_p5_group4_revoke_safe_summary_anon_exec.sql'
+expected_rollback = root / 'supabase' / 'rollback' / '20260823_p5_group4_restore_safe_summary_anon_exec.sql'
+expected_check = root / 'supabase' / 'baseline' / 'p5_group4_safe_summary_anon_exec_check.sql'
+expected_revocation_gate = root / 'test_p5_group4_safe_summary_revocation.py'
+for path in (expected_forward, expected_rollback, expected_check, expected_revocation_gate):
+    require(path.exists(), f'Group 4 execution-package file missing: {path.name}')
+
+allowed_sql = {expected_forward.name.lower(), expected_rollback.name.lower()}
 for folder in (root / 'supabase' / 'migrations', root / 'supabase' / 'rollback'):
     for path in folder.glob('*'):
         lowered = path.name.lower()
-        require(not ('p5' in lowered and 'group4' in lowered),
-                f'Group 4 SQL appeared during preparation stage: {path.name}')
+        if 'p5' in lowered and 'group4' in lowered:
+            require(lowered in allowed_sql, f'unexpected Group 4 SQL file: {path.name}')
 
 require('Groups 1–3 predecessor gates are complete' in doc,
         'Group 4 doc does not record completed predecessor chain')
@@ -84,10 +92,10 @@ require('20260823064535 / p5_group3_revoke_admin_user_mgmt_anon_exec' in doc,
         'Group 4 doc missing accepted Group3 migration')
 require('258 / 5d43f0f65f80f24aab35d5e60d6c66cb86166f303743a5c9274509625e0c71b3' in doc,
         'Group 4 doc missing accepted Group3 fingerprint')
-require('No Group 4 forward `REVOKE` migration is included yet.' in doc,
-        'Group 4 doc lost no-forward-migration guard')
-require('No Group 4 rollback migration is included yet.' in doc,
-        'Group 4 doc lost no-rollback guard')
+require('Execution package is prepared but not applied to Production.' in doc,
+        'Group 4 doc lost pre-apply Production guard')
+require('Cloudflare exact-head verification remains required before Production apply.' in doc,
+        'Group 4 doc lost Cloudflare exact-head hard gate')
 require('`6 -> 5`' in doc, 'Group 4 doc lost expected anon transition')
 
 print(
