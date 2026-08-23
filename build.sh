@@ -74,6 +74,7 @@ python3 test_p5_group3_admin_user_mgmt_candidate.py
 python3 test_p5_group3_admin_user_mgmt_revocation.py
 python3 test_p5_group4_safe_summary_candidate.py
 node test_p5_group4_safe_summary_bff.mjs
+python3 test_p5_group4_safe_summary_revocation.py
 node --check dist/cloud-adapter.js
 node --check dist/cloud-security-hotfix.js
 node --check dist/cloud-ui-action-bridge.js
