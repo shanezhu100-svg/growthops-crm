@@ -93,6 +93,27 @@ for(const rpcCase of [
   }
 }
 
+// Every ADMIN user-management RPC is session-gated on both BFFs. Without the
+// HttpOnly cookie the upstream must not be contacted; with the cookie, any
+// forged browser p_token must be replaced by the server-read cookie token.
+for(const rpcCase of [
+  {rpc:'crm_list_users',args:{p_token:'forged'},reply:[]},
+  {rpc:'crm_upsert_user',args:{p_token:'forged',p_user_id:null,p_name:'Example',p_username:'example-user',p_password:'not-sent-upstream-in-real-test',p_role:'SALES',p_enabled:true},reply:{id:'u2',role:'SALES'}},
+  {rpc:'crm_delete_user',args:{p_token:'forged',p_user_id:'00000000-0000-0000-0000-000000000002'},reply:true},
+]){
+  for(const invoke of [invokeVercel,invokeCf]){
+    let calls=0;
+    const missing=await invoke({headers:sameOrigin,body:{rpc:rpcCase.rpc,args:rpcCase.args}},async()=>{calls++; return okJson(rpcCase.reply);});
+    assert.equal(missing.status,401); assert.equal(missing.json.message,'SESSION_REQUIRED'); assert.equal(calls,0);
+
+    let requestUrl=''; let requestBody=null;
+    const present=await invoke({headers:{...sameOrigin,cookie:'__Host-growthops_crm=cookie-session-token'},body:{rpc:rpcCase.rpc,args:rpcCase.args}},async(url,options)=>{calls++; requestUrl=String(url); requestBody=JSON.parse(options.body); return okJson(rpcCase.reply);});
+    assert.equal(present.status,200); assert.equal(calls,1);
+    assert.ok(requestUrl.endsWith(`/rest/v1/rpc/${rpcCase.rpc}`));
+    assert.equal(requestBody.p_token,'cookie-session-token');
+  }
+}
+
 // Logout always clears cookie.
 for(const invoke of [invokeVercel,invokeCf]){
   const result=await invoke({headers:{...sameOrigin,cookie:'__Host-growthops_crm=cookie-session-token'},body:{rpc:'crm_logout',args:{}}},()=>okJson({ok:true}));
@@ -115,4 +136,4 @@ for(const invoke of [invokeVercel,invokeCf]){
   assert.equal(result.status,401); assert.deepEqual(result.json,{message:'SESSION_INVALID'}); assert.match(String(result.headers['set-cookie']||''),/Max-Age=0/);
 }
 
-console.log('CLOUDFLARE_P2B_SERVER_IDENTITY_TESTS_OK: secret-key=required; publishable-fallback=none; request-id=active; logs=filtered; errors=sanitized; v5-only; logout-clears-cookie');
+console.log('CLOUDFLARE_P2B_SERVER_IDENTITY_TESTS_OK: secret-key=required; publishable-fallback=none; request-id=active; logs=filtered; errors=sanitized; admin-user-rpcs=session-gated; v5-only; logout-clears-cookie');
