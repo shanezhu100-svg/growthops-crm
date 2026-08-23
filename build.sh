@@ -84,6 +84,8 @@ python3 test_p5_group6_public_boundary_revocation.py
 python3 test_post_p5_audit_sequence_acl.py
 python3 test_post_p5_service_role_rpc_minimization.py
 python3 test_post_p5_service_role_relation_acl.py
+node test_post_p5_login_trusted_source_bucket.mjs
+python3 test_post_p5_login_trusted_source_bucket.py
 node --check dist/cloud-adapter.js
 node --check dist/cloud-security-hotfix.js
 node --check dist/cloud-ui-action-bridge.js
