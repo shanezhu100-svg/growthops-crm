@@ -4,23 +4,23 @@ Last updated: 2026-08-23
 
 ## Status
 
-Group 1 and Group 2 predecessor gates are complete. Group 3 live preflight is PASS. **Execution package is prepared but not applied to Production.**
+Group 1 and Group 2 predecessor gates are complete. Group 3 Production execution is complete and verified. The only database privilege change was removal of `anon` EXECUTE from exactly three server-mediated ADMIN user-management RPCs.
 
-This branch is based directly on accepted `main@92e7ed7ed6fadbbe2ba1ff5a5e029715a323964b`.
+The branch remains based on accepted `main@92e7ed7ed6fadbbe2ba1ff5a5e029715a323964b` pending the final evidence-head merge.
 
 ## Exact scope
 
-Group 3 contains exactly these three live ADMIN user-management RPCs:
+Group 3 contains exactly:
 
 - `crm_list_users(text)`
 - `crm_upsert_user(text, uuid, text, text, text, text, boolean)`
 - `crm_delete_user(text, uuid)`
 
-They remain intentionally reachable through the authenticated server BFF path. Group 3 removes only the transitional direct `anon` EXECUTE grants; it does not remove the BFF path or alter any function body.
+The authenticated BFF path remains intact. No function body, user row, table, RLS policy, Vault value, session rule, or CRM business behavior was changed by the Group 3 migration.
 
 ## Accepted predecessor baseline
 
-Current accepted Production baseline after Group 2:
+Immediately before Group 3, Production was verified as:
 
 - `main`: `92e7ed7ed6fadbbe2ba1ff5a5e029715a323964b`;
 - CRM functions: `40`;
@@ -31,79 +31,67 @@ Current accepted Production baseline after Group 2:
 - latest migration: `20260823062545 / p5_group2_revoke_legacy_credential_status_anon_exec`;
 - canonical fingerprint: `258 / 03efe21f9345b9d01a362873b0eaf63834ab641dd0e7c8eee2ab6efa80607224`.
 
+All three target functions were `SECURITY DEFINER` with explicit `anon` and `service_role` grants, no `authenticated` grant, and no PUBLIC EXECUTE.
+
 ## BFF/runtime boundary
 
-Both Vercel and Cloudflare `/api/crm` BFFs:
+Both Vercel and Cloudflare `/api/crm` BFFs continue to:
 
 - keep all three RPCs in `AUTH_RPCS` and out of `PUBLIC_RPCS` / `LOGIN_RPCS`;
 - require the `__Host-growthops_crm` HttpOnly, Secure, SameSite=Strict cookie;
 - reject missing cookie with `401 SESSION_REQUIRED` before any upstream RPC call;
-- overwrite any browser-supplied `p_token` with the server-read cookie token;
-- require `GROWTHOPS_SUPABASE_SECRET_KEY` with `sb_secret_` identity and have no publishable-key fallback;
+- overwrite browser-supplied `p_token` with the server-read cookie token;
+- require `GROWTHOPS_SUPABASE_SECRET_KEY` with `sb_secret_` identity and no publishable-key fallback;
 - enforce same-origin before dispatch;
 - keep request secrets out of logs and responses.
 
-The cross-platform P2-B harness dynamically executes all three ADMIN RPC cases against both handlers and proves the missing-cookie and forged-token behavior.
+The executable cross-platform P2-B harness covers all three ADMIN RPCs with fake upstream data only; no real user administration operation was performed for testing.
 
-## Production function preflight
+## Function safeguards verified before execution
 
-Live read-only inspection confirms all three functions are `SECURITY DEFINER` and currently have the same explicit ACL shape:
+All three functions call `crm_session_context`, are workspace-bound, and require ADMIN authorization.
 
-- `anon=true`;
-- `authenticated=false`;
-- `service_role=true`;
-- `PUBLIC EXECUTE=false`.
+`crm_upsert_user` retains minimum password length, role allowlist, duplicate-username protection, self-disable prevention, last-active-admin protection, bcrypt password hashing, password-change session revocation, and server audit logging.
 
-All three call `crm_session_context`, are workspace-bound, and require ADMIN authorization.
+`crm_delete_user` retains self-delete prevention, workspace membership validation, last-active-admin protection, and server audit logging.
 
-`crm_upsert_user` retains:
+## Execution package exact-head evidence
 
-- minimum 10-character password requirement for new users;
-- role allowlist (`ADMIN`, `FINANCE`, `OPS`, `SALES`);
-- duplicate-username protection;
-- self-disable prevention;
-- last-active-admin protection;
-- bcrypt password hashing;
-- session revocation after password changes while preserving the caller's current session only for self password change;
-- server audit logging.
+Execution-package head:
 
-`crm_delete_user` retains:
-
-- self-delete prevention;
-- workspace membership check;
-- last-active-admin protection;
-- server audit logging.
-
-No real user write operation was performed during this preflight.
-
-## Preparation exact-head evidence
-
-Preflight head: `5fc74065e64c0b99e7a0920d291c1323b3ffd5b6`.
+`803ae738d059071b0f906732af2e45a257e8ec63`
 
 Vercel:
 
-- deployment `dpl_6UW8jGBR5k9YsN9wYsW9XmyfrNAv`;
+- deployment `dpl_A57fwk1g9HUyW7FTn9LTeXFiANVG`;
 - state `READY`;
-- cross-platform marker includes `admin-user-rpcs=session-gated`;
+- `admin-user-rpcs=session-gated` PASS;
 - `P5_GROUP3_ADMIN_USER_MGMT_CANDIDATE_OK` PASS;
+- `P5_GROUP3_ADMIN_USER_MGMT_REVOCATION_OK` PASS;
 - Group 1/2 and P3/P4 gates remain PASS.
 
 Cloudflare Pages:
 
-- deployment `a208a12f-6801-458e-846d-e60444609669`;
-- URL `https://a208a12f.growthops-crm.pages.dev/`;
+- deployment `5e9ddffb-582b-4d7c-b514-1ca3e8e8fba6`;
+- URL `https://5e9ddffb.growthops-crm.pages.dev/`;
 - status `success`;
-- same Group 3 candidate and cross-platform session gates PASS;
+- same exact commit `803ae738d059071b0f906732af2e45a257e8ec63`;
+- dynamic ADMIN session gate PASS;
+- Group 3 candidate/revocation gates PASS;
 - P3/P4 attack regression PASS;
 - P1 output parity PASS.
 
-## Prepared execution package
+## Production migration
 
-Forward migration:
+Forward migration file:
 
 `supabase/migrations/20260823_p5_group3_revoke_admin_user_mgmt_anon_exec.sql`
 
-It contains exactly three statements:
+Applied Production migration record:
+
+`20260823064535 / p5_group3_revoke_admin_user_mgmt_anon_exec`
+
+Exact privilege changes:
 
 ```sql
 revoke execute on function public.crm_list_users(text) from anon;
@@ -111,37 +99,42 @@ revoke execute on function public.crm_upsert_user(text, uuid, text, text, text, 
 revoke execute on function public.crm_delete_user(text, uuid) from anon;
 ```
 
-Exact inverse rollback:
+Exact inverse rollback is preserved in:
 
 `supabase/rollback/20260823_p5_group3_restore_admin_user_mgmt_anon_exec.sql`
 
-Read-only post-check:
+Read-only post-check is preserved in:
 
 `supabase/baseline/p5_group3_admin_user_mgmt_anon_exec_check.sql`
 
-Dedicated static gate:
+## Production post-change verification
 
-`test_p5_group3_admin_user_mgmt_revocation.py`
+The repository post-check confirms all three targets:
 
-Expected privilege transition after a later Production apply:
+- `anon=false`;
+- `authenticated=false`;
+- `service_role=true`.
 
-- anon CRM EXECUTE: `9 -> 6`;
-- authenticated CRM EXECUTE: `0`;
-- service_role CRM EXECUTE: `40`;
-- CRM functions: `40`.
+Global Production state is now:
 
-## Execution gate
+- CRM functions: `40`;
+- anon EXECUTE: `6` (`9 -> 6`);
+- authenticated EXECUTE: `0`;
+- service_role EXECUTE: `40`;
+- CRM tables with RLS: `9/9`;
+- latest migration: `20260823064535 / p5_group3_revoke_admin_user_mgmt_anon_exec`.
 
-Before applying Production, the new execution-package exact head must independently pass Vercel and Cloudflare builds, including:
+Canonical inventory remains exactly 258 lines. Post-Group-3 fingerprint:
 
-- Group 1/2 gates;
-- P3/P4 attack regression;
-- dynamic three-ADMIN-RPC session gate;
-- `P5_GROUP3_ADMIN_USER_MGMT_CANDIDATE_OK`;
-- `P5_GROUP3_ADMIN_USER_MGMT_REVOCATION_OK`;
-- Cloudflare P1 output parity.
+`258 / 5d43f0f65f80f24aab35d5e60d6c66cb86166f303743a5c9274509625e0c71b3`
 
-Immediately before apply, Production must still match `40 / 9 / 0 / 40`, RLS `9/9`, migration `20260823062545`, and fingerprint `258 / 03efe21f9345b9d01a362873b0eaf63834ab641dd0e7c8eee2ab6efa80607224`.
+The fingerprint delta is expected from the three `FPRIV` transitions only.
+
+## Final merge gate
+
+Before merging PR #23, the final evidence-only head must independently pass Vercel and Cloudflare builds with Group 1/2/3 gates, P3/P4 attack regression, dynamic ADMIN session gating, and Cloudflare P1 parity green.
+
+Merge must use the expected final head SHA. After merge, verify `main`, Vercel Production, Cloudflare Production, Production `40 / 6 / 0 / 40`, RLS `9/9`, latest migration `20260823064535`, and canonical fingerprint `258 / 5d43f0f65f80f24aab35d5e60d6c66cb86166f303743a5c9274509625e0c71b3`.
 
 ## Non-goals
 
