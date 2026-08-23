@@ -111,15 +111,19 @@ expected_new_fp = '625be29b82c3dfac4282313c4c32558ed3d1acebf878325959cad97fc8dc6
 doc = doc_path.read_text(encoding='utf-8')
 for marker, label in (
     ('main@9c4b0d8647da6f4544b563324a8d2c525165e74e', 'accepted main'),
-    ('PUBLIC / anon / authenticated / service_role = 0 / 0 / 0 / 40', 'current function boundary'),
-    ('20260823104232 / post_p5_revoke_browser_audit_sequence_acl', 'current migration'),
-    (f'258 / {expected_current_fp}', 'current fingerprint'),
-    (f'258 / {expected_new_fp}', 'expected fingerprint'),
+    ('PUBLIC / anon / authenticated / service_role = 0 / 0 / 0 / 40', 'pre-apply function boundary'),
+    ('20260823104232 / post_p5_revoke_browser_audit_sequence_acl', 'pre-apply migration'),
+    (f'258 / {expected_current_fp}', 'pre-apply fingerprint'),
+    ('20260823120150 / post_p5_minimize_service_role_rpc_exec', 'applied migration'),
+    (f'258 / {expected_new_fp}', 'accepted fingerprint'),
     ('temporary service_role EXECUTE count: `12`', 'transaction rehearsal service count'),
     ('BFF-entry permission-denied tests: `0`', 'transaction rehearsal permission result'),
     ('`ROLLBACK`', 'transaction rollback'),
     ('already_initialized', 'bootstrap fail-closed guard'),
-    ('production-change=none', 'preparation-only state'),
+    ('`service_role EXECUTE = 12`', 'post-apply direct service-role count'),
+    ('`42501 permission denied`', 'direct-internal denial smoke'),
+    ('`INVALID_SESSION` (`P0001`)', 'wrapper nested-chain smoke'),
+    ('production-change=applied+verified', 'Production acceptance state'),
 ):
     require(marker in doc, f'documentation missing {label}')
 
@@ -129,5 +133,6 @@ require(build.count('python3 test_post_p5_service_role_rpc_minimization.py') == 
 print(
     'POST_P5_SERVICE_ROLE_RPC_MINIMIZATION_OK: '
     'revoke=28-internal-service-role; preserved=11-bff+bootstrap; rollback=exact; '
-    'rehearsal=12+zero-permission-denied; expected-fingerprint=625be29b; production-change=none'
+    'service-role=12; direct-internal=denied; wrapper-chain=preserved; '
+    'fingerprint=625be29b; production-change=applied+verified'
 )

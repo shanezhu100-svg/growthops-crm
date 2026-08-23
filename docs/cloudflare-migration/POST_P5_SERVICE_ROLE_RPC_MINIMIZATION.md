@@ -4,24 +4,24 @@ Last updated: 2026-08-23
 
 ## Status
 
-Preparation only. Production change: none.
+Production change: applied and verified. PR remains Draft until the exact final evidence head is green on both hosting paths and the final Production freeze is repeated.
 
 Accepted base is `main@9c4b0d8647da6f4544b563324a8d2c525165e74e` after P5 Groups 1–6 and residual audit-sequence ACL hardening.
 
-Current Production baseline:
+Pre-apply Production baseline was:
 
 - CRM functions: `40`
 - function EXECUTE boundary `PUBLIC / anon / authenticated / service_role = 0 / 0 / 0 / 40`
 - CRM tables / RLS enabled: `9 / 9`
 - audit sequence browser privileges: none; service_role SELECT/UPDATE/USAGE preserved
-- latest migration: `20260823104232 / post_p5_revoke_browser_audit_sequence_acl`
-- canonical fingerprint: `258 / 40aa990fdd83bf8a132b94df0e20e4a57af607a2c032980671ba94c0c6c1a8df`
+- latest pre-apply migration: `20260823104232 / post_p5_revoke_browser_audit_sequence_acl`
+- pre-apply canonical fingerprint: `258 / 40aa990fdd83bf8a132b94df0e20e4a57af607a2c032980671ba94c0c6c1a8df`
 
 ## Why minimize service_role direct EXECUTE
 
-Both hosting BFFs expose the same 11 server entry RPCs. The server credential therefore does not need direct PostgREST EXECUTE on every internal CRM helper. Internal function-to-function calls execute through postgres-owned SECURITY DEFINER chains or trigger execution and do not require a direct `service_role` grant on the callee.
+Both hosting BFFs expose the same 11 server entry RPCs. The server credential does not need direct PostgREST EXECUTE on every internal CRM helper. Internal function-to-function calls execute through postgres-owned SECURITY DEFINER chains or trigger execution and do not require a direct `service_role` grant on the callee.
 
-The intended service-role surface becomes exactly 12 functions: the 11 BFF entries plus the recovery-only bootstrap function.
+The accepted direct service-role surface is exactly 12 functions: the 11 BFF entries plus the recovery-only bootstrap function.
 
 ### Preserved 11 BFF entry RPCs
 
@@ -43,9 +43,9 @@ The intended service-role surface becomes exactly 12 functions: the 11 BFF entri
 
 Bootstrap is not a browser BFF entry. It is preserved as an operational/recovery function. Production is already initialized: bootstrap first checks for any existing `crm_users` row and raises `already_initialized`; browser roles have no EXECUTE on bootstrap. Keeping its service-role grant therefore preserves recovery capability without reopening the browser boundary.
 
-## Exact prepared change
+## Exact change
 
-`supabase/migrations/20260823_revoke_internal_service_role_exec.sql` revokes `service_role` EXECUTE from exactly 28 internal, trigger, helper, or legacy RPC functions. It changes no function body, table, sequence, RLS policy, browser-role grant, BFF allowlist, runtime asset, session rule, or credential behavior.
+`supabase/migrations/20260823_revoke_internal_service_role_exec.sql` revokes `service_role` EXECUTE from exactly 28 internal, trigger, helper, or legacy CRM functions. It changes no function body, table, sequence, RLS policy, browser-role grant, BFF allowlist, runtime asset, session rule, or credential behavior.
 
 The exact inverse is:
 
@@ -55,11 +55,11 @@ The rollback restores service_role EXECUTE on exactly those same 28 signatures a
 
 ## Important dependency note
 
-`crm_reveal_client_secret_value_v5` currently calls `crm_reveal_client_secret_field_v3` internally. v3 therefore remains a database dependency and is **not dropped**. Only its direct service_role EXECUTE is proposed for removal. The same principle applies to the other internal helpers: object definitions stay intact; only direct server-role entry authority is reduced.
+`crm_reveal_client_secret_value_v5` currently calls `crm_reveal_client_secret_field_v3` internally. v3 remains a database dependency and is **not dropped**. Only its direct service_role EXECUTE was removed. The same principle applies to the other internal helpers: object definitions remain intact; only direct server-role entry authority was reduced.
 
-## Live transaction rehearsal — PASS and rolled back
+## Pre-apply live transaction rehearsal — PASS and rolled back
 
-A net-zero Production transaction was executed before preparing this branch:
+A net-zero Production transaction was executed before apply:
 
 1. `BEGIN`.
 2. Temporarily revoke service_role EXECUTE from the same 28 functions.
@@ -76,28 +76,58 @@ Observed rehearsal result:
 - BFF-entry permission-denied tests: `0`
 - Production after rollback: restored to service_role EXECUTE `40`
 
-No real credential, token, password, 2FA value, client data, or secret value was used or inspected in this rehearsal.
-
-## Deterministic expected fingerprint
-
-A second net-zero transaction temporarily applied the same 28 revokes, ran the repository's canonical `p0_schema_security_fingerprint.sql` algorithm, and rolled back.
-
-Expected post-minimization state:
+A second net-zero transaction temporarily applied the same 28 revokes, ran the repository canonical fingerprint algorithm, and rolled back. It predicted exactly:
 
 - inventory lines: `258`
 - service_role EXECUTE: `12`
 - canonical SHA-256: `625be29b82c3dfac4282313c4c32558ed3d1acebf878325959cad97fc8dc6691`
 
-The line count remains 258 because only `FPRIV` values change.
+## Production result
 
-## Hard gates before any Production apply
+Applied migration:
 
-1. Exact preparation head must build green on Vercel and Cloudflare.
-2. All existing P3/P4, P5 Groups 1–6, credential, HttpOnly-session, P1 parity, and post-P5 sequence ACL gates must remain green.
-3. Live read-only preflight must still show `0 / 0 / 0 / 40`, RLS `9/9`, sequence browser ACL none, migration `20260823104232`, and canonical `258 / 40aa990f...`.
-4. Exactly 12 preserved service-role functions must be executable and exactly 28 revoke candidates must still be executable before apply.
-5. No Production apply is permitted from a head whose scope has drifted beyond this permission-only package.
+`20260823120150 / post_p5_minimize_service_role_rpc_exec`
 
-After any apply, the read-only post-check must show `0 / 0 / 0 / 12`, all 12 preserved functions executable, no other CRM function executable by service_role, sequence ACL unchanged, RLS `9/9`, and canonical `258 / 625be29b82c3dfac4282313c4c32558ed3d1acebf878325959cad97fc8dc6691`.
+Immediate read-only post-check matched the rehearsal exactly:
 
-`production-change=none`
+- CRM functions: `40`
+- `PUBLIC EXECUTE = 0`
+- `anon EXECUTE = 0`
+- `authenticated EXECUTE = 0`
+- `service_role EXECUTE = 12`
+- preserved service-role entries: `12/12`
+- unexpected service-role entries: `0`
+- CRM tables / RLS: `9/9`
+- audit sequence browser privileges: none
+- audit sequence service_role SELECT/UPDATE/USAGE: preserved
+- canonical fingerprint: `258 / 625be29b82c3dfac4282313c4c32558ed3d1acebf878325959cad97fc8dc6691`
+
+## Post-apply functional smoke — PASS and rolled back
+
+A transaction-local smoke test switched to `service_role` after the permanent revoke and then rolled back all test side effects.
+
+Preserved wrappers:
+
+- `crm_public_status()` -> `OK`
+- `crm_login_v3(...)` with an intentionally invalid test identity -> wrapper executed (`OK` result path)
+- `crm_load_state_v3(...)` with an invalid test session -> `INVALID_SESSION` (`P0001`), proving the wrapper entered its internal SECURITY DEFINER chain rather than failing permission checks
+
+Direct internal calls now fail as intended:
+
+- `crm_login(...)` -> `42501 permission denied`
+- `crm_load_state(...)` -> `42501 permission denied`
+- `crm_session_context(...)` -> `42501 permission denied`
+- `crm_reveal_client_secret_field_v3(...)` -> `42501 permission denied`
+
+No real credential, token, password, 2FA value, client data, or secret value was used or inspected in either rehearsal or smoke test.
+
+## Final merge gates
+
+1. Exact final evidence head must build green on Vercel and Cloudflare.
+2. All existing P3/P4, P5 Groups 1–6, credential, HttpOnly-session, P1 parity, post-P5 sequence ACL, and service-role minimization gates must remain green.
+3. Final Production freeze must still show `0 / 0 / 0 / 12`, RLS `9/9`, sequence browser ACL none, migration `20260823120150`, and canonical `258 / 625be29b...`.
+4. PR may merge only at the exact verified head.
+
+Rollback trigger: if any of the 11 BFF entry RPCs fails because an internal helper is no longer reachable through the intended SECURITY DEFINER chain, restore exactly the 28 service_role EXECUTE grants with the prepared rollback. Do not reopen PUBLIC/anon/authenticated execution.
+
+`production-change=applied+verified`
