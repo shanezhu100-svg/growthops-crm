@@ -52,7 +52,6 @@ require("src like '%crm_session_context%'" in p3p4 and
         "src like '%crm_redact_secrets%'" in p3p4 and
         "src like '%crm_extract_live_secrets%'" in p3p4,
         'P3/P4 save-state session/secret assertions weakened')
-
 require("p_token: 'browser-injected'" in http_api,
         'HttpOnly API test lost forged-token exercise')
 require("requestBody.p_token, 'cookie-session-token'" in http_api,
@@ -83,29 +82,32 @@ for folder in (root / 'supabase' / 'migrations', root / 'supabase' / 'rollback')
         if 'p5' in lowered and 'group5' in lowered:
             require(lowered in allowed_sql, f'unexpected Group 5 SQL file: {path.name}')
 
-require('Groups 1–4 predecessor gates are complete' in doc,
-        'Group 5 doc does not record completed predecessor chain')
-require('385bff8e0316bf8b1460b12202ea88f8c880a2c4' in doc,
-        'Group 5 doc missing accepted Group4 main SHA')
-require('20260823071407 / p5_group4_revoke_safe_summary_anon_exec' in doc,
-        'Group 5 doc missing accepted Group4 migration')
-require('258 / c3a5ef7bdd5c5d7c347d8155224ae4cc299e80917fccc8a622096c35e6e1bf4b' in doc,
-        'Group 5 doc missing accepted Group4 canonical fingerprint')
-require('6a19a63fc39a1536617dec6db33710342bbdd035' in doc,
-        'Group 5 doc missing preparation exact head')
-require('dpl_Bcc1evu3q5LqNosYwm2yPLZVdY7k' in doc,
-        'Group 5 doc missing Vercel preparation evidence')
-require('4905e9f1-0957-4cfc-a332-79af7279e40e' in doc,
-        'Group 5 doc missing Cloudflare preparation evidence')
+# Freeze accepted predecessor, exact pre-apply platform evidence and verified
+# Production result. Live DB assertions are performed separately before merge.
+for expected, message in (
+    ('385bff8e0316bf8b1460b12202ea88f8c880a2c4', 'accepted Group4 main SHA'),
+    ('20260823071407 / p5_group4_revoke_safe_summary_anon_exec', 'accepted Group4 migration'),
+    ('258 / c3a5ef7bdd5c5d7c347d8155224ae4cc299e80917fccc8a622096c35e6e1bf4b', 'accepted Group4 fingerprint'),
+    ('1068d5ba4c603f64b34ca99c6257718e268f9e1e', 'execution-package exact head'),
+    ('dpl_HWTZvqWfWW4gCGX8RjrMLwEMxPqt', 'Vercel execution-package evidence'),
+    ('b5b3919a-9d3d-49a7-b2c9-b45fa2df8d05', 'Cloudflare execution-package evidence'),
+    ('20260823085810 / p5_group5_revoke_session_state_anon_exec', 'applied Production migration'),
+    ('258 / 50522a7a3029da6a81a094241e804cb540987616e0f8622dc6606e2fab39e3cb', 'post-Group5 canonical fingerprint'),
+):
+    require(expected in doc, f'Group 5 doc missing {message}')
+
+require('anon EXECUTE: `2` (`5 -> 2`)' in doc,
+        'Group 5 doc missing post-change anon total')
+require('`crm_login_v3(text,text)`' in doc and '`crm_public_status()`' in doc,
+        'Group 5 doc lost exact remaining anon boundary')
 require('deliberately does not require `crm_session_context`' in doc,
         'Group 5 doc lost logout semantic distinction')
-require('`5 -> 2`' in doc, 'Group 5 doc lost expected anon transition')
-require('Production has not been changed by Group 5 yet.' in doc,
-        'Group 5 doc lost pre-apply Production boundary')
+require('exactly three `FPRIV` transitions' in doc,
+        'Group 5 doc lost expected fingerprint-delta explanation')
 
 print(
     'P5_GROUP5_SESSION_STATE_CANDIDATE_OK: '
     'load+save+logout=auth-only-bff; cookie-token=authoritative; '
     'save-secret-guard=covered; logout-distinction=preserved; '
-    'group4=accepted; package=prepared; production-change=none'
+    'group4=accepted; production-change=applied+verified'
 )
