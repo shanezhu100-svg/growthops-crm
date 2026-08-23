@@ -78,6 +78,9 @@ python3 test_p5_group4_safe_summary_revocation.py
 python3 test_p5_group5_session_state_candidate.py
 node test_p5_group5_session_state_bff.mjs
 python3 test_p5_group5_session_state_revocation.py
+python3 test_p5_group6_public_boundary_candidate.py
+node test_p5_group6_public_boundary_bff.mjs
+python3 test_p5_group6_public_boundary_revocation.py
 node --check dist/cloud-adapter.js
 node --check dist/cloud-security-hotfix.js
 node --check dist/cloud-ui-action-bridge.js
