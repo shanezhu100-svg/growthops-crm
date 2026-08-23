@@ -13,7 +13,7 @@ Accepted predecessor:
 - RLS `9/9`
 - canonical `195 / a69eba751a24ffbc98e5f47628c09c7b271b89d55ee7518d89cf3620391bd56e`
 
-Production change: **not applied** in this preparation commit.
+Production change: **applied + verified**.
 
 ## Risk found
 
@@ -57,7 +57,7 @@ Any future server RPC must intentionally update this allowlist and its tests; ot
 
 ## Production rehearsals
 
-All rehearsals were performed inside explicit transactions and ended in `ROLLBACK`.
+All pre-apply rehearsals were performed inside explicit transactions and ended in `ROLLBACK`.
 
 ### Default-grant probe
 
@@ -84,23 +84,68 @@ A non-CRM function renamed to `crm_*`, a non-CRM table renamed to `crm_*`, and a
 
 After the rehearsals, Production was checked for residue: no guard event trigger, no guard function and no probe object remained.
 
+## Preparation evidence
+
+Preparation head: `2f062f74f9b80fb443b0c44ae361fd698fd86462`.
+
+Vercel:
+- deployment `dpl_2nBW9EuHKreZs9LFppwpYgJS7oEu`;
+- exact commit `2f062f74...`;
+- READY;
+- `POST_P5_CRM_ACL_EVENT_GUARD_OK` PASS with `production-change=none`;
+- predecessor P3/P4/session/P5/post-P5 gates all PASS.
+
+Cloudflare:
+- deployment `8a75dace-839e-45fe-bb4b-2faac335b16a`;
+- exact URL `https://8a75dace.growthops-crm.pages.dev/`;
+- exact commit `2f062f74...`;
+- status success;
+- CRM ACL guard gate PASS;
+- `CLOUDFLARE_P1_OUTPUT_PARITY_OK` PASS;
+- site deployed successfully.
+
+Fresh pre-apply Production freeze confirmed zero drift: `40 / 0/0/0/12`, direct relation/sequence ACL `0`, RLS `9/9`, no guard installed, migration `20260823131002`, canonical `195 / a69eba751a24ffbc98e5f47628c09c7b271b89d55ee7518d89cf3620391bd56e`. PR #33 remained mergeable with exact preparation head.
+
+## Production result
+
+Applied migration:
+`20260823135410 / post_p5_crm_acl_event_guard`
+
+Immediate post-check verified:
+- CRM functions remain `40`;
+- function EXECUTE remains `PUBLIC/anon/authenticated/service_role = 0/0/0/12`;
+- direct CRM table/sequence ACL remains `0`;
+- RLS remains `9/9`;
+- event trigger `growthops_crm_acl_guard_ddl` exists and is enabled;
+- event trigger and guard function owners are `postgres`;
+- guard function remains SECURITY DEFINER with `search_path=pg_catalog`;
+- guard anon/authenticated/service_role EXECUTE are all false;
+- event trigger has the expected 16 CREATE/ALTER tags;
+- exact service allowlist markers are present;
+- canonical remains exactly `195 / a69eba751a24ffbc98e5f47628c09c7b271b89d55ee7518d89cf3620391bd56e`.
+
+## Installed-guard transaction probe
+
+After apply, the installed Production guard was exercised inside a transaction and the probe was rolled back. Verified:
+- new CRM function: anon/authenticated/service_role EXECUTE = false;
+- explicit service-role opt-in = true;
+- allowlisted `crm_public_status()` after CREATE OR REPLACE: browser=false/service_role=true;
+- new CRM table: browser/service-role direct access = false;
+- identity sequence and standalone sequence: service-role SELECT/UPDATE/USAGE = false;
+- non-CRM function/table renamed to `crm_*`: browser/service-role access = false;
+- new `crm_*` procedure: browser/service-role EXECUTE = false.
+
+A residue check after rollback confirmed no probe function or relation remained; the installed guard remained present and latest migration stayed `20260823135410`.
+
 ## Rollback
 
 Rollback drops only the event trigger and infrastructure guard function. It intentionally does not grant anything back to CRM objects that may have been created while the guard was active; automatic privilege broadening during rollback would be unsafe.
 
-## Acceptance gates
+## Final acceptance
 
-Before apply:
-1. exact preparation head passes Vercel and Cloudflare builds;
-2. all predecessor P3/P4/session/P5/post-P5 gates remain green;
-3. Cloudflare P1 parity remains green;
-4. fresh Production preflight confirms no guard is installed and the boundary remains `40 / 0/0/0/12 / relation ACL 0 / RLS 9/9 / canonical 195+a69eba75`;
-5. PR head/base and mergeability are unchanged.
-
-After apply:
-1. event trigger exists and is enabled;
-2. guard function is postgres-owned SECURITY DEFINER with `search_path=pg_catalog` and no external EXECUTE;
-3. existing CRM boundary remains `0/0/0/12` and direct relation ACL remains `0`;
-4. canonical remains exactly `195 / a69eba751a24ffbc98e5f47628c09c7b271b89d55ee7518d89cf3620391bd56e`;
-5. a transaction probe verifies new/renamed CRM objects fail closed;
-6. final evidence-only head passes Vercel and Cloudflare before Ready/merge.
+Before merge:
+1. final evidence-only head must differ from the preparation head only in this document and the static gate status;
+2. final exact head must pass Vercel and Cloudflare builds;
+3. all predecessor gates and Cloudflare P1 parity must remain green;
+4. final Production freeze must confirm guard enabled, `40 / 0/0/0/12`, relation/sequence ACL `0`, RLS `9/9`, migration `20260823135410`, canonical `195 / a69eba751a24ffbc98e5f47628c09c7b271b89d55ee7518d89cf3620391bd56e`;
+5. Ready/merge is permitted only with the exact verified head SHA.

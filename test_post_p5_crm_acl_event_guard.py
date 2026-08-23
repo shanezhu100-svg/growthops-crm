@@ -103,10 +103,14 @@ for sql, label in ((preflight.lower(), 'preflight'), (postcheck.lower(), 'post-c
 for expected, label in (
     ('cb466292535508325fadb7ebe0ba1626755f1e3c', 'accepted predecessor main'),
     ('20260823131002 / post_p5_login_trusted_source_bucket', 'accepted predecessor migration'),
+    ('20260823135410 / post_p5_crm_acl_event_guard', 'applied Production migration'),
     ('195 / a69eba751a24ffbc98e5f47628c09c7b271b89d55ee7518d89cf3620391bd56e', 'stable canonical'),
-    ('Production change: **not applied**', 'preparation status'),
+    ('Production change: **applied + verified**', 'Production status'),
     ('CREATE and ALTER/rename paths are both covered', 'rename bypass coverage'),
     ('explicit service-role opt-in after creation = true', 'service opt-in rehearsal'),
+    ('Installed-guard transaction probe', 'installed guard verification'),
+    ('8a75dace-839e-45fe-bb4b-2faac335b16a', 'Cloudflare preparation evidence'),
+    ('dpl_2nBW9EuHKreZs9LFppwpYgJS7oEu', 'Vercel preparation evidence'),
 ):
     require(expected in doc, f'doc missing {label}')
 
@@ -117,5 +121,5 @@ print(
     'POST_P5_CRM_ACL_EVENT_GUARD_OK: '
     'scope=public.crm_*; create+alter=covered; procedures=deny; '
     'service-allowlist=12; relations=deny; default-privileges=unchanged; '
-    'fingerprint=a69eba75; production-change=none'
+    'fingerprint=a69eba75; production-change=applied+verified'
 )
