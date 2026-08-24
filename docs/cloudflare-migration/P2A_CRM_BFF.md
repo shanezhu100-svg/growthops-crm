@@ -1,6 +1,8 @@
 # P2-A Cloudflare CRM BFF Port
 
-Last updated: 2026-08-22
+Last reviewed: 2026-08-24
+
+> Status: completed historical phase. This document is retained as P2-A acceptance evidence. The repository has since advanced through P2-B and P5/Post-P5 hardening; the current canonical build runs the P2-B server-identity API gate rather than the earlier P2-A parity harness.
 
 ## Scope
 
@@ -53,9 +55,11 @@ Covered cases:
 - v5 scalar credential reveal;
 - logout cookie clearing on success and upstream failure.
 
-The gate is part of `build.sh` and emits:
+Historical P2-A success marker:
 
 `CLOUDFLARE_P2A_API_PARITY_TESTS_OK: method=post-only; csrf=same-origin; allowlist=exact; login-token-hidden; cookie-injection=exact; credential-reveal=v5-only; logout-clears-cookie`
+
+The P2-A test file remains in the repository as a historical/manual parity harness. It is **not** part of the current canonical `build.sh`. The current build runs `test_cloudflare_p2b_api.mjs`, which preserves the P2-A application boundary while additionally enforcing the P2-B server-only Supabase identity, request-ID, log-filtering, and upstream-error-sanitization contract.
 
 ## Live Preview acceptance evidence
 
@@ -91,15 +95,17 @@ The temporary smoke page and its temporary build copy hook were deleted after va
 
 Vercel Preview for the same P2-A implementation was `READY`, and its build log emitted `CLOUDFLARE_P2A_API_PARITY_TESTS_OK`. Existing frozen CRM build/security hashes remained unchanged.
 
-## Remaining P2-A acceptance before merge
+## Historical final acceptance checklist
 
-Before merging the final single-commit P2-A candidate:
-1. squash the P2-A branch to one commit on the current `main`;
+The following was the P2-A pre-merge checklist at the time of that phase. It is retained as historical acceptance context and is not a current outstanding-work list:
+1. squash the P2-A branch to one commit on the then-current `main`;
 2. require the squashed head to be green on both Vercel and Cloudflare;
 3. confirm Cloudflare final-head routing still exposes only `/api/crm`;
-4. perform one user-entered login on the final Cloudflare Preview (the user must enter credentials themselves; credentials must not be sent to ChatGPT), confirm state loads, then log out;
+4. perform one user-entered login on the final Cloudflare Preview (the user enters credentials themselves; credentials are not sent to ChatGPT), confirm state loads, then log out;
 5. re-run the Production Supabase schema/security fingerprint and require `258 / d78c430cdd33757f50a5286b66c0095e3ff322d64f364eb4b61f1a517fd3d729`;
 6. only then mark the P2-A PR Ready and merge with the expected head SHA.
+
+P2-A was subsequently superseded operationally by P2-B server-identity acceptance and the later P5/Post-P5 hardening work documented alongside this file.
 
 ## Next phase
 
