@@ -146,6 +146,7 @@ for (const rpc of ['crm_unlock_credentials_v1', 'crm_reveal_client_secret_value_
       p_role: 'ADMIN',
       role: 'ADMIN',
       ...(rpc === 'crm_unlock_credentials_v1' ? { p_password: 'valid-test-password' } : {}),
+      ...(rpc === 'crm_upsert_user' ? { p_name: 'Token Test', p_username: 'token-test' } : {}),
     };
     const result = await invoke({
       headers: sessionHeaders,
