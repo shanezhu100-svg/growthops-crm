@@ -42,16 +42,22 @@ def fail(message: str) -> None:
 if not DIST.is_dir():
     fail('dist/ missing; run sh build.sh first')
 
+# Collect every pinned-artifact mismatch before failing so one CI run exposes the
+# complete drift set. Missing files remain fail-closed and are reported alongside
+# hash mismatches instead of forcing repeated one-at-a-time diagnostic runs.
+drift = []
 for name, expected in EXPECTED_SHA256.items():
     path = DIST / name
     if not path.is_file():
-        fail(f'missing dist/{name}')
+        drift.append(f'missing dist/{name}')
+        continue
     actual = sha256(path)
     if actual != expected:
-        fail(
-            f'dist/{name} hash drift; '
-            f'expected={expected}; actual={actual}'
+        drift.append(
+            f'dist/{name} hash drift; expected={expected}; actual={actual}'
         )
+if drift:
+    fail(' | '.join(drift))
 
 # Fail-open defense in depth: Pages must have a top-level static 404 so an
 # exhausted Functions allowance cannot turn an unknown /api/* path into the SPA
