@@ -7,6 +7,7 @@ const COOKIE_NAME = '__Host-growthops_crm';
 const COOKIE_MAX_AGE = 7 * 24 * 60 * 60;
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
 const BODY_TOO_LARGE = Symbol('BODY_TOO_LARGE');
+const INVALID_JSON = Symbol('INVALID_JSON');
 
 const PUBLIC_RPCS = new Set([
   'crm_public_status',
@@ -132,17 +133,18 @@ function declaredBodyTooLarge(headers = {}) {
 
 function bodyObject(req) {
   if (declaredBodyTooLarge(req.headers)) return BODY_TOO_LARGE;
-  if (req.body && typeof req.body === 'object') {
+  if (req.body === undefined || req.body === '') return {};
+  if (req.body !== null && typeof req.body === 'object') {
     let serialized;
-    try { serialized = JSON.stringify(req.body); } catch { return null; }
+    try { serialized = JSON.stringify(req.body); } catch { return INVALID_JSON; }
     if (Buffer.byteLength(serialized, 'utf8') > MAX_BODY_BYTES) return BODY_TOO_LARGE;
     return req.body;
   }
-  if (typeof req.body === 'string' && req.body) {
+  if (typeof req.body === 'string') {
     if (Buffer.byteLength(req.body, 'utf8') > MAX_BODY_BYTES) return BODY_TOO_LARGE;
-    try { return JSON.parse(req.body); } catch { return null; }
+    try { return JSON.parse(req.body); } catch { return INVALID_JSON; }
   }
-  return {};
+  return req.body;
 }
 
 function safeLog(event, requestIdValue, rpc, status) {
@@ -227,7 +229,8 @@ module.exports = async function handler(req, res) {
 
   const body = bodyObject(req);
   if (body === BODY_TOO_LARGE) return json(res, 413, { message: 'REQUEST_BODY_TOO_LARGE' });
-  if (!body) return json(res, 400, { message: 'INVALID_JSON' });
+  if (body === INVALID_JSON) return json(res, 400, { message: 'INVALID_JSON' });
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return json(res, 400, { message: 'INVALID_REQUEST' });
 
   const rpc = String(body.rpc || '');
   const args = body.args && typeof body.args === 'object' && !Array.isArray(body.args) ? { ...body.args } : {};

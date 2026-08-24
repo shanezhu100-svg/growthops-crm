@@ -3,6 +3,7 @@ const COOKIE_NAME = '__Host-growthops_crm';
 const COOKIE_MAX_AGE = 7 * 24 * 60 * 60;
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
 const BODY_TOO_LARGE = Symbol('BODY_TOO_LARGE');
+const INVALID_JSON = Symbol('INVALID_JSON');
 
 // Cloudflare Pages `_headers` rules do not apply to Pages Functions. Keep these
 // dynamic-response headers byte-for-byte aligned with vercel.json; the build gate
@@ -70,7 +71,7 @@ async function bodyObject(request){
   }finally{ try{reader.releaseLock();}catch{} }
   if(total===0)return {};
   const bytes=new Uint8Array(total); let offset=0; for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}
-  const text=new TextDecoder().decode(bytes); try{return JSON.parse(text);}catch{return null;}
+  const text=new TextDecoder().decode(bytes); try{return JSON.parse(text);}catch{return INVALID_JSON;}
 }
 function safeLog(event,requestIdValue,rpc,status){ console.error(JSON.stringify({event,platform:'cloudflare',requestId:requestIdValue,rpc:ALL_RPCS.has(rpc)?rpc:'unknown',status:Number(status||0)})); }
 function safeUpstreamMessage(data){ const message=String(data?.message||'').trim(); return SAFE_UPSTREAM_MESSAGES.has(message)?message:''; }
@@ -87,7 +88,7 @@ export async function onRequest(context){
   const request=context.request; const env=context.env||{}; const requestIdValue=requestId(request); const respond=(status,body,extra={})=>json(status,body,requestIdValue,extra);
   if(request.method!=='POST') return respond(405,{message:'METHOD_NOT_ALLOWED'},{Allow:'POST'});
   if(!sameOrigin(request)) return respond(403,{message:'CROSS_ORIGIN_REQUEST_BLOCKED'});
-  const body=await bodyObject(request); if(body===BODY_TOO_LARGE)return respond(413,{message:'REQUEST_BODY_TOO_LARGE'}); if(!body)return respond(400,{message:'INVALID_JSON'});
+  const body=await bodyObject(request); if(body===BODY_TOO_LARGE)return respond(413,{message:'REQUEST_BODY_TOO_LARGE'}); if(body===INVALID_JSON)return respond(400,{message:'INVALID_JSON'}); if(!body||typeof body!=='object'||Array.isArray(body))return respond(400,{message:'INVALID_REQUEST'});
   const rpc=String(body.rpc||''); const args=body.args&&typeof body.args==='object'&&!Array.isArray(body.args)?{...body.args}:{};
   if(!ALL_RPCS.has(rpc)) return respond(403,{message:'RPC_NOT_ALLOWED'});
   const config=serverConfig(env); if(!config){ safeLog('server_identity_missing',requestIdValue,rpc,503); return respond(503,{message:'SERVER_IDENTITY_NOT_CONFIGURED'}); }
