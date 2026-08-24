@@ -141,9 +141,15 @@ for (const rpc of authAttackRpcs) {
 for (const rpc of ['crm_unlock_credentials_v1', 'crm_reveal_client_secret_value_v5', 'crm_upsert_user', 'crm_delete_user']) {
   for (const invoke of invokers) {
     let upstreamBody = null;
+    const rpcArgs = {
+      p_token: 'attacker-forged-token',
+      p_role: 'ADMIN',
+      role: 'ADMIN',
+      ...(rpc === 'crm_unlock_credentials_v1' ? { p_password: 'valid-test-password' } : {}),
+    };
     const result = await invoke({
       headers: sessionHeaders,
-      body: { rpc, args: { p_token: 'attacker-forged-token', p_role: 'ADMIN', role: 'ADMIN' } },
+      body: { rpc, args: rpcArgs },
     }, async (_url, options) => {
       upstreamBody = JSON.parse(options.body);
       return okJson(rpc === 'crm_reveal_client_secret_value_v5' ? { value: 'synthetic-single-value' } : {});
