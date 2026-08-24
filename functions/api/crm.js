@@ -1,6 +1,8 @@
 const SUPABASE_URL_DEFAULT = 'https://avahcwyxparbcjdfglzx.supabase.co';
 const COOKIE_NAME = '__Host-growthops_crm';
 const COOKIE_MAX_AGE = 7 * 24 * 60 * 60;
+const MAX_BODY_BYTES = 4 * 1024 * 1024;
+const BODY_TOO_LARGE = Symbol('BODY_TOO_LARGE');
 
 // Cloudflare Pages `_headers` rules do not apply to Pages Functions. Keep these
 // dynamic-response headers byte-for-byte aligned with vercel.json; the build gate
@@ -58,7 +60,18 @@ function supabaseOrigin(raw){
 }
 function serverConfig(env={}){ const key=String(env.GROWTHOPS_SUPABASE_SECRET_KEY||'').trim(); const url=supabaseOrigin(env.GROWTHOPS_SUPABASE_URL); if(!/^sb_secret_[A-Za-z0-9_-]+$/.test(key)||!url) return null; return {url,key}; }
 function json(status,body,requestIdValue,extraHeaders={}){ const headers=new Headers({...extraHeaders,...SECURITY_HEADERS,'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store, max-age=0','Pragma':'no-cache','X-Request-ID':requestIdValue}); return new Response(JSON.stringify(body),{status,headers}); }
-async function bodyObject(request){ const text=await request.text(); if(!text) return {}; try{return JSON.parse(text);}catch{return null;} }
+function declaredBodyTooLarge(headers){ const raw=String(headers.get('content-length')||'').trim(); if(!/^\d+$/.test(raw))return false; const value=Number(raw); return Number.isFinite(value)&&value>MAX_BODY_BYTES; }
+async function bodyObject(request){
+  if(declaredBodyTooLarge(request.headers)) return BODY_TOO_LARGE;
+  if(!request.body) return {};
+  const reader=request.body.getReader(); const chunks=[]; let total=0;
+  try{
+    for(;;){ const {done,value}=await reader.read(); if(done)break; total+=value.byteLength; if(total>MAX_BODY_BYTES){ try{await reader.cancel();}catch{} return BODY_TOO_LARGE; } chunks.push(value); }
+  }finally{ try{reader.releaseLock();}catch{} }
+  if(total===0)return {};
+  const bytes=new Uint8Array(total); let offset=0; for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}
+  const text=new TextDecoder().decode(bytes); try{return JSON.parse(text);}catch{return null;}
+}
 function safeLog(event,requestIdValue,rpc,status){ console.error(JSON.stringify({event,platform:'cloudflare',requestId:requestIdValue,rpc:ALL_RPCS.has(rpc)?rpc:'unknown',status:Number(status||0)})); }
 function safeUpstreamMessage(data){ const message=String(data?.message||'').trim(); return SAFE_UPSTREAM_MESSAGES.has(message)?message:''; }
 async function supabaseRpc(name,args,config,sourceBucket=''){
@@ -74,7 +87,7 @@ export async function onRequest(context){
   const request=context.request; const env=context.env||{}; const requestIdValue=requestId(request); const respond=(status,body,extra={})=>json(status,body,requestIdValue,extra);
   if(request.method!=='POST') return respond(405,{message:'METHOD_NOT_ALLOWED'},{Allow:'POST'});
   if(!sameOrigin(request)) return respond(403,{message:'CROSS_ORIGIN_REQUEST_BLOCKED'});
-  const body=await bodyObject(request); if(!body) return respond(400,{message:'INVALID_JSON'});
+  const body=await bodyObject(request); if(body===BODY_TOO_LARGE)return respond(413,{message:'REQUEST_BODY_TOO_LARGE'}); if(!body)return respond(400,{message:'INVALID_JSON'});
   const rpc=String(body.rpc||''); const args=body.args&&typeof body.args==='object'&&!Array.isArray(body.args)?{...body.args}:{};
   if(!ALL_RPCS.has(rpc)) return respond(403,{message:'RPC_NOT_ALLOWED'});
   const config=serverConfig(env); if(!config){ safeLog('server_identity_missing',requestIdValue,rpc,503); return respond(503,{message:'SERVER_IDENTITY_NOT_CONFIGURED'}); }

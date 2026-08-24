@@ -5,6 +5,8 @@ const { createHash } = require('node:crypto');
 const SUPABASE_URL_DEFAULT = 'https://avahcwyxparbcjdfglzx.supabase.co';
 const COOKIE_NAME = '__Host-growthops_crm';
 const COOKIE_MAX_AGE = 7 * 24 * 60 * 60;
+const MAX_BODY_BYTES = 4 * 1024 * 1024;
+const BODY_TOO_LARGE = Symbol('BODY_TOO_LARGE');
 
 const PUBLIC_RPCS = new Set([
   'crm_public_status',
@@ -121,9 +123,23 @@ function json(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
+function declaredBodyTooLarge(headers = {}) {
+  const raw = String(headers['content-length'] || '').trim();
+  if (!/^\d+$/.test(raw)) return false;
+  const value = Number(raw);
+  return Number.isFinite(value) && value > MAX_BODY_BYTES;
+}
+
 function bodyObject(req) {
-  if (req.body && typeof req.body === 'object') return req.body;
+  if (declaredBodyTooLarge(req.headers)) return BODY_TOO_LARGE;
+  if (req.body && typeof req.body === 'object') {
+    let serialized;
+    try { serialized = JSON.stringify(req.body); } catch { return null; }
+    if (Buffer.byteLength(serialized, 'utf8') > MAX_BODY_BYTES) return BODY_TOO_LARGE;
+    return req.body;
+  }
   if (typeof req.body === 'string' && req.body) {
+    if (Buffer.byteLength(req.body, 'utf8') > MAX_BODY_BYTES) return BODY_TOO_LARGE;
     try { return JSON.parse(req.body); } catch { return null; }
   }
   return {};
@@ -209,6 +225,7 @@ module.exports = async function handler(req, res) {
   if (!sameOrigin(req)) return json(res, 403, { message: 'CROSS_ORIGIN_REQUEST_BLOCKED' });
 
   const body = bodyObject(req);
+  if (body === BODY_TOO_LARGE) return json(res, 413, { message: 'REQUEST_BODY_TOO_LARGE' });
   if (!body) return json(res, 400, { message: 'INVALID_JSON' });
 
   const rpc = String(body.rpc || '');
