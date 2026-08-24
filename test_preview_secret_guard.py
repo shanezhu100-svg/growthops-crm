@@ -62,10 +62,18 @@ expect_ok(
     "backend=disabled",
 )
 expect_ok({"VERCEL_ENV": "preview"}, "backend=disabled")
+expect_ok({"CF_PAGES": "1"}, "platform=cloudflare-unknown")
 expect_fail(
     {
         "CF_PAGES": "1",
         "CF_PAGES_BRANCH": "feature-unsafe",
+        "GROWTHOPS_SUPABASE_SECRET_KEY": SAFE_SECRET,
+    },
+    "would default to production",
+)
+expect_fail(
+    {
+        "CF_PAGES": "1",
         "GROWTHOPS_SUPABASE_SECRET_KEY": SAFE_SECRET,
     },
     "would default to production",
@@ -110,6 +118,10 @@ for bad_url in (
     "not-a-url",
     "https://user:pass@stagingref.supabase.co",
     "https://stagingref.supabase.co:8443",
+    "https://stagingref.supabase.co:notaport",
+    "https://stagingref.supabase.co/rest/v1",
+    "https://stagingref.supabase.co/?query=1",
+    "https://stagingref.supabase.co/#fragment",
 ):
     expect_fail(
         {
@@ -134,5 +146,5 @@ assert LEAK_SECRET not in leak.stderr
 
 print(
     "PREVIEW_SECRET_BOUNDARY_TESTS_OK: production=unchanged; preview-no-secret=disabled; "
-    "preview-production-target=blocked; preview-staging=allowed; secret-output=none"
+    "preview-production-target=blocked; preview-staging=allowed; malformed-target=blocked; secret-output=none"
 )

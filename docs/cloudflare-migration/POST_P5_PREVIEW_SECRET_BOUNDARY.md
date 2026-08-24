@@ -1,6 +1,6 @@
 # Post-P5 Preview Server-Secret Boundary
 
-Status: guard implemented; platform environment cleanup still required.
+Status: build guard verified; platform environment cleanup still required.
 
 ## Threat model
 
@@ -24,16 +24,25 @@ Preview is rejected when a server secret is present and:
 
 - `GROWTHOPS_SUPABASE_URL` is absent (the runtime default is production),
 - the URL resolves to the canonical production Supabase host, or
-- the URL is malformed/non-HTTPS/non-Supabase or embeds credentials/a nonstandard port.
+- the URL is malformed/non-HTTPS/non-Supabase, embeds credentials/a nonstandard port, or contains a path/query/fragment.
 
 ## Build enforcement
 
 `preview_secret_guard.py` runs before all other build stages. It recognizes:
 
 - Cloudflare Preview: `CF_PAGES=1` and `CF_PAGES_BRANCH != main`
+- Cloudflare unknown branch context: `CF_PAGES=1` with a missing branch is treated conservatively as Preview-like
 - Vercel Preview: `VERCEL_ENV=preview`
 
-It never prints the server secret. `test_preview_secret_guard.py` exercises production, backend-disabled Preview, production-target rejection, staging isolation, malformed URL rejection, and output leak protection.
+It never prints the server secret. `test_preview_secret_guard.py` exercises production, backend-disabled Preview, production-target rejection, staging isolation, malformed URL rejection, missing Cloudflare branch behavior, and output leak protection.
+
+## Observed Vercel acceptance evidence
+
+On 2026-08-23 the exact-head Vercel Preview for commit `a6788d91ee67adcf7137f75ae52ef67c41659556` reached the build command and was rejected immediately by the guard:
+
+`PREVIEW_SECRET_BOUNDARY_FAILED: Preview server secret is set but GROWTHOPS_SUPABASE_URL is absent; runtime would default to production`
+
+This is expected and confirms the platform still injects a server secret into Preview while the BFF would otherwise default to the production Supabase project. No secret value was printed.
 
 ## Platform cleanup still required
 

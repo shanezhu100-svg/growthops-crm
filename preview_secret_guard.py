@@ -38,8 +38,15 @@ def preview_platforms() -> list[str]:
     platforms: list[str] = []
     if os.getenv("CF_PAGES", "").strip() == "1":
         branch = os.getenv("CF_PAGES_BRANCH", "").strip()
-        if branch and branch != PRODUCTION_BRANCH:
+        if branch == PRODUCTION_BRANCH:
+            pass
+        elif branch:
             platforms.append("cloudflare-preview")
+        else:
+            # Cloudflare documents CF_PAGES_BRANCH as a system build variable.
+            # If it is unexpectedly missing, classify the build conservatively so
+            # a server secret cannot silently bypass Preview isolation.
+            platforms.append("cloudflare-unknown")
     if os.getenv("VERCEL_ENV", "").strip().lower() == "preview":
         platforms.append("vercel-preview")
     return platforms
@@ -50,10 +57,16 @@ def validate_preview_target(raw_url: str, production_host: str) -> str:
         fail("Preview server secret is set but GROWTHOPS_SUPABASE_URL is absent; runtime would default to production")
     parsed = urlparse(raw_url)
     host = (parsed.hostname or "").lower().rstrip(".")
+    try:
+        port = parsed.port
+    except ValueError:
+        fail("Preview Supabase URL contains an invalid port")
     if parsed.scheme != "https" or not host.endswith(".supabase.co"):
         fail("Preview server secret requires an explicit HTTPS *.supabase.co staging URL")
-    if parsed.username or parsed.password or parsed.port not in (None, 443):
+    if parsed.username or parsed.password or port not in (None, 443):
         fail("Preview Supabase URL contains unsupported credentials or port")
+    if parsed.path not in ("", "/") or parsed.query or parsed.fragment:
+        fail("Preview Supabase URL must be a project origin without path, query, or fragment")
     if host == production_host:
         fail("Preview server secret cannot target the production Supabase project")
     return host
