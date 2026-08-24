@@ -77,7 +77,7 @@ function safeUpstreamMessage(data){ const message=String(data?.message||'').trim
 async function supabaseRpc(name,args,config,sourceBucket=''){
   const headers={apikey:config.key,'Content-Type':'application/json','Cache-Control':'no-store'};
   if(/^[0-9a-f]{24}$/.test(String(sourceBucket))) headers['x-growthops-source-bucket']=String(sourceBucket);
-  const response=await fetch(`${config.url}/rest/v1/rpc/${encodeURIComponent(name)}`,{method:'POST',headers,body:JSON.stringify(args||{})});
+  const response=await fetch(`${config.url}/rest/v1/rpc/${encodeURIComponent(name)}`,{method:'POST',headers,redirect:'error',body:JSON.stringify(args||{})});
   let data=null; try{data=await response.json();}catch{} if(!response.ok){ const error=new Error('UPSTREAM_RPC_FAILED'); error.status=response.status; error.safeMessage=safeUpstreamMessage(data); error.sessionRelated=/SESSION|TOKEN|UNAUTHORIZED/i.test(String(data?.message||data?.hint||'')); throw error;} return data;
 }
 function sanitizeUpstreamError(error){ const safeMessage=String(error?.safeMessage||''); if(safeMessage){ if(safeMessage.endsWith('_THROTTLED'))return{status:429,message:safeMessage}; if(safeMessage==='FORBIDDEN')return{status:403,message:safeMessage}; return{status:400,message:safeMessage}; } const s=Number(error?.status||0); if(s===400)return{status:400,message:'UPSTREAM_BAD_REQUEST'}; if(s===401)return{status:401,message:'SESSION_INVALID'}; if(s===403)return{status:403,message:'REQUEST_DENIED'}; if(s===404)return{status:404,message:'UPSTREAM_NOT_FOUND'}; if(s===409)return{status:409,message:'CONFLICT'}; if(s===429)return{status:429,message:'RATE_LIMITED'}; return{status:502,message:'UPSTREAM_REQUEST_FAILED'}; }
