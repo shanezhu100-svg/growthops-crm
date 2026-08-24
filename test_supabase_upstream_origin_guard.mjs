@@ -41,6 +41,7 @@ for(const source of [vercelSource,cfSource]){
   assert.ok(source.includes('parsed.pathname'));
   assert.ok(source.includes('parsed.search'));
   assert.ok(source.includes('parsed.hash'));
+  assert.ok(source.includes("redirect: 'error'")||source.includes("redirect:'error'"));
 }
 
 const invalid=[
@@ -63,9 +64,9 @@ for(const url of invalid){
 for(const [input,expected] of [[undefined,DEFAULT_URL],[STAGING_URL+'/',STAGING_URL]]){
   for(const invoke of [invokeVercel,invokeCf]){
     let capture=null;
-    const result=await invoke(input,async(url,options)=>{capture={url:String(url),apikey:options.headers.apikey};return new Response(JSON.stringify({service:'GrowthOps CRM Cloud'}),{status:200,headers:{'Content-Type':'application/json'}});});
-    assert.equal(result.status,200); assert.equal(capture.apikey,TEST_SECRET); assert.equal(capture.url,expected+'/rest/v1/rpc/crm_public_status');
+    const result=await invoke(input,async(url,options)=>{capture={url:String(url),apikey:options.headers.apikey,redirect:options.redirect};return new Response(JSON.stringify({service:'GrowthOps CRM Cloud'}),{status:200,headers:{'Content-Type':'application/json'}});});
+    assert.equal(result.status,200); assert.equal(capture.apikey,TEST_SECRET); assert.equal(capture.url,expected+'/rest/v1/rpc/crm_public_status'); assert.equal(capture.redirect,'error');
   }
 }
 
-console.log('SUPABASE_UPSTREAM_ORIGIN_GUARD_OK: platforms=vercel+cloudflare; scheme=https-only; host=*.supabase.co-only; credentials+path+query+fragment=denied; invalid-target=503+zero-fetch; staging-origin=allowed');
+console.log('SUPABASE_UPSTREAM_ORIGIN_GUARD_OK: platforms=vercel+cloudflare; scheme=https-only; host=*.supabase.co-only; credentials+path+query+fragment=denied; redirects=error; invalid-target=503+zero-fetch; staging-origin=allowed');
