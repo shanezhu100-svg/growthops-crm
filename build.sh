@@ -75,6 +75,10 @@ python3 credential_eye_self_heal_finalize.py
 python3 test_credential_eye_self_heal_output.py
 python3 admin_password_byte_cap_finalize.py
 python3 test_admin_password_byte_cap_output.py
+# Final server-side input boundaries. Patch the two deployment BFFs before
+# syntax/runtime tests so canonical builds and deployed handlers are aligned.
+python3 unlock_password_input_bounds_finalize.py
+python3 user_identity_input_bounds_finalize.py
 node --check api/crm.js
 GROWTHOPS_SUPABASE_SECRET_KEY=sb_secret_test_http_only_ci node test_http_only_session_api.js
 node test_cloudflare_p2b_api.mjs
@@ -83,6 +87,8 @@ node test_api_body_limit.mjs
 node test_api_request_envelope.mjs
 node test_login_input_bounds.mjs
 node test_admin_password_input_bounds.mjs
+node test_unlock_password_input_bounds.mjs
+node test_user_identity_input_bounds.mjs
 python3 test_server_identity_sink_inventory.py
 node test_cloudflare_p3p4_attack_regression.mjs
 python3 test_p5_sensitive_rpc_revocation.py
@@ -107,6 +113,9 @@ python3 test_post_p5_login_trusted_source_bucket.py
 python3 test_post_p5_crm_acl_event_guard.py
 python3 test_post_p5_crm_rls_alter_guard.py
 python3 test_post_p5_bcrypt_password_byte_cap.py
+python3 test_post_p5_single_workspace_membership_invariant.py
+python3 test_post_p5_bcrypt_verification_byte_caps.py
+python3 test_post_p5_user_identity_byte_caps.py
 node --check dist/cloud-adapter.js
 node --check dist/cloud-security-hotfix.js
 node --check dist/cloud-ui-action-bridge.js
