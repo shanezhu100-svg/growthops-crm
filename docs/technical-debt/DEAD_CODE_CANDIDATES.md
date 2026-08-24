@@ -1,30 +1,26 @@
-# Dead-code candidates — defer until Cloudflare is stable
+# Dead-code cleanup record
 
-Last reviewed: 2026-08-21
+Last reviewed: 2026-08-24
 
-This is a holding list only. **Do not delete these files during Cloudflare P1/P2.** The current migration baseline must remain stable.
+The Cloudflare P1/P2 baseline freeze has ended. P2-B completed real Cloudflare and Vercel Preview acceptance, and the repository has since advanced through P5/Post-P5 hardening. The four historical candidates below were therefore re-audited for removal in a dedicated technical-debt change.
 
-## Current candidates
+## Removed candidates
 
 - `credential_refresh_eye_finalize.py`
 - `test_credential_refresh_eye_output.py`
 - `ui_runtime_diagnostic_finalize.py`
 - `test_ui_runtime_diagnostic_output.py`
 
-Why they are candidates:
+## Deletion-gate evidence
 
-- Current `build.sh` does not invoke either finalizer or either paired test.
-- Their responsibilities overlap with later credential v5/v6 runtime handling or optional diagnostics.
-- They are not required to simplify P1/P2 and deleting them now would create unnecessary baseline churn.
+Before removal:
 
-## Required deletion gate
+1. `build.sh` did not execute either finalizer or either paired test.
+2. The sole GitHub Actions workflow (`.github/workflows/crm-build.yml`) executed only the canonical `sh build.sh && python3 cloudflare_p1_verify.py` gate and did not name these files.
+3. The credential refresh/eye responsibilities had been superseded by the canonical v5/v6 credential UI pipeline plus the later eye self-heal output gate.
+4. The runtime diagnostic finalizer was never part of the canonical production build; production uses the normal UI action/runtime path without injecting `ui-runtime-diagnostic.js`.
+5. This cleanup must merge only after the complete authoritative CRM Build Gate passes unchanged, proving no generated/runtime artifact or test dependency remains.
 
-After Cloudflare P1/P2 is stable, perform one repository-wide reference scan before deleting anything. Confirm all of the following for each candidate:
+## Remaining candidates
 
-1. `build.sh` and CI/workflows do not execute it.
-2. No Python file imports/executes it.
-3. No generated/runtime JS or HTML depends on its output.
-4. No deployment/debug runbook still requires it.
-5. Removing it leaves the full authoritative build/test suite green.
-
-Delete confirmed dead files together in one dedicated technical-debt PR; do not mix that cleanup with Cloudflare migration/security changes.
+None recorded here. Any future cleanup candidate must be re-audited against the then-current build, CI, generated runtime, deployment runbooks, and full regression gate before deletion.
