@@ -81,6 +81,10 @@ python3 credential_eye_self_heal_finalize.py
 python3 test_credential_eye_self_heal_output.py
 python3 admin_password_byte_cap_finalize.py
 python3 test_admin_password_byte_cap_output.py
+# Public deployment guidance must describe the actual server-authenticated runtime
+# rather than the historical browser-local prototype.
+python3 production_auth_copy_finalize.py
+python3 test_production_auth_copy_output.py
 # Final server-side identity and input boundaries. Patch the two deployment BFFs
 # before syntax/runtime tests so canonical builds and deployed handlers are aligned.
 python3 preview_runtime_boundary_finalize.py
