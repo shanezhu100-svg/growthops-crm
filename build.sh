@@ -41,6 +41,7 @@ python3 test_assets_all_clients_output.py
 python3 test_workspace_state_secret_hard_guard.py
 python3 test_backup_security_output.py
 python3 test_preview_secret_guard.py
+python3 test_post_p5_v5_direct_scalar.py
 python3 test_vercel_security_headers.py
 python3 cloudflare_headers_finalize.py
 node test_cloudflare_function_security_headers.mjs
