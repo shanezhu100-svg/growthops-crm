@@ -1,14 +1,14 @@
 # Post-P5 v5 Direct Scalar Reveal
 
-Status: candidate prepared; production migration not yet accepted.
+Status: **Production accepted** on 2026-08-24 UTC.
 
 ## Why
 
-The browser/BFF credential surface is already restricted to `crm_reveal_client_secret_value_v5`, and v5 returns only one `value`. However, the original v5 implementation internally called the server-only v3 helper, which decrypted the workspace Vault tree and constructed a broader `{loginPassword, accountSecrets}` JSON bundle before v5 selected one scalar.
+The browser/BFF credential surface was already restricted to `crm_reveal_client_secret_value_v5`, and v5 returned only one `value`. However, the original v5 implementation internally called the server-only v3 helper, which decrypted the workspace Vault tree and constructed a broader `{loginPassword, accountSecrets}` JSON bundle before v5 selected one scalar.
 
-That bundle never crossed the browser boundary and v3/v4 have no browser or service-role EXECUTE after P5, so this is not a current external exposure. It is an internal least-data/lifetime improvement.
+That bundle never crossed the browser boundary and v3/v4 had no browser or service-role EXECUTE after P5, so this was not an external exposure. This hardening reduces internal plaintext copies and lifetime.
 
-## Candidate behavior
+## Accepted behavior
 
 The replacement keeps the v5 signature and browser contract unchanged while removing the v3/v4/full-client dependency. It:
 
@@ -20,7 +20,7 @@ The replacement keeps the v5 signature and browser contract unchanged while remo
 - reads the encrypted workspace Vault document once, selects one client/platform/account, strips login identifiers from the selected account, and asks the existing scalar helper only for the requested password/twofa value;
 - preserves Facebook/TikTok platform-login-password fallback semantics for password only;
 - clears non-returned JSON references before serializing the result;
-- keeps v5 executable only by `service_role`; browser roles still have zero direct database EXECUTE after P5.
+- keeps v5 executable only by `service_role`; browser roles remain at zero direct database EXECUTE after P5.
 
 The 12-hour v3 session-freshness branch does not need a second check in v5: v5 already requires the exact unexpired unlock token, and that token can only be created by re-entering the current ADMIN password. The 2026-08-23 re-auth bridge intentionally treats that valid unlock as the fresh re-auth signal.
 
@@ -28,14 +28,26 @@ The 12-hour v3 session-freshness branch does not need a second check in v5: v5 a
 
 Vault currently stores one encrypted secret JSON document per workspace, so a database function still has to decrypt that workspace document before selecting a field. Eliminating that would require a separate storage-model migration (for example, one Vault item per account/field) and is intentionally out of scope.
 
-## Acceptance sequence
+## Production acceptance
 
-1. Run `post_p5_v5_direct_scalar_preflight.sql` read-only against Production.
-2. Run repository build/static gates including `test_post_p5_v5_direct_scalar.py`.
-3. Apply `20260824_post_p5_v5_direct_scalar.sql` as a tracked Supabase migration.
-4. Run `post_p5_v5_direct_scalar_check.sql` read-only.
-5. Re-run P5/Post-P5 ACL checks and advisors.
-6. Confirm v5 still has service-role EXECUTE only and v3/v4 remain unreachable through both BFF allowlists.
-7. Record the production migration version and live function fingerprint before merging the candidate branch.
+- Read-only preflight: `POST_P5_V5_DIRECT_SCALAR_PREFLIGHT_OK`.
+- Tracked Supabase migration: `20260824005806 post_p5_v5_direct_scalar`.
+- Read-only post-check: `POST_P5_V5_DIRECT_SCALAR_OK`.
+- Live function fingerprint (MD5 of `pg_get_functiondef`): `d5825feb1a40aad7d9b65fe6e7491b7d`.
+- Live v5 properties: SECURITY DEFINER, `search_path=public, pg_catalog`, direct `crm_read_workspace_secrets` present, v3 dependency absent.
+- Live function ACL after migration: v5 `service_role=true`, `anon=false`, `authenticated=false`.
+- Whole CRM function EXECUTE totals after migration: anon `0`, authenticated `0`, service_role `12`.
+- Pure synthetic helper semantics: direct password, direct 2FA, nested password, nested TOTP, backup-code array and login-identifier exclusion all passed.
+- Supabase Security Advisor after migration: unchanged; only nine intentional `RLS enabled / no policy` INFO findings.
+- Supabase Performance Advisor after migration: unchanged; only five unused-index INFO findings.
+- Both BFFs remain allowlisted for v5 only; v3/v4/full-client reveal are not browser-facing RPCs.
 
-Rollback is `supabase/rollback/20260824_post_p5_v5_direct_scalar_rollback.sql`; it restores only v5's previous internal v3 composition and intentionally does not reopen any P5 browser grants.
+A transaction-style synthetic workspace/session/unlock/Vault end-to-end probe was intentionally **not executed** because the tool safety layer rejected construction of credential-like test material. The rejected call did not reach PostgreSQL and created no records. Production acceptance therefore relies on the read-only pre/post checks, live function/ACL catalog evidence, synthetic scalar-helper tests, and the existing BFF/P5 regression suite.
+
+## Rollback
+
+`supabase/rollback/20260824_post_p5_v5_direct_scalar_rollback.sql` restores only v5's previous internal v3 composition. It intentionally preserves the Post-P5 execution boundary: PUBLIC/anon/authenticated stay revoked and only `service_role` remains executable.
+
+## Repository/deployment follow-through
+
+After this acceptance record is committed, merge the candidate branch so the canonical repository contains the already-applied migration. Production application builds must then pass `test_post_p5_v5_direct_scalar.py` in addition to the existing Preview-secret, P2/P3/P4/P5 and Post-P5 gates.
