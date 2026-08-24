@@ -92,13 +92,25 @@ function loginSourceBucket(req) {
   return createHash('sha256').update(ip, 'utf8').digest('hex').slice(0, 24);
 }
 
+function supabaseOrigin(raw) {
+  const value = String(raw || SUPABASE_URL_DEFAULT).trim();
+  try {
+    const parsed = new URL(value);
+    const host = String(parsed.hostname || '').toLowerCase().replace(/\.$/, '');
+    if (parsed.protocol !== 'https:' || !host.endsWith('.supabase.co')) return '';
+    if (parsed.username || parsed.password || (parsed.port && parsed.port !== '443')) return '';
+    if (parsed.pathname !== '/' || parsed.search || parsed.hash) return '';
+    return `https://${host}`;
+  } catch {
+    return '';
+  }
+}
+
 function serverConfig() {
   const key = String(process.env.GROWTHOPS_SUPABASE_SECRET_KEY || '').trim();
-  if (!/^sb_secret_[A-Za-z0-9_-]+$/.test(key)) return null;
-  return {
-    url: String(process.env.GROWTHOPS_SUPABASE_URL || SUPABASE_URL_DEFAULT).replace(/\/+$/, ''),
-    key,
-  };
+  const url = supabaseOrigin(process.env.GROWTHOPS_SUPABASE_URL);
+  if (!/^sb_secret_[A-Za-z0-9_-]+$/.test(key) || !url) return null;
+  return { url, key };
 }
 
 function json(res, status, body) {

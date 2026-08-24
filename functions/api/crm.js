@@ -46,7 +46,17 @@ async function loginSourceBucket(request){
   const digest=await globalThis.crypto.subtle.digest('SHA-256',new TextEncoder().encode(ip));
   return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('').slice(0,24);
 }
-function serverConfig(env={}){ const key=String(env.GROWTHOPS_SUPABASE_SECRET_KEY||'').trim(); if(!/^sb_secret_[A-Za-z0-9_-]+$/.test(key)) return null; return {url:String(env.GROWTHOPS_SUPABASE_URL||SUPABASE_URL_DEFAULT).replace(/\/+$/,''),key}; }
+function supabaseOrigin(raw){
+  const value=String(raw||SUPABASE_URL_DEFAULT).trim();
+  try{
+    const parsed=new URL(value); const host=String(parsed.hostname||'').toLowerCase().replace(/\.$/,'');
+    if(parsed.protocol!=='https:'||!host.endsWith('.supabase.co')) return '';
+    if(parsed.username||parsed.password||(parsed.port&&parsed.port!=='443')) return '';
+    if(parsed.pathname!=='/'||parsed.search||parsed.hash) return '';
+    return `https://${host}`;
+  }catch{return '';}
+}
+function serverConfig(env={}){ const key=String(env.GROWTHOPS_SUPABASE_SECRET_KEY||'').trim(); const url=supabaseOrigin(env.GROWTHOPS_SUPABASE_URL); if(!/^sb_secret_[A-Za-z0-9_-]+$/.test(key)||!url) return null; return {url,key}; }
 function json(status,body,requestIdValue,extraHeaders={}){ const headers=new Headers({...extraHeaders,...SECURITY_HEADERS,'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store, max-age=0','Pragma':'no-cache','X-Request-ID':requestIdValue}); return new Response(JSON.stringify(body),{status,headers}); }
 async function bodyObject(request){ const text=await request.text(); if(!text) return {}; try{return JSON.parse(text);}catch{return null;} }
 function safeLog(event,requestIdValue,rpc,status){ console.error(JSON.stringify({event,platform:'cloudflare',requestId:requestIdValue,rpc:ALL_RPCS.has(rpc)?rpc:'unknown',status:Number(status||0)})); }
