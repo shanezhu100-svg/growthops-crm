@@ -174,6 +174,7 @@ async function supabaseRpc(name, args, config, sourceBucket = '') {
   const response = await fetch(`${config.url}/rest/v1/rpc/${encodeURIComponent(name)}`, {
     method: 'POST',
     headers,
+    redirect: 'error',
     body: JSON.stringify(args || {}),
   });
 
