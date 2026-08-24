@@ -80,6 +80,7 @@ node test_supabase_upstream_origin_guard.mjs
 node test_api_body_limit.mjs
 node test_api_request_envelope.mjs
 node test_login_input_bounds.mjs
+node test_admin_password_input_bounds.mjs
 python3 test_server_identity_sink_inventory.py
 node test_cloudflare_p3p4_attack_regression.mjs
 python3 test_p5_sensitive_rpc_revocation.py
@@ -103,6 +104,7 @@ node test_post_p5_login_trusted_source_bucket.mjs
 python3 test_post_p5_login_trusted_source_bucket.py
 python3 test_post_p5_crm_acl_event_guard.py
 python3 test_post_p5_crm_rls_alter_guard.py
+python3 test_post_p5_bcrypt_password_byte_cap.py
 node --check dist/cloud-adapter.js
 node --check dist/cloud-security-hotfix.js
 node --check dist/cloud-ui-action-bridge.js

@@ -156,6 +156,12 @@ function loginInputValid(args = {}) {
     && Buffer.byteLength(args.p_password, 'utf8') <= LOGIN_PASSWORD_MAX_BYTES;
 }
 
+function upsertPasswordInputValid(args = {}) {
+  if (!Object.prototype.hasOwnProperty.call(args, 'p_password') || args.p_password == null) return true;
+  return typeof args.p_password === 'string'
+    && Buffer.byteLength(args.p_password, 'utf8') <= LOGIN_PASSWORD_MAX_BYTES;
+}
+
 function safeLog(event, requestIdValue, rpc, status) {
   const safeRpc = ALL_RPCS.has(rpc) ? rpc : 'unknown';
   console.error(JSON.stringify({
@@ -277,6 +283,9 @@ module.exports = async function handler(req, res) {
     }
 
     args.p_token = sessionToken;
+    if (rpc === 'crm_upsert_user' && !upsertPasswordInputValid(args)) {
+      return json(res, 400, { message: 'INVALID_REQUEST' });
+    }
 
     if (rpc === 'crm_logout') {
       try {

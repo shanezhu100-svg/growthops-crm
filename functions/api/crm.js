@@ -80,6 +80,10 @@ function loginInputValid(args={}){
   const encoder=new TextEncoder();
   return encoder.encode(args.p_username).byteLength<=LOGIN_USERNAME_MAX_BYTES&&encoder.encode(args.p_password).byteLength<=LOGIN_PASSWORD_MAX_BYTES;
 }
+function upsertPasswordInputValid(args={}){
+  if(!Object.prototype.hasOwnProperty.call(args,'p_password')||args.p_password==null)return true;
+  return typeof args.p_password==='string'&&new TextEncoder().encode(args.p_password).byteLength<=LOGIN_PASSWORD_MAX_BYTES;
+}
 function safeLog(event,requestIdValue,rpc,status){ console.error(JSON.stringify({event,platform:'cloudflare',requestId:requestIdValue,rpc:ALL_RPCS.has(rpc)?rpc:'unknown',status:Number(status||0)})); }
 function safeUpstreamMessage(data){ const message=String(data?.message||'').trim(); return SAFE_UPSTREAM_MESSAGES.has(message)?message:''; }
 async function supabaseRpc(name,args,config,sourceBucket=''){
@@ -105,6 +109,7 @@ export async function onRequest(context){
     if(PUBLIC_RPCS.has(rpc)){ delete args.p_token; return respond(200,stripSessionToken(await supabaseRpc(rpc,args,config))); }
     if(!sessionToken) return respond(401,{message:'SESSION_REQUIRED'},{'Set-Cookie':clearSessionCookie()});
     args.p_token=sessionToken;
+    if(rpc==='crm_upsert_user'&&!upsertPasswordInputValid(args))return respond(400,{message:'INVALID_REQUEST'});
     if(rpc==='crm_logout'){ try{ const data=await supabaseRpc(rpc,args,config); return respond(200,stripSessionToken(data),{'Set-Cookie':clearSessionCookie()}); }catch(error){ error.clearSessionCookie=true; throw error; } }
     return respond(200,stripSessionToken(await supabaseRpc(rpc,args,config)));
   }catch(error){
