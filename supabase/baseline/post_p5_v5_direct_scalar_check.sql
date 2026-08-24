@@ -35,8 +35,8 @@ begin
      or position('rateLimitVersion' in v_def)=0 then
     raise exception 'V5_DIRECT_SCALAR_CHECK_FAILED audit parity missing';
   end if;
-  if position("v_field not in ('password','twofa')" in v_def)=0
-     or position("v_platform not in ('facebook','tiktok','google','instagram')" in v_def)=0 then
+  if position('v_field not in (''password'',''twofa'')' in v_def)=0
+     or position('v_platform not in (''facebook'',''tiktok'',''google'',''instagram'')' in v_def)=0 then
     raise exception 'V5_DIRECT_SCALAR_CHECK_FAILED allowlist missing';
   end if;
   if not has_function_privilege('service_role',v_oid,'EXECUTE')
