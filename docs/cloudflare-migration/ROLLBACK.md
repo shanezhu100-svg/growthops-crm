@@ -1,71 +1,106 @@
 # Cloudflare Migration Rollback
 
-This runbook keeps the currently validated Vercel deployment as the recovery origin while Cloudflare is introduced in phases.
+Last reviewed: 2026-08-24
 
-## Frozen Vercel recovery target
+This runbook describes recovery for the **current server-boundary architecture** after P2-B, P5, and Post-P5 hardening. It preserves the validated Vercel same-origin BFF path as the primary hosting fallback without reopening browser/`anon` Supabase privileges.
 
-- Production deployment: `dpl_GrqUWZuHikcp2LX5PTpyozLC8skH`
-- Production URL: `https://growthops-gkume1n0z-shanezhu100-svgs-projects.vercel.app`
+## Current Vercel recovery principle
+
+Use the most recent **READY Production deployment from `main` that corresponds to a commit already accepted by the complete canonical CRM Build Gate**. Do not permanently pin rollback to an old pre-P5 application release, because older code may assume database privileges that have since been intentionally removed.
+
+Validated checkpoint at this review:
+
+- Production deployment: `dpl_3zL8NYGHxmSZPixUdVtUWV5g551s`
+- Production URL: `https://growthops-ec5gbp67e-shanezhu100-svgs-projects.vercel.app`
 - Stable alias: `https://growthops-crm.vercel.app`
-- Stable Git commit: `78fa37c34501302ed7cd27cc5804cb055d90a932`
+- Git commit: `ddcfe1ce48238c630364a5273185c47e1b0b36ed`
 - Checkpoint state: `READY`
+- Vercel rollback-candidate state: `true`
+- 5xx runtime log check at review: no matching Production 5xx entries in the preceding 24-hour window.
 
-Do not delete or redeploy this recovery target as part of P1 Cloudflare Preview work.
+This checkpoint is evidence, not an immutable forever-pin. Before an actual rollback, verify that the selected Vercel deployment is still `READY`, maps to the intended `main` commit, and remains compatible with the then-current Supabase privilege state.
 
-## P1 rollback: Pages/static hosting only
+## Current architecture invariants
 
-P1 does not change Supabase or authentication.
+A hosting rollback must preserve all of these controls:
 
-If Cloudflare Pages Preview is broken:
+- browser traffic uses the same-origin `/api/crm` BFF;
+- CRM session material remains in the `__Host-growthops_crm` HttpOnly, Secure, SameSite=Strict cookie;
+- browser Supabase URL/key globals and direct browser RPC access remain absent from the shipped application;
+- both Vercel and Cloudflare BFFs use the server-only Supabase identity boundary;
+- Production Supabase origin remains pinned to the canonical project;
+- current P5 state keeps `anon` CRM RPC EXECUTE at zero;
+- Post-P5 service-role minimization and direct relation ACL restrictions remain in force;
+- credential reveal remains v5 single-scalar only and ADMIN reauthentication remains required.
 
-1. Stop using the Cloudflare Preview URL.
-2. Continue using the frozen Vercel production/preview.
-3. Leave Supabase untouched.
-4. Fix the Cloudflare build/output configuration in a new preview.
+Do not treat database privilege rollback as a normal hosting rollback step.
 
-No database rollback is required because P1 must not change the database.
+## P1 historical rollback: Pages/static hosting only
 
-## P2 rollback: Worker `/api/crm` migration
+P1 did not change Supabase or authentication. Its original recovery action was simply to stop using the Cloudflare Preview URL and continue on Vercel.
 
-During the first Worker phase, preserve the existing same-origin `/api/crm` contract.
+No database rollback was required for P1.
 
-If Worker API behavior is incorrect:
+## P2/P2-B hosting rollback: `/api/crm` server boundary
 
-1. Disable/remove the Cloudflare Worker route serving the CRM API or route CRM traffic back to Vercel.
-2. Restore the Vercel origin as the active application/API path.
-3. Do not revoke transitional Supabase `anon` RPC grants until Worker Preview has passed acceptance; this preserves the Vercel BFF rollback path.
-4. Verify login, cookie session restore, state load/save, account summary, credential unlock/reveal, and logout.
+The Vercel and Cloudflare implementations now share the same server-only Supabase identity model. If the Cloudflare application/API path is unhealthy but Supabase itself is healthy:
 
-## P5 rollback: Supabase RPC privilege tightening
+1. Disable or bypass the affected Cloudflare route/policy as appropriate, or route the CRM hostname back to the validated Vercel Production origin.
+2. Select a Vercel deployment that is `READY`, accepted by the canonical gate, and compatible with the current database privilege state.
+3. Keep the server-only Supabase secret and canonical Production origin boundary intact.
+4. **Do not restore `anon` RPC grants merely to make an older application build work.** Prefer the current compatible Vercel BFF path.
+5. Verify login, cookie-session restore, state load/save, account summary, credential unlock/reveal, and logout.
 
-After Cloudflare Worker begins using a privileged server-side Supabase identity, RPC grants will be reduced in small forward migrations.
+If a candidate Vercel rollback build requires a privilege that current Post-P5 Production intentionally removed, stop and choose a compatible application deployment instead of broadening the database surface.
+
+## P5/Post-P5 database rollback
+
+P5 and Post-P5 changes are security migrations, not hosting toggles. Their rollback SQL is retained for narrowly diagnosed regressions and must be applied only to the exact affected migration/control.
 
 Rules:
 
-- Revoke one logical group at a time.
-- Commit every privilege change as migration SQL.
-- Validate Cloudflare Preview before the next revoke.
-- If rollback to Vercel is still required after a revoke, use an explicit reviewed forward migration to restore only the minimum execution grant needed by the frozen Vercel BFF.
-- Do not casually restore broad v3/v4/full credential reveal access.
+- never restore broad `anon` EXECUTE as a generic emergency measure;
+- never restore pre-P5 browser/direct-RPC behavior;
+- identify the exact failed migration or ACL control first;
+- use only the matching reviewed rollback SQL under `supabase/rollback/`;
+- preserve unaffected P5/Post-P5 revocations and ACL hardening;
+- re-run the associated read-only post-check and the canonical repository gate immediately after any database rollback;
+- record the resulting Production fingerprint/ACL state before resuming traffic changes.
+
+The historical Group 1 rollback for the two sensitive credential RPCs remains documented in `P5_RPC_REVOCATION.md`, but its own trigger is narrow: a proven failure of the server-only identity path for those RPCs while the expected service-role privilege should exist. A UI-only defect is not a permission rollback trigger.
+
+Later P5/Post-P5 controls have their own exact rollback artifacts. Do not combine them into one broad privilege restoration.
+
+## Preview rollback / fail-closed rule
+
+Preview environments must not silently target Production Supabase. If a Cloudflare or Vercel Preview has a server secret but no explicit isolated staging `GROWTHOPS_SUPABASE_URL`, the expected behavior is fail-closed.
+
+Fix Preview by either:
+
+1. configuring an explicit isolated staging Supabase URL compatible with the Preview secret; or
+2. removing the Preview server secret when no Preview backend should be active.
+
+Never bypass the Preview boundary by weakening Production origin checks or defaulting Preview to Production Supabase.
 
 ## Access/WAF rollback
 
 If Cloudflare Access, WAF, or rate limiting blocks legitimate CRM use:
 
-1. Roll back or disable the specific Cloudflare policy/rule first.
-2. Keep CRM/Supabase data unchanged.
-3. Confirm the origin application still works before changing any application code.
-4. Never solve an Access/WAF issue by weakening Vault, Session, RLS, or credential RPC controls.
+1. roll back or disable only the specific Cloudflare policy/rule causing the failure;
+2. keep CRM/Supabase data and database privileges unchanged;
+3. confirm the origin application still works before changing application code;
+4. never solve an Access/WAF issue by weakening Vault, Session, RPC, origin, RLS, or credential controls.
 
 ## Production cutover rollback
 
-If Cloudflare Production fails after DNS/hostname cutover:
+If a Cloudflare Production hostname/routing cutover fails:
 
-1. Disable conflicting Worker/Access routing as needed.
-2. Route the CRM hostname back to the preserved Vercel origin using the previously verified DNS configuration.
-3. Confirm HTTPS resolves correctly.
-4. Run the smoke checks below.
-5. Inspect Worker/Supabase errors before attempting another cutover.
+1. freeze further routing/security changes until the failure mode is identified;
+2. disable only the conflicting Worker/Access/routing rule as needed;
+3. route the CRM hostname back to the validated current Vercel Production origin using the previously verified DNS configuration;
+4. confirm HTTPS and the stable application origin resolve correctly;
+5. run the mandatory smoke checks below;
+6. inspect Cloudflare/BFF/Supabase errors before attempting another cutover.
 
 Exact DNS record values must be recorded when the production domain is actually configured. Do not invent them in advance.
 
@@ -81,9 +116,12 @@ Exact DNS record values must be recorded when the production domain is actually 
 - Reveal returns only the requested field and hides again on schedule/backgrounding.
 - OPS cannot reveal password/2FA.
 - Logout clears the session.
+- Browser direct Supabase configuration/RPC material remains absent.
 - Workspace sensitive-key scan remains `0`.
 - Audit sensitive payload-value scan remains `0`.
+- Current P5/Post-P5 privilege checks remain at their accepted state, including zero `anon` CRM RPC EXECUTE.
 - Vault secret count has not changed because of hosting rollback.
+- The canonical `sh build.sh && python3 cloudflare_p1_verify.py` gate remains green for the selected application commit.
 
 ## Vault rule
 
