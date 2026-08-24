@@ -3,6 +3,8 @@ set -eu
 # This must run before any build/finalizer code so Preview branch code cannot
 # silently inherit the production Supabase server identity.
 python3 preview_secret_guard.py
+# Validate CI/quota policy before any expensive build/finalizer work.
+python3 test_ci_quota_guard.py
 python3 verify_final_source.py
 python3 runtime_config_compat.py
 trap 'rm -f index.html' 0
