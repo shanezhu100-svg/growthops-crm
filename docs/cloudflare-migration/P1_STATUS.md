@@ -1,8 +1,8 @@
-# P1 Cloudflare Pages Preview Status
+# P1 Cloudflare Pages Preview Status (Historical)
 
-Last updated: 2026-08-22
+Last reviewed: 2026-08-24
 
-This file is the single current checklist for P1. Do not repeat completed preflight checks unless their underlying commit/deployment changes.
+> Status: completed historical phase. This file preserves the P1 migration evidence and checklist; it is no longer the current project checklist. The repository has since advanced through P2-A, P2-B, P5, and Post-P5 hardening. Current merge validation is defined by the canonical `sh build.sh && python3 cloudflare_p1_verify.py` GitHub Actions gate.
 
 ## P0 gate status
 
@@ -26,7 +26,7 @@ A raw offline `pg_dump` artifact was not produced and is not claimed. It may be 
 - [x] `cloudflare_p1_verify.py` limited to Cloudflare output parity only: `dist/` presence plus five frozen production artifact SHA-256 values.
 - [x] Credential / HttpOnly / RPC security remains owned by `sh build.sh` and its existing authoritative tests.
 - [x] Obsolete GitHub Pages deployment workflow `.github/workflows/static.yml` removed from the P1 branch.
-- [x] Suspected unused finalizers/tests recorded as post-migration dead-code candidates; nothing in that group is deleted during P1/P2.
+- [x] Suspected unused finalizers/tests recorded as post-migration dead-code candidates; nothing in that group was deleted during P1/P2. Those candidates were later re-audited after the freeze ended, and the proven-unused files were removed in PR #61 and PR #62 under the complete canonical build gate.
 - [x] P1 introduces no database migration, RPC grant change, authentication change, credential movement, API split, CSP tightening or production DNS change.
 - [x] GitHub App `Cloudflare Workers and Pages` is installed and limited to `Only select repositories`, with only `growthops-crm` selected.
 - [x] Cloudflare Pages Git integration recognizes `shanezhu100-svg/growthops-crm`.
@@ -54,16 +54,18 @@ This was not a CRM/runtime failure. PR #16 was not merged early, the verifier wa
 - [x] Final single-commit merge candidate `81503135d7a1f162f959850b6816de30028794dd` received a successful Cloudflare Preview before this status-only update; Cloudflare bot reported `Deploy successful`, with deployment URL `https://7cfc7e07.growthops-crm.pages.dev` and branch Preview URL `https://cloudflare-p1-pages-preview.growthops-crm.pages.dev`.
 - [x] Post-Preview Supabase structural/security cross-check remained on the frozen baseline shape: 9 CRM tables, 40 CRM functions, 26 CRM indexes, 5 business triggers, 12 anon-executable CRM RPCs, 0 authenticated-executable CRM RPCs, 40 service-role-executable CRM RPCs, 9 RLS-enabled CRM tables, 0 CRM policies, and 1 Vault row.
 - [x] The full deterministic Production fingerprint immediately before Preview remained `258 / d78c430cdd33757f50a5286b66c0095e3ff322d64f364eb4b61f1a517fd3d729`; P1 performed no database writes.
-- [x] Vercel Production rollback target remains `READY`, and no Production runtime error cluster was found in the checked one-hour window.
+- [x] Vercel Production rollback target remained `READY`, and no Production runtime error cluster was found in the checked one-hour window.
 
-## Final P1 merge gate
+## Historical P1 merge gate
 
-All functional P1 acceptance items are complete. This status-only commit must itself receive green Cloudflare and Vercel Preview checks before PR #16 is marked Ready and merged.
+At the time of P1, all functional acceptance items were complete and the status-only commit itself was required to receive green Cloudflare and Vercel Preview checks before PR #16 was marked Ready and merged.
 
-Do not merge if the PR head moves after those checks; merge only with the expected head SHA.
+The historical rule was: do not merge if the PR head moves after those checks; merge only with the expected head SHA. The repository continues to use expected-head merges for current small PRs, while current PR execution is validated by the secret-free GitHub canonical gate and main-only Vercel Git deployment policy.
 
-## Next transition
+## Historical next transition
 
-Once P1 is merged, proceed to P2-A only:
+P1's next planned transition was P2-A:
 
 **move the existing same-origin `/api/crm` behavior 1:1 to Cloudflare Worker/Pages Functions before any API split or Supabase privilege tightening.**
+
+That transition is complete. P2-A was followed by P2-B server identity, P5 RPC revocation, and Post-P5 hardening; their dedicated documents and the current canonical build gates are authoritative for those later controls.
