@@ -77,6 +77,7 @@ node --check api/crm.js
 GROWTHOPS_SUPABASE_SECRET_KEY=sb_secret_test_http_only_ci node test_http_only_session_api.js
 node test_cloudflare_p2b_api.mjs
 node test_supabase_upstream_origin_guard.mjs
+python3 test_server_identity_sink_inventory.py
 node test_cloudflare_p3p4_attack_regression.mjs
 python3 test_p5_sensitive_rpc_revocation.py
 python3 test_p5_group2_legacy_status_candidate.py
