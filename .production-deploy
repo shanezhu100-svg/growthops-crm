@@ -2,3 +2,5 @@ verified-final-crm
 source-bytes=643031
 source-sha256=51ca745531e98d1799d0ac181e97e29a1fdd6ea2eb77587b41051d9519103e43
 build-parent=6a5d47d84ac44b7588d9b442b8bc0d368c309050
+production-validation-base=ea923dc60f200dccae3104a51f0aeffe8a94ee3c
+production-validation-purpose=admin-password-finalizer-fix
