@@ -84,6 +84,7 @@ python3 test_admin_password_byte_cap_output.py
 # Final server-side identity and input boundaries. Patch the two deployment BFFs
 # before syntax/runtime tests so canonical builds and deployed handlers are aligned.
 python3 preview_runtime_boundary_finalize.py
+python3 production_supabase_origin_pin_finalize.py
 python3 unlock_password_input_bounds_finalize.py
 python3 user_identity_input_bounds_finalize.py
 python3 session_token_input_bounds_finalize.py
@@ -92,6 +93,7 @@ GROWTHOPS_SUPABASE_SECRET_KEY=sb_secret_test_http_only_ci node test_http_only_se
 node test_cloudflare_p2b_api.mjs
 node test_supabase_upstream_origin_guard.mjs
 node test_preview_runtime_boundary.mjs
+node test_production_supabase_origin_pin.mjs
 node test_api_body_limit.mjs
 node test_api_request_envelope.mjs
 node test_login_input_bounds.mjs
