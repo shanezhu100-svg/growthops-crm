@@ -1,5 +1,8 @@
 #!/bin/sh
 set -eu
+# This must run before any build/finalizer code so Preview branch code cannot
+# silently inherit the production Supabase server identity.
+python3 preview_secret_guard.py
 python3 verify_final_source.py
 python3 runtime_config_compat.py
 trap 'rm -f index.html' 0
@@ -37,6 +40,7 @@ python3 test_credential_client_detail_v4_output.py
 python3 test_assets_all_clients_output.py
 python3 test_workspace_state_secret_hard_guard.py
 python3 test_backup_security_output.py
+python3 test_preview_secret_guard.py
 python3 test_vercel_security_headers.py
 python3 cloudflare_headers_finalize.py
 node test_cloudflare_function_security_headers.mjs
