@@ -66,6 +66,10 @@ python3 credential_ui_v6_finalize.py
 python3 test_credential_ui_v6_output.py
 python3 http_only_session_finalize.py
 python3 test_http_only_session_output.py
+# The HttpOnly/same-origin migration has removed every browser consumer of the
+# legacy publishable Supabase transport globals. Strip those dead globals now.
+python3 browser_supabase_config_scrub_finalize.py
+python3 test_browser_supabase_config_scrub_output.py
 python3 client_detail_return_finalize.py
 python3 test_client_detail_return_output.py
 python3 module_home_navigation_finalize.py
