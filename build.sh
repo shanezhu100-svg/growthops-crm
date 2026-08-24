@@ -107,6 +107,7 @@ python3 test_post_p5_login_trusted_source_bucket.py
 python3 test_post_p5_crm_acl_event_guard.py
 python3 test_post_p5_crm_rls_alter_guard.py
 python3 test_post_p5_bcrypt_password_byte_cap.py
+python3 test_post_p5_single_workspace_membership_invariant.py
 node --check dist/cloud-adapter.js
 node --check dist/cloud-security-hotfix.js
 node --check dist/cloud-ui-action-bridge.js
