@@ -18,11 +18,17 @@ const headers={'sec-fetch-site':'same-origin',origin:'https://crm.example',host:
 const body={rpc:'crm_public_status',args:{}};
 
 async function invokeVercel(url,fetchImpl){
-  const oldFetch=global.fetch; const oldSecret=process.env.GROWTHOPS_SUPABASE_SECRET_KEY; const oldUrl=process.env.GROWTHOPS_SUPABASE_URL;
+  const oldFetch=global.fetch;
+  const names=['GROWTHOPS_SUPABASE_SECRET_KEY','GROWTHOPS_SUPABASE_URL','VERCEL_ENV'];
+  const old=Object.fromEntries(names.map(name=>[name,process.env[name]]));
   process.env.GROWTHOPS_SUPABASE_SECRET_KEY=TEST_SECRET;
   if(url===undefined) delete process.env.GROWTHOPS_SUPABASE_URL; else process.env.GROWTHOPS_SUPABASE_URL=url;
+  delete process.env.VERCEL_ENV;
   global.fetch=fetchImpl; const res=makeRes();
-  try{await vercelHandler({method:'POST',headers,body},res);}finally{global.fetch=oldFetch; if(oldSecret===undefined)delete process.env.GROWTHOPS_SUPABASE_SECRET_KEY;else process.env.GROWTHOPS_SUPABASE_SECRET_KEY=oldSecret; if(oldUrl===undefined)delete process.env.GROWTHOPS_SUPABASE_URL;else process.env.GROWTHOPS_SUPABASE_URL=oldUrl;}
+  try{await vercelHandler({method:'POST',headers,body},res);}finally{
+    global.fetch=oldFetch;
+    for(const name of names){if(old[name]===undefined)delete process.env[name];else process.env[name]=old[name];}
+  }
   return{status:res.statusCode,json:parse(res.body)};
 }
 async function invokeCf(url,fetchImpl){
@@ -69,4 +75,4 @@ for(const [input,expected] of [[undefined,DEFAULT_URL],[STAGING_URL+'/',STAGING_
   }
 }
 
-console.log('SUPABASE_UPSTREAM_ORIGIN_GUARD_OK: platforms=vercel+cloudflare; scheme=https-only; host=*.supabase.co-only; credentials+path+query+fragment=denied; redirects=error; invalid-target=503+zero-fetch; staging-origin=allowed');
+console.log('SUPABASE_UPSTREAM_ORIGIN_GUARD_OK: platforms=vercel+cloudflare; scheme=https-only; host=*.supabase.co-only; credentials+path+query+fragment=denied; redirects=error; invalid-target=503+zero-fetch; staging-origin=allowed; vercel-env=isolated-non-production');
