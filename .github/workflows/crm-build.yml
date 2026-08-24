@@ -36,4 +36,4 @@ jobs:
           node --version
           python3 --version
       - name: Run canonical CRM build gates
-        run: sh build.sh
+        run: sh build.sh && python3 cloudflare_p1_verify.py

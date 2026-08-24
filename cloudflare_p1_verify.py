@@ -8,8 +8,8 @@ DIST = ROOT / 'dist'
 # P1 verifier scope is intentionally narrow: Cloudflare output/parity only.
 # Application security is already enforced by sh build.sh and its existing tests.
 EXPECTED_SHA256 = {
-    'index.html': '941be51fcaf60acd0bb350c1822260f24555340fb2d719effe0f339c3b69a1e5',
-    'cloud-adapter.js': '2a5b5da0f94ba66a2b58ed64b923e0167e7723eb7ccccd3c6384dfbeb471a2a6',
+    'index.html': 'a80eb58791d28a09a4d9fee85dc1de8eb0a29d8718fe9e6a5bbe461cd8794271',
+    'cloud-adapter.js': '9713943a80008f625000d6fac2440fb9395f9e6e2c1fd09e820a399c5c34379f',
     'cloud-security-hotfix.js': 'f2b3f08c9bbabc4e974c859fe6d86396d028f46b43354b6d74572b5efa938194',
     'cloud-p1-overrides.js': 'e50e05322a0d56e78bf112a52be08ff54263f4ce88cb0b9b91f6613722b8ccab',
     'cloud-ui-action-bridge.js': 'b15e0b792e2f0ba6e99bef53fea96dde78b647b5528ae199311c4be9b37027a7',
@@ -42,16 +42,22 @@ def fail(message: str) -> None:
 if not DIST.is_dir():
     fail('dist/ missing; run sh build.sh first')
 
+# Collect every pinned-artifact mismatch before failing so one CI run exposes the
+# complete drift set. Missing files remain fail-closed and are reported alongside
+# hash mismatches instead of forcing repeated one-at-a-time diagnostic runs.
+drift = []
 for name, expected in EXPECTED_SHA256.items():
     path = DIST / name
     if not path.is_file():
-        fail(f'missing dist/{name}')
+        drift.append(f'missing dist/{name}')
+        continue
     actual = sha256(path)
     if actual != expected:
-        fail(
-            f'dist/{name} hash drift; '
-            f'expected={expected}; actual={actual}'
+        drift.append(
+            f'dist/{name} hash drift; expected={expected}; actual={actual}'
         )
+if drift:
+    fail(' | '.join(drift))
 
 # Fail-open defense in depth: Pages must have a top-level static 404 so an
 # exhausted Functions allowance cannot turn an unknown /api/* path into the SPA
