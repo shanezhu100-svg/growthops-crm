@@ -6,6 +6,8 @@ const SUPABASE_URL_DEFAULT = 'https://avahcwyxparbcjdfglzx.supabase.co';
 const COOKIE_NAME = '__Host-growthops_crm';
 const COOKIE_MAX_AGE = 7 * 24 * 60 * 60;
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
+const LOGIN_USERNAME_MAX_BYTES = 256;
+const LOGIN_PASSWORD_MAX_BYTES = 72;
 const BODY_TOO_LARGE = Symbol('BODY_TOO_LARGE');
 const INVALID_JSON = Symbol('INVALID_JSON');
 
@@ -147,6 +149,13 @@ function bodyObject(req) {
   return req.body;
 }
 
+function loginInputValid(args = {}) {
+  return typeof args.p_username === 'string'
+    && typeof args.p_password === 'string'
+    && Buffer.byteLength(args.p_username, 'utf8') <= LOGIN_USERNAME_MAX_BYTES
+    && Buffer.byteLength(args.p_password, 'utf8') <= LOGIN_PASSWORD_MAX_BYTES;
+}
+
 function safeLog(event, requestIdValue, rpc, status) {
   const safeRpc = ALL_RPCS.has(rpc) ? rpc : 'unknown';
   console.error(JSON.stringify({
@@ -248,6 +257,7 @@ module.exports = async function handler(req, res) {
   try {
     if (LOGIN_RPCS.has(rpc)) {
       delete args.p_token;
+      if (!loginInputValid(args)) return json(res, 401, { message: 'LOGIN_FAILED' });
       const data = await supabaseRpc(rpc, args, config, loginSourceBucket(req));
       if (data?.error) return json(res, 401, { message: 'LOGIN_FAILED' });
       const token = String(data?.token || '');

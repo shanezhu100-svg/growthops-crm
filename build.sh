@@ -79,6 +79,7 @@ node test_cloudflare_p2b_api.mjs
 node test_supabase_upstream_origin_guard.mjs
 node test_api_body_limit.mjs
 node test_api_request_envelope.mjs
+node test_login_input_bounds.mjs
 python3 test_server_identity_sink_inventory.py
 node test_cloudflare_p3p4_attack_regression.mjs
 python3 test_p5_sensitive_rpc_revocation.py

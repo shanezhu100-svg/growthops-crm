@@ -2,6 +2,8 @@ const SUPABASE_URL_DEFAULT = 'https://avahcwyxparbcjdfglzx.supabase.co';
 const COOKIE_NAME = '__Host-growthops_crm';
 const COOKIE_MAX_AGE = 7 * 24 * 60 * 60;
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
+const LOGIN_USERNAME_MAX_BYTES = 256;
+const LOGIN_PASSWORD_MAX_BYTES = 72;
 const BODY_TOO_LARGE = Symbol('BODY_TOO_LARGE');
 const INVALID_JSON = Symbol('INVALID_JSON');
 
@@ -73,6 +75,11 @@ async function bodyObject(request){
   const bytes=new Uint8Array(total); let offset=0; for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}
   const text=new TextDecoder().decode(bytes); try{return JSON.parse(text);}catch{return INVALID_JSON;}
 }
+function loginInputValid(args={}){
+  if(typeof args.p_username!=='string'||typeof args.p_password!=='string')return false;
+  const encoder=new TextEncoder();
+  return encoder.encode(args.p_username).byteLength<=LOGIN_USERNAME_MAX_BYTES&&encoder.encode(args.p_password).byteLength<=LOGIN_PASSWORD_MAX_BYTES;
+}
 function safeLog(event,requestIdValue,rpc,status){ console.error(JSON.stringify({event,platform:'cloudflare',requestId:requestIdValue,rpc:ALL_RPCS.has(rpc)?rpc:'unknown',status:Number(status||0)})); }
 function safeUpstreamMessage(data){ const message=String(data?.message||'').trim(); return SAFE_UPSTREAM_MESSAGES.has(message)?message:''; }
 async function supabaseRpc(name,args,config,sourceBucket=''){
@@ -94,7 +101,7 @@ export async function onRequest(context){
   const config=serverConfig(env); if(!config){ safeLog('server_identity_missing',requestIdValue,rpc,503); return respond(503,{message:'SERVER_IDENTITY_NOT_CONFIGURED'}); }
   const cookies=parseCookies(request.headers.get('cookie')||''); const sessionToken=String(cookies[COOKIE_NAME]||'');
   try{
-    if(LOGIN_RPCS.has(rpc)){ delete args.p_token; const data=await supabaseRpc(rpc,args,config,await loginSourceBucket(request)); if(data?.error) return respond(401,{message:'LOGIN_FAILED'}); const token=String(data?.token||''); if(!token) return respond(502,{message:'LOGIN_SESSION_MISSING'}); return respond(200,stripSessionToken(data),{'Set-Cookie':sessionCookie(token)}); }
+    if(LOGIN_RPCS.has(rpc)){ delete args.p_token; if(!loginInputValid(args))return respond(401,{message:'LOGIN_FAILED'}); const data=await supabaseRpc(rpc,args,config,await loginSourceBucket(request)); if(data?.error) return respond(401,{message:'LOGIN_FAILED'}); const token=String(data?.token||''); if(!token) return respond(502,{message:'LOGIN_SESSION_MISSING'}); return respond(200,stripSessionToken(data),{'Set-Cookie':sessionCookie(token)}); }
     if(PUBLIC_RPCS.has(rpc)){ delete args.p_token; return respond(200,stripSessionToken(await supabaseRpc(rpc,args,config))); }
     if(!sessionToken) return respond(401,{message:'SESSION_REQUIRED'},{'Set-Cookie':clearSessionCookie()});
     args.p_token=sessionToken;
