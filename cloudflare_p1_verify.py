@@ -9,7 +9,7 @@ DIST = ROOT / 'dist'
 # Application security is already enforced by sh build.sh and its existing tests.
 EXPECTED_SHA256 = {
     'index.html': 'a80eb58791d28a09a4d9fee85dc1de8eb0a29d8718fe9e6a5bbe461cd8794271',
-    'cloud-adapter.js': '2a5b5da0f94ba66a2b58ed64b923e0167e7723eb7ccccd3c6384dfbeb471a2a6',
+    'cloud-adapter.js': '9713943a80008f625000d6fac2440fb9395f9e6e2c1fd09e820a399c5c34379f',
     'cloud-security-hotfix.js': 'f2b3f08c9bbabc4e974c859fe6d86396d028f46b43354b6d74572b5efa938194',
     'cloud-p1-overrides.js': 'e50e05322a0d56e78bf112a52be08ff54263f4ce88cb0b9b91f6613722b8ccab',
     'cloud-ui-action-bridge.js': 'b15e0b792e2f0ba6e99bef53fea96dde78b647b5528ae199311c4be9b37027a7',
