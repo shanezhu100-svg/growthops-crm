@@ -94,6 +94,7 @@ python3 user_identity_input_bounds_finalize.py
 python3 session_token_input_bounds_finalize.py
 node --check api/crm.js
 GROWTHOPS_SUPABASE_SECRET_KEY=sb_secret_test_http_only_ci node test_http_only_session_api.js
+GROWTHOPS_SUPABASE_SECRET_KEY=sb_secret_test_cache_privacy_ci node test_vercel_cache_privacy.js
 node test_cloudflare_p2b_api.mjs
 node test_supabase_upstream_origin_guard.mjs
 node test_preview_runtime_boundary.mjs
