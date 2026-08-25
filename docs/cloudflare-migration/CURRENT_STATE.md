@@ -48,6 +48,21 @@ The canonical repository gates encode the accepted post-P5 Production privilege 
 
 Do not restore `anon` RPC execution or broad service-role relation access as a normal hosting rollback. Use the exact migration-specific rollback process in `ROLLBACK.md` only for a diagnosed database-control regression.
 
+## Current Production database checkpoint
+
+A fresh read-only Production inventory was captured on 2026-08-24 after the latest applied migration `20260824034405 / post_p5_user_identity_byte_caps`. Using the same deterministic catalog query retained in `supabase/baseline/p0_schema_security_fingerprint.sql`, the current CRM schema/security checkpoint is:
+
+- inventory lines: `200`;
+- SHA-256: `bffaf123425bc7bddf02ecf00132848a5bfc4248e44395a5283c8ca9706b97f1`;
+- function EXECUTE boundary for `anon / authenticated / service_role`: `0 / 0 / 12`;
+- direct CRM table grants for those application roles: `0 / 0 / 0`;
+- direct CRM sequence grants for those application roles: `0 / 0 / 0`;
+- CRM RLS: enabled on `9 / 9` tables, with `0` browser-facing policies under the current RPC-only/default-deny design;
+- ordinary workspace sensitive-key matches: `0`;
+- server audit sensitive-payload-value matches: `0`.
+
+This is the **current catalog/security comparison anchor**, not a replacement for a full database schema export. The historical P0 fingerprints remain valid evidence for their own phases, including the accepted `195 / edfcd23e...` relation-ACL checkpoint before later Post-P5 function/constraint changes. The outstanding full schema-only `pg_dump`/equivalent export remains a separate P0 recovery deliverable; do not claim full disaster-recovery schema portability from this fingerprint alone.
+
 ## Current credential/storage boundary
 
 - customer password/2FA secret values remain in Supabase Vault-backed server-side handling;
@@ -107,6 +122,8 @@ Operational rollback instructions are in:
 `ROLLBACK.md`
 
 The core rule is: **hosting rollback and database privilege rollback are separate operations**. Route back to a compatible validated Vercel server-boundary build first; change Supabase privileges only when a specific database security migration is proven to be the cause, and then only through its exact reviewed rollback artifact.
+
+`P0_MIGRATION_LEDGER.md` preserves the remote migration history and repository mapping. Historical 2026-08-13/14 SQL gaps remain explicitly unresolved rather than reconstructed from guesses. Later forward migrations must remain mapped to genuine repository SQL, and the current Production catalog/security checkpoint above should be refreshed after any future schema/ACL/function change.
 
 ## Historical phase documents
 
