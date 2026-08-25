@@ -10,6 +10,10 @@ vercel = (root / 'api/crm.js').read_text(encoding='utf-8')
 cloudflare = (root / 'functions/api/crm.js').read_text(encoding='utf-8')
 p2b = (root / 'test_cloudflare_p2b_api.mjs').read_text(encoding='utf-8')
 build = (root / 'build.sh').read_text(encoding='utf-8')
+current_state = (root / 'docs/cloudflare-migration/CURRENT_STATE.md').read_text(encoding='utf-8')
+current_recovery = (root / 'docs/cloudflare-migration/CURRENT_RECOVERY_VERIFICATION.md').read_text(encoding='utf-8')
+acceptance = (root / 'docs/cloudflare-migration/POST_P5_RATE_LIMIT_CONCURRENCY.md').read_text(encoding='utf-8')
+ledger_appendix = (root / 'docs/cloudflare-migration/P0_MIGRATION_LEDGER_20260825_APPENDIX.md').read_text(encoding='utf-8')
 
 
 def require(ok, msg):
@@ -139,9 +143,44 @@ for marker in (
 require(build.count('python3 test_post_p5_rate_limit_concurrency.py') == 1,
         'canonical build must execute rate-limit concurrency package gate exactly once')
 
+# Production acceptance and recovery authority must not drift back to the
+# pre-concurrency function fingerprint after this migration is applied.
+current_migration = '20260825075808 / post_p5_rate_limit_concurrency'
+current_primary_hash = '77ba3a7c646cf2ea04f41d20ceb1dd02aa9f041db7cbd2a0ad0386ddedbfba65'
+current_guard_hash = '2a6c96fe5c2290cd30ee5b29800dcb47d9f1686d48b51344486c2c7780030140'
+for source, label in (
+    (current_state, 'CURRENT_STATE'),
+    (current_recovery, 'CURRENT_RECOVERY_VERIFICATION'),
+    (acceptance, 'POST_P5_RATE_LIMIT_CONCURRENCY'),
+):
+    require(current_migration in source, f'{label} missing accepted concurrency migration')
+    require(current_primary_hash in source, f'{label} missing current primary CRM fingerprint')
+    require(current_guard_hash in source, f'{label} missing current three-guard fingerprint')
+
+# The ledger appendix stores version and name in separate table columns, so gate
+# the two fields independently while retaining the same fingerprint requirements.
+require('20260825075808' in ledger_appendix,
+        'P0_MIGRATION_LEDGER_20260825_APPENDIX missing concurrency migration version')
+require('post_p5_rate_limit_concurrency' in ledger_appendix,
+        'P0_MIGRATION_LEDGER_20260825_APPENDIX missing concurrency migration name')
+require(current_primary_hash in ledger_appendix,
+        'P0_MIGRATION_LEDGER_20260825_APPENDIX missing current primary CRM fingerprint')
+require(current_guard_hash in ledger_appendix,
+        'P0_MIGRATION_LEDGER_20260825_APPENDIX missing current three-guard fingerprint')
+
+require('inventory_lines = 200' in current_recovery,
+        'CURRENT_RECOVERY_VERIFICATION missing current primary inventory count')
+require('guard_inventory_lines = 9' in current_recovery,
+        'CURRENT_RECOVERY_VERIFICATION missing current guard inventory count')
+require('supabase/baseline/post_p5_rate_limit_concurrency_check.sql' in current_recovery,
+        'CURRENT_RECOVERY_VERIFICATION missing concurrency post-check')
+require('supabase/rollback/20260825_post_p5_rate_limit_concurrency.sql' in acceptance,
+        'acceptance documentation missing exact concurrency rollback')
+
 print(
     'POST_P5_RATE_LIMIT_CONCURRENCY_PACKAGE_OK: '
     'locks=login-source+unlock-user+reveal-user-xact; '
     'unlock-failures=committable; reveal-throttle=committable; '
-    'thresholds=preserved; acl=preserved; production-change=pending'
+    'thresholds=preserved; acl=preserved; production-change=applied+verified; '
+    'recovery-anchor=current'
 )
