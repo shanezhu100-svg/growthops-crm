@@ -6,7 +6,9 @@ migration = (root / 'supabase' / 'migrations' / '20260823_post_p5_crm_acl_event_
 rollback = (root / 'supabase' / 'rollback' / '20260823_post_p5_crm_acl_event_guard.sql').read_text(encoding='utf-8')
 preflight = (root / 'supabase' / 'baseline' / 'post_p5_crm_acl_event_guard_preflight.sql').read_text(encoding='utf-8')
 postcheck = (root / 'supabase' / 'baseline' / 'post_p5_crm_acl_event_guard_check.sql').read_text(encoding='utf-8')
+guard_fingerprint = (root / 'supabase' / 'baseline' / 'post_p5_crm_guard_security_fingerprint.sql').read_text(encoding='utf-8')
 doc = (root / 'docs' / 'cloudflare-migration' / 'POST_P5_CRM_ACL_EVENT_GUARD.md').read_text(encoding='utf-8')
+guard_fingerprint_doc = (root / 'docs' / 'cloudflare-migration' / 'POST_P5_GUARD_FINGERPRINT.md').read_text(encoding='utf-8')
 vercel = (root / 'api' / 'crm.js').read_text(encoding='utf-8')
 cloudflare = (root / 'functions' / 'api' / 'crm.js').read_text(encoding='utf-8')
 build = (root / 'build.sh').read_text(encoding='utf-8')
@@ -100,6 +102,37 @@ for sql, label in ((preflight.lower(), 'preflight'), (postcheck.lower(), 'post-c
         require(forbidden not in sql, f'{label} is no longer read-only: {forbidden.strip()}')
     require('inventory_lines' in sql and 'fingerprint' in sql, f'{label} lost canonical verification')
 
+guard_body = '\n'.join(
+    line for line in guard_fingerprint.splitlines()
+    if not line.lstrip().startswith('--')
+).lower()
+for forbidden in ('create ', 'drop ', 'alter ', 'grant ', 'revoke ', 'truncate ', 'delete from ', 'insert into ', 'update '):
+    require(forbidden not in guard_body,
+            f'guard fingerprint must remain read-only: {forbidden.strip()}')
+for name in ('growthops_crm_acl_guard_ddl', 'growthops_crm_rls_guard_ddl'):
+    require(name in guard_body, f'guard fingerprint lost {name}')
+require('from pg_event_trigger' in guard_body,
+        'guard fingerprint lost event-trigger inventory')
+require('pg_get_functiondef' in guard_body and 'pg_get_userbyid' in guard_body,
+        'guard fingerprint lost function definition/owner coverage')
+require("has_function_privilege('anon'" in guard_body and
+        "has_function_privilege('authenticated'" in guard_body and
+        "has_function_privilege('service_role'" in guard_body,
+        'guard fingerprint lost application-role EXECUTE coverage')
+require('e.evtenabled::text' in guard_body and 'array_to_string(e.evttags' in guard_body,
+        'guard fingerprint lost event enabled/tag coverage')
+require('guard_inventory_lines = 6' in guard_fingerprint and
+        'd3491022f0827324c810d401123d6027c0c3d46498868a2b5520bbea54bae52f' in guard_fingerprint,
+        'guard fingerprint lost accepted Production checkpoint')
+for expected in (
+    'guard_inventory_lines = 6',
+    'd3491022f0827324c810d401123d6027c0c3d46498868a2b5520bbea54bae52f',
+    'p0_schema_security_fingerprint.sql',
+    'not a full schema backup',
+):
+    require(expected in guard_fingerprint_doc,
+            f'guard fingerprint doc missing recovery contract: {expected}')
+
 for expected, label in (
     ('cb466292535508325fadb7ebe0ba1626755f1e3c', 'accepted predecessor main'),
     ('20260823131002 / post_p5_login_trusted_source_bucket', 'accepted predecessor migration'),
@@ -121,5 +154,6 @@ print(
     'POST_P5_CRM_ACL_EVENT_GUARD_OK: '
     'scope=public.crm_*; create+alter=covered; procedures=deny; '
     'service-allowlist=12; relations=deny; default-privileges=unchanged; '
-    'fingerprint=a69eba75; production-change=applied+verified'
+    'fingerprint=a69eba75; guard-fingerprint=d3491022; '
+    'production-change=applied+verified'
 )
