@@ -2,7 +2,9 @@
 
 Checkpoint date: 2026-08-21
 
-This inventory defines what must remain true before and after the Cloudflare migration. It is a recovery/acceptance inventory, not a replacement for a full `pg_dump` schema export.
+**Historical checkpoint.** This document preserves the P0 state observed before later P5/Post-P5 privilege hardening. For current recovery execution and accepted Production values, use `CURRENT_RECOVERY_VERIFICATION.md` and `CURRENT_STATE.md`. In particular, the transitional P0 `anon` RPC statements below are historical and must not be used to restore current privileges.
+
+This inventory defines what had to remain true before and after the initial Cloudflare migration phases. It is recovery/acceptance evidence, not a replacement for a full `pg_dump` schema export.
 
 ## Data-safety invariants
 
@@ -23,7 +25,7 @@ Observed before migration:
 - No RLS policies are present on the `crm_*` business tables.
 - Therefore direct table access remains default-deny and controlled RPCs/functions form the application access path.
 - `authenticated` is not the CRM application execution role for the browser-facing RPC set.
-- Existing `anon` RPC grants are transitional and must remain until Cloudflare Worker privileged access is proven in Preview.
+- Existing `anon` RPC grants were transitional at this P0 checkpoint and were later revoked through P5; current Production expects `anon=0` for CRM RPC EXECUTE.
 - Old full/v3/v4 credential reveal functions must remain unavailable to browser roles.
 - v5 reveal must return only the requested credential field, never a client credential tree.
 
@@ -54,23 +56,25 @@ The built browser application must retain:
 
 ## Revalidation
 
-Run `supabase/baseline/p0_recovery_inventory.sql` against the target Supabase project and compare results with `P0_BASELINE.md` before:
+The retained `supabase/baseline/p0_recovery_inventory.sql` is still read-only and useful for migration-ledger, RLS, privilege, Vault-count, sensitive-data and structural inspection. For any **current** recovery or database rollback, run and interpret it through `CURRENT_RECOVERY_VERIFICATION.md` and compare current values with `CURRENT_STATE.md`, not the historical `P0_BASELINE.md` privilege counts.
+
+The historical P0 workflow originally used this inventory before:
 
 1. first Cloudflare Pages Preview;
 2. first Worker API Preview;
 3. first anon RPC privilege revocation;
 4. Cloudflare Production cutover;
-5. any rollback that includes database changes.
+5. database-changing rollback acceptance.
 
-The inventory SQL is read-only and must not mutate production data.
+Those phase milestones are retained as history; they do not reopen completed P5/Post-P5 privileges.
 
 ## Full schema snapshot requirement
 
-The current repository now records the live migration ledger gap and a repeatable security inventory, but a real full schema export is still a P0 recovery deliverable. When a trusted `pg_dump`/Supabase schema export is obtained, store it as a clearly dated snapshot or an approved external backup artifact. Do not attempt to recreate missing 2026-08-13/14 migration SQL by guessing from the current schema.
+The current repository records the live migration-ledger gap and repeatable security inventories, but a real full schema export is still a P0 recovery deliverable. When a trusted `pg_dump`/Supabase schema export is obtained, store it as a clearly dated snapshot or an approved external backup artifact. Do not attempt to recreate missing 2026-08-13/14 migration SQL by guessing from the current schema.
 
 ## Acceptance rule
 
-A migration phase is not accepted if any of the following occurs unexpectedly:
+A migration/recovery phase is not accepted if any of the following occurs unexpectedly:
 
 - Vault count changes because of hosting migration;
 - workspace sensitive-key count becomes nonzero;
@@ -80,3 +84,5 @@ A migration phase is not accepted if any of the following occurs unexpectedly:
 - old full/v3/v4 credential reveal becomes browser-executable;
 - session lifetime or active-session cap weakens;
 - Cloudflare ordinary storage receives customer password/2FA values.
+
+For current privilege/fingerprint values and current recovery sequencing, `CURRENT_RECOVERY_VERIFICATION.md`, `CURRENT_STATE.md`, and `ROLLBACK.md` take precedence over this historical P0 checkpoint.
