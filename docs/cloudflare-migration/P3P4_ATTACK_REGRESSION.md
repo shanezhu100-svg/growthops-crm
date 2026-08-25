@@ -2,6 +2,8 @@
 
 Last updated: 2026-08-22
 
+**Phase status: completed historical phase.** This file records the P3/P4 regression checkpoint before P5 privilege revocation. For the current Production security/privilege state, use `CURRENT_STATE.md`; for current recovery rules, use `ROLLBACK.md`. Any `PENDING_P5`, “Before merge,” or “Next phase” language below is historical checkpoint context, not a current task list.
+
 ## Scope
 
 P3/P4 is regression-only. It does **not** redesign or change CRM Session, Vault, Credential reveal, business UI, database schema, RPC grants, CSP, WAF, Access, DNS, or traffic routing.
@@ -48,17 +50,19 @@ The live check on 2026-08-22 returned the following hard-gate results:
 - `user_management_session_workspace_guards`: PASS — the four user-management/safe-summary RPCs retain session/workspace/ADMIN guards;
 - `save_state_session_and_secret_guard`: PASS — session plus secret redaction/extraction controls remain present.
 
-The only non-PASS result is intentional and deferred:
+At that historical checkpoint, the only non-PASS result was intentional and deferred:
 
-- `sensitive_anon_surface_pre_p5`: `PENDING_P5` — `crm_unlock_credentials_v1` and `crm_reveal_client_secret_value_v5` are still anon-executable until the separate P5 permission-revocation phase.
+- `sensitive_anon_surface_pre_p5`: `PENDING_P5` — `crm_unlock_credentials_v1` and `crm_reveal_client_secret_value_v5` were still anon-executable pending the separate P5 permission-revocation phase.
+
+P5 was subsequently completed, including later groups through the public boundary; the current canonical gate now expects CRM `anon` RPC EXECUTE to be zero. Do not treat the historical `PENDING_P5` result above as current Production state.
 
 The first dry execution of the read-only inventory exposed a test-only PostgreSQL type mismatch (`name[]` vs `text[]`) in its expected-list comparison. The query performed no writes. The script was corrected by explicitly casting `proname` to `text`, then rerun successfully with the results above.
 
 No grant or permission change is made in P3/P4.
 
-## Acceptance gates
+## Historical acceptance gates
 
-Before this phase can be marked Ready or merged:
+At the time this phase was accepted and merged, the requirements were:
 
 1. Vercel Preview must pass the existing build/security suite plus the new P3/P4 attack marker;
 2. Cloudflare Preview must pass the same final branch head;
@@ -68,11 +72,13 @@ Before this phase can be marked Ready or merged:
 6. the branch must be one final commit, ahead 1 / behind 0;
 7. only after the exact final head is green on both platforms may the Draft PR be marked Ready and merged with expected head SHA.
 
-## Next phase
+These checks are retained as historical acceptance evidence. Current merge validation is the canonical GitHub gate and Production verification process documented in `CURRENT_STATE.md`.
 
-P5 is separate. It will incrementally revoke the remaining sensitive anon EXECUTE grants, starting with:
+## Historical next phase
+
+P5 was the separate phase after P3/P4. It subsequently completed the incremental `anon` RPC revocation, beginning with:
 
 - `crm_unlock_credentials_v1`;
 - `crm_reveal_client_secret_value_v5`.
 
-Each P5 revoke group must validate both Cloudflare and Vercel rollback paths before proceeding.
+The current accepted privilege state and Post-P5 controls are documented in `CURRENT_STATE.md` and enforced by the canonical build gates.
