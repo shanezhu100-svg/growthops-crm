@@ -178,6 +178,21 @@ function safeUpstreamMessage(data) {
   return SAFE_UPSTREAM_MESSAGES.has(message) ? message : '';
 }
 
+function committedRpcError(rpc, data) {
+  const code = String(data && typeof data === 'object' && !Array.isArray(data) ? data.error || '' : '').trim();
+  if (!code) return null;
+  if (rpc === 'crm_unlock_credentials_v1') {
+    if (code === 'CREDENTIAL_UNLOCK_THROTTLED') return { status: 429, message: code };
+    if (code === 'CREDENTIAL_UNLOCK_INVALID') return { status: 400, message: code };
+    return { status: 502, message: 'UPSTREAM_REQUEST_FAILED' };
+  }
+  if (rpc === 'crm_reveal_client_secret_value_v5') {
+    if (code === 'CREDENTIAL_REVEAL_THROTTLED') return { status: 429, message: code };
+    return { status: 502, message: 'UPSTREAM_REQUEST_FAILED' };
+  }
+  return null;
+}
+
 async function supabaseRpc(name, args, config, sourceBucket = '') {
   const headers = {
     apikey: config.key,
@@ -299,6 +314,11 @@ module.exports = async function handler(req, res) {
     }
 
     const data = await supabaseRpc(rpc, args, config);
+    const committed = committedRpcError(rpc, data);
+    if (committed) {
+      safeLog('upstream_rpc_result_error', requestIdValue, rpc, committed.status);
+      return json(res, committed.status, { message: committed.message });
+    }
     return json(res, 200, stripSessionToken(data));
   } catch (error) {
     const upstreamStatus = Number(error?.status || 0);

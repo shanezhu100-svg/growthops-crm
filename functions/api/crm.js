@@ -86,6 +86,20 @@ function upsertPasswordInputValid(args={}){
 }
 function safeLog(event,requestIdValue,rpc,status){ console.error(JSON.stringify({event,platform:'cloudflare',requestId:requestIdValue,rpc:ALL_RPCS.has(rpc)?rpc:'unknown',status:Number(status||0)})); }
 function safeUpstreamMessage(data){ const message=String(data?.message||'').trim(); return SAFE_UPSTREAM_MESSAGES.has(message)?message:''; }
+function committedRpcError(rpc,data){
+  const code=String(data&&typeof data==='object'&&!Array.isArray(data)?data.error||'':'').trim();
+  if(!code)return null;
+  if (rpc === 'crm_unlock_credentials_v1') {
+    if(code==='CREDENTIAL_UNLOCK_THROTTLED')return{status:429,message:code};
+    if(code==='CREDENTIAL_UNLOCK_INVALID')return{status:400,message:code};
+    return{status:502,message:'UPSTREAM_REQUEST_FAILED'};
+  }
+  if (rpc === 'crm_reveal_client_secret_value_v5') {
+    if(code==='CREDENTIAL_REVEAL_THROTTLED')return{status:429,message:code};
+    return{status:502,message:'UPSTREAM_REQUEST_FAILED'};
+  }
+  return null;
+}
 async function supabaseRpc(name,args,config,sourceBucket=''){
   const headers={apikey:config.key,'Content-Type':'application/json','Cache-Control':'no-store'};
   if(/^[0-9a-f]{24}$/.test(String(sourceBucket))) headers['x-growthops-source-bucket']=String(sourceBucket);
@@ -111,7 +125,10 @@ export async function onRequest(context){
     args.p_token=sessionToken;
     if(rpc==='crm_upsert_user'&&!upsertPasswordInputValid(args))return respond(400,{message:'INVALID_REQUEST'});
     if(rpc==='crm_logout'){ try{ const data=await supabaseRpc(rpc,args,config); return respond(200,stripSessionToken(data),{'Set-Cookie':clearSessionCookie()}); }catch(error){ error.clearSessionCookie=true; throw error; } }
-    return respond(200,stripSessionToken(await supabaseRpc(rpc,args,config)));
+    const data=await supabaseRpc(rpc,args,config);
+    const committed=committedRpcError(rpc,data);
+    if(committed){safeLog('upstream_rpc_result_error',requestIdValue,rpc,committed.status);return respond(committed.status,{message:committed.message});}
+    return respond(200,stripSessionToken(data));
   }catch(error){
     const upstreamStatus=Number(error?.status||0); const headers={}; if(error?.clearSessionCookie||upstreamStatus===401||error?.sessionRelated) headers['Set-Cookie']=clearSessionCookie(); const safe=sanitizeUpstreamError(error); safeLog('upstream_rpc_error',requestIdValue,rpc,upstreamStatus||safe.status); return respond(safe.status,{message:safe.message},headers);
   }
