@@ -12,7 +12,14 @@ def require(ok, message):
         raise SystemExit(message)
 
 rules = vercel.get('git', {}).get('deploymentEnabled')
-require(rules == {'*': False, 'main': True}, 'Vercel Git deployment policy must default-deny every branch and explicitly allow main')
+require(
+    rules == {'**': False, 'main': True},
+    'Vercel Git deployment policy must deny slash-containing/non-main branch names with globstar and explicitly allow main',
+)
+require(
+    '*' not in rules,
+    'Vercel bare-star deny is insufficient for slash-containing branch names; use globstar',
+)
 
 require('name: CRM Build Gate' in workflow, 'missing CRM Build Gate workflow')
 require('pull_request:' in workflow and 'branches: [main]' in workflow, 'PR workflow must target main')
@@ -29,4 +36,4 @@ require('run: sh build.sh' in workflow, 'PR CI must execute canonical build.sh')
 require('cancel-in-progress: true' in workflow, 'stale PR CI must be cancelled')
 require(build.count('python3 test_ci_quota_guard.py') == 1, 'canonical build must run quota/CI guard exactly once')
 
-print('CI_QUOTA_GUARD_OK: vercel-git=main-only; non-main=deployment-disabled; pr-ci=github-actions; secrets=none; permissions=contents-read; actions=sha-pinned; node=24.x; canonical-build=sh-build.sh')
+print('CI_QUOTA_GUARD_OK: vercel-git=main-only; non-main=globstar-deployment-disabled; slash-branches=covered; pr-ci=github-actions; secrets=none; permissions=contents-read; actions=sha-pinned; node=24.x; canonical-build=sh-build.sh')
