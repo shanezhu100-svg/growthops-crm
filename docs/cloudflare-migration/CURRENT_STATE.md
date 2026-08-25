@@ -40,34 +40,39 @@ The canonical repository gates encode the accepted post-P5 Production privilege 
 - the 12 effective `service_role` functions are the reviewed CRM BFF/bootstrap entry allowlist;
 - the historical `rls_auto_enable()` event-trigger helper is now postgres-only for direct EXECUTE, while the postgres-owned `ensure_rls` event trigger remains active and bound to it;
 - direct service-role CRM table grants are removed;
-- direct service-role sequence grants are removed;
-- RPC entry paths preserve the required SECURITY DEFINER wrapper chain;
-- CRM ACL event guards cover create/alter of `public.crm_*` objects;
+- direct service-role CRM sequence grants are removed;
+- postgres-created future objects in `public` no longer receive automatic `service_role` table, sequence, or function privileges;
+- future non-`crm_*` functions/procedures created or altered in `public` are normalized fail-closed by `growthops_public_noncrm_function_acl_guard_ddl`, which removes direct/effective `PUBLIC`, `anon`, `authenticated`, and `service_role` EXECUTE exposure;
+- the existing `growthops_crm_acl_guard_ddl` remains authoritative for the exact reviewed `crm_*` service-role function allowlist and denies broad relation/procedure exposure;
 - RLS-alter guards cover the protected CRM table namespace;
 - browser roles remain blocked from sensitive credential/Vault internals.
 
-Do not restore `anon` RPC execution or broad service-role relation/function access as a normal hosting rollback. Use the exact migration-specific rollback process in `ROLLBACK.md` only for a diagnosed database-control regression.
+The future-object boundary was verified in Production with a transaction-contained DDL probe: a synthetic non-CRM function, table, and sequence all met the fail-closed target and were then rolled back; all three probe objects were confirmed absent afterward.
+
+Do not restore `anon` RPC execution, broad service-role relation/function access, or permissive future-object defaults as a normal hosting rollback. Use the exact migration-specific rollback process in `ROLLBACK.md` only for a diagnosed database-control regression.
 
 ## Current Production database checkpoint
 
-A fresh read-only Production inventory was revalidated on 2026-08-24 after the applied migration `20260825032049 / post_p5_revoke_rls_auto_enable_service_role_exec`. Using the same deterministic catalog query retained in `supabase/baseline/p0_schema_security_fingerprint.sql`, the current CRM schema/security checkpoint is:
+A fresh read-only Production inventory was revalidated on 2026-08-24 after the applied migration `20260825040850 / post_p5_public_default_privilege_guard`. Using the same deterministic catalog query retained in `supabase/baseline/p0_schema_security_fingerprint.sql`, the current CRM schema/security checkpoint is:
 
 - inventory lines: `200`;
 - SHA-256: `bffaf123425bc7bddf02ecf00132848a5bfc4248e44395a5283c8ca9706b97f1`;
 - effective function EXECUTE boundary across all `public` functions for `anon / authenticated / service_role`: `0 / 0 / 12`;
+- postgres/public future default `service_role` grants for tables / sequences / functions: `0 / 0 / 0`;
+- existing non-CRM public functions/procedures executable by `anon`, `authenticated`, or `service_role`: `0`;
 - direct CRM table grants for those application roles: `0 / 0 / 0`;
 - direct CRM sequence grants for those application roles: `0 / 0 / 0`;
 - CRM RLS: enabled on `9 / 9` tables, with `0` browser-facing policies under the current RPC-only/default-deny design;
 - ordinary workspace sensitive-key matches: `0`;
 - server audit sensitive-payload-value matches: `0`.
 
-Two repository-managed Post-P5 DDL guards live outside the primary fingerprint's historical `crm_*` function namespace. Current recovery comparison therefore also uses the read-only supplemental query in `supabase/baseline/post_p5_crm_guard_security_fingerprint.sql`, documented in `POST_P5_GUARD_FINGERPRINT.md`. Its accepted Production checkpoint is:
+Three repository-managed Post-P5 DDL guards live outside the primary fingerprint's historical `crm_*` function namespace. Current recovery comparison therefore also uses the read-only supplemental query in `supabase/baseline/post_p5_crm_guard_security_fingerprint.sql`, documented in `POST_P5_GUARD_FINGERPRINT.md`. Its accepted Production checkpoint is:
 
-- guard inventory lines: `6`;
-- guard SHA-256: `d3491022f0827324c810d401123d6027c0c3d46498868a2b5520bbea54bae52f`;
-- scope: both `growthops_crm_acl_guard_ddl` and `growthops_crm_rls_guard_ddl` function definitions/owners, application-role EXECUTE truth, and event-trigger event/enabled/tags/function bindings.
+- guard inventory lines: `9`;
+- guard SHA-256: `2a6c96fe5c2290cd30ee5b29800dcb47d9f1686d48b51344486c2c7780030140`;
+- scope: `growthops_crm_acl_guard_ddl`, `growthops_crm_rls_guard_ddl`, and `growthops_public_noncrm_function_acl_guard_ddl` function definitions/owners, application-role EXECUTE truth, and event-trigger event/enabled/tags/function bindings.
 
-The supplemental guard checkpoint does not alter or replace the primary `200 / bffaf123...` comparison contract. Refresh both checkpoints after a future schema/ACL/function change that can affect their respective scopes.
+The supplemental guard checkpoint does not alter or replace the primary `200 / bffaf123...` comparison contract. Refresh both checkpoints after a future schema/ACL/function/guard change that can affect their respective scopes.
 
 This is the **current catalog/security comparison anchor**, not a replacement for a full database schema export. The historical P0 fingerprints remain valid evidence for their own phases, including the accepted `195 / edfcd23e...` relation-ACL checkpoint before later Post-P5 function/constraint changes. The outstanding full schema-only `pg_dump`/equivalent export remains a separate P0 recovery deliverable; do not claim full disaster-recovery schema portability from this fingerprint alone.
 
@@ -143,7 +148,7 @@ Use phase documents for detailed evidence:
 - `P2B_SERVER_IDENTITY.md`: server-only Supabase identity, request IDs, log filtering and error sanitization;
 - `P3P4_ATTACK_REGRESSION.md`: attack-style BFF regression and pre-P5 inventory;
 - `P5_*.md`: incremental `anon` RPC revocation history;
-- `POST_P5_*.md`: service-role minimization, relation ACL, trusted-source login buckets, ACL/RLS guards and later input/schema invariants.
+- `POST_P5_*.md`: service-role minimization, relation ACL, trusted-source login buckets, ACL/RLS guards, future-object default-deny, and later input/schema invariants.
 
 Those documents intentionally preserve the state observed at their own phase. Their historical fingerprints, grant counts, “next phase” sections, or Preview assumptions must not be interpreted as the current Production contract when they differ from this file or the canonical build gates.
 
@@ -152,5 +157,5 @@ Those documents intentionally preserve the state observed at their own phase. Th
 1. Prefer small, single-purpose PRs with explicit rollback and no unrelated refactors.
 2. Do not delete files solely because their names look historical; prove they are outside build, CI, runtime and documentation dependencies first.
 3. Do not weaken fail-closed Preview/Production origin checks to accommodate platform configuration gaps.
-4. Do not reintroduce browser Supabase config, browser token persistence, broad credential reveal, or `anon` CRM RPC execution.
+4. Do not reintroduce browser Supabase config, browser token persistence, broad credential reveal, `anon` CRM RPC execution, or permissive future-object defaults in `public`.
 5. Keep `ROLLBACK.md` and this file current whenever the architecture, privilege boundary, CI deployment policy, or recovery strategy materially changes.
