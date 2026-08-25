@@ -36,9 +36,9 @@ Current input/resource guards include a 4 MiB API body limit, top-level object r
 
 The canonical repository gates encode the accepted post-P5 Production privilege shape:
 
-- CRM `anon` RPC EXECUTE: `0` after P5 Group 6;
-- browser `authenticated` CRM RPC execution remains absent;
-- Post-P5 service-role RPC minimization preserves the reviewed BFF/bootstrap entry surface and reports `service-role=12`;
+- effective EXECUTE across all `public` functions for `anon / authenticated / service_role`: `0 / 0 / 12`;
+- the 12 effective `service_role` functions are the reviewed CRM BFF/bootstrap entry allowlist;
+- the historical `rls_auto_enable()` event-trigger helper is now postgres-only for direct EXECUTE, while the postgres-owned `ensure_rls` event trigger remains active and bound to it;
 - direct service-role CRM table grants are removed;
 - direct service-role sequence grants are removed;
 - RPC entry paths preserve the required SECURITY DEFINER wrapper chain;
@@ -46,15 +46,15 @@ The canonical repository gates encode the accepted post-P5 Production privilege 
 - RLS-alter guards cover the protected CRM table namespace;
 - browser roles remain blocked from sensitive credential/Vault internals.
 
-Do not restore `anon` RPC execution or broad service-role relation access as a normal hosting rollback. Use the exact migration-specific rollback process in `ROLLBACK.md` only for a diagnosed database-control regression.
+Do not restore `anon` RPC execution or broad service-role relation/function access as a normal hosting rollback. Use the exact migration-specific rollback process in `ROLLBACK.md` only for a diagnosed database-control regression.
 
 ## Current Production database checkpoint
 
-A fresh read-only Production inventory was captured on 2026-08-24 after the latest applied migration `20260824034405 / post_p5_user_identity_byte_caps`. Using the same deterministic catalog query retained in `supabase/baseline/p0_schema_security_fingerprint.sql`, the current CRM schema/security checkpoint is:
+A fresh read-only Production inventory was revalidated on 2026-08-24 after the applied migration `20260825032049 / post_p5_revoke_rls_auto_enable_service_role_exec`. Using the same deterministic catalog query retained in `supabase/baseline/p0_schema_security_fingerprint.sql`, the current CRM schema/security checkpoint is:
 
 - inventory lines: `200`;
 - SHA-256: `bffaf123425bc7bddf02ecf00132848a5bfc4248e44395a5283c8ca9706b97f1`;
-- function EXECUTE boundary for `anon / authenticated / service_role`: `0 / 0 / 12`;
+- effective function EXECUTE boundary across all `public` functions for `anon / authenticated / service_role`: `0 / 0 / 12`;
 - direct CRM table grants for those application roles: `0 / 0 / 0`;
 - direct CRM sequence grants for those application roles: `0 / 0 / 0`;
 - CRM RLS: enabled on `9 / 9` tables, with `0` browser-facing policies under the current RPC-only/default-deny design;
