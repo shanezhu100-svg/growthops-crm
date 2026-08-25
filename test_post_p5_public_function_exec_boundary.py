@@ -76,11 +76,24 @@ for name in expected_names:
     require(name in old_gate, f'existing CRM service-role gate no longer preserves {name}')
 require("service-role=12" in old_gate, 'existing CRM gate target count drifted')
 
+current_state = (root / 'docs' / 'cloudflare-migration' / 'CURRENT_STATE.md').read_text(encoding='utf-8')
+for marker in (
+    'all `public` functions',
+    '`anon / authenticated / service_role`: `0 / 0 / 12`',
+    '`rls_auto_enable()`',
+    '`ensure_rls`',
+    '`20260825032049 / post_p5_revoke_rls_auto_enable_service_role_exec`',
+):
+    require(marker in current_state, f'CURRENT_STATE missing accepted all-public boundary marker: {marker}')
+
+ledger = (root / 'docs' / 'cloudflare-migration' / 'P0_MIGRATION_LEDGER.md').read_text(encoding='utf-8')
+require('`20260825032049` | `post_p5_revoke_rls_auto_enable_service_role_exec` | `supabase/migrations/20260824_post_p5_revoke_rls_auto_enable_service_role_exec.sql`' in ledger, 'migration ledger missing applied all-public boundary migration mapping')
+
 build = (root / 'build.sh').read_text(encoding='utf-8')
 require(build.count('python3 test_post_p5_public_function_exec_boundary.py') == 1, 'build must execute all-public function boundary gate exactly once')
 
 print(
     'POST_P5_PUBLIC_FUNCTION_EXEC_BOUNDARY_PACKAGE_OK: '
     'anon=0; authenticated=0; service-role-target=12; '
-    'rls-auto-enable=postgres-only; ensure-rls=preserved; production-change=pending'
+    'rls-auto-enable=postgres-only; ensure-rls=preserved; production-change=applied+verified'
 )
