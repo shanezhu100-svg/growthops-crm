@@ -82,8 +82,26 @@ begin
     raise exception 'future non-CRM public function retains PUBLIC EXECUTE';
   end if;
 
+  -- Preserve the original explicit service_role checks as a stable historical
+  -- acceptance contract, then add anon/authenticated below.
+  if has_table_privilege('service_role', 'public.growthops_public_acl_probe_table_20260824', 'SELECT')
+     or has_table_privilege('service_role', 'public.growthops_public_acl_probe_table_20260824', 'INSERT')
+     or has_table_privilege('service_role', 'public.growthops_public_acl_probe_table_20260824', 'UPDATE')
+     or has_table_privilege('service_role', 'public.growthops_public_acl_probe_table_20260824', 'DELETE')
+     or has_table_privilege('service_role', 'public.growthops_public_acl_probe_table_20260824', 'TRUNCATE')
+     or has_table_privilege('service_role', 'public.growthops_public_acl_probe_table_20260824', 'REFERENCES')
+     or has_table_privilege('service_role', 'public.growthops_public_acl_probe_table_20260824', 'TRIGGER') then
+    raise exception 'future public table retains service_role privilege';
+  end if;
+
+  if has_sequence_privilege('service_role', 'public.growthops_public_acl_probe_sequence_20260824', 'USAGE')
+     or has_sequence_privilege('service_role', 'public.growthops_public_acl_probe_sequence_20260824', 'SELECT')
+     or has_sequence_privilege('service_role', 'public.growthops_public_acl_probe_sequence_20260824', 'UPDATE') then
+    raise exception 'future public sequence retains service_role privilege';
+  end if;
+
   for v_role in
-    select unnest(array['anon','authenticated','service_role']::text[])
+    select unnest(array['anon','authenticated']::text[])
   loop
     if has_table_privilege(v_role, 'public.growthops_public_acl_probe_table_20260824', 'SELECT')
        or has_table_privilege(v_role, 'public.growthops_public_acl_probe_table_20260824', 'INSERT')
