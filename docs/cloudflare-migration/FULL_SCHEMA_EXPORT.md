@@ -8,7 +8,7 @@ This runbook defines the trusted path for closing the outstanding P0 **full sche
 
 The full schema-only export is **not yet complete**.
 
-Current automation can query the Production database and recompute the accepted recovery fingerprints, but that is not equivalent to a portable schema dump. The connected Supabase automation surface does not currently expose a database-password retrieval action or a schema/backup export action, and the current execution environment does not provide the Supabase CLI, `pg_dump`, `psql`, or Docker.
+Current automation can query the Production database and recompute the accepted recovery fingerprints, but that is not equivalent to a portable schema dump. The connected Supabase automation surface does not currently expose a database-password retrieval action, temporary/JIT database-access action, or schema/backup export action. The current execution environment was also rechecked at this review and does not provide the Supabase CLI, `pg_dump`, `psql`, or Docker.
 
 Do not mark this deliverable complete until a real export artifact has been produced through an authorized database connection and independently verified.
 
@@ -84,8 +84,8 @@ A schema file existing on disk is not enough. Verify the artifact against curren
 Current comparison checkpoints at this review are:
 
 - primary CRM fingerprint: `200 / bffaf123425bc7bddf02ecf00132848a5bfc4248e44395a5283c8ca9706b97f1`;
-- supplemental CRM guard fingerprint: `6 / d3491022f0827324c810d401123d6027c0c3d46498868a2b5520bbea54bae52f`;
-- accepted Production migration head: `20260824034405 / post_p5_user_identity_byte_caps`.
+- supplemental CRM guard fingerprint: `9 / 2a6c96fe5c2290cd30ee5b29800dcb47d9f1686d48b51344486c2c7780030140`;
+- accepted Production migration head: `20260825040850 / post_p5_public_default_privilege_guard`.
 
 ## What does not count as completion
 
@@ -108,7 +108,7 @@ These are useful evidence, but they do not replace a trusted portable dump.
 The current blocker is operational authorization/tooling, not a known Production database defect:
 
 - no database password/credential-bearing connection string is available through the connected automation tools;
-- no schema-export/download action is exposed by the connected Supabase tool surface;
+- no temporary/JIT database-access or schema-export/download action is exposed by the connected Supabase tool surface;
 - the current execution environment has no Supabase CLI / Docker / `pg_dump` / `psql` toolchain;
 - the public repository contains no database dump credential.
 
