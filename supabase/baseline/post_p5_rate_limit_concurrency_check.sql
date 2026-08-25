@@ -15,9 +15,9 @@ select
   position('90813011' in def)>0 as login_lock_namespace,
   position('90813012' in def)>0 as unlock_lock_namespace,
   position('90813013' in def)>0 as reveal_lock_namespace,
-  position("return jsonb_build_object('error','CREDENTIAL_UNLOCK_INVALID')" in def)>0 as unlock_invalid_committable,
-  position("return jsonb_build_object('error','CREDENTIAL_UNLOCK_THROTTLED')" in def)>0 as unlock_throttled_committable,
-  position("return jsonb_build_object('error','CREDENTIAL_REVEAL_THROTTLED')" in def)>0 as reveal_throttled_committable,
+  position($needle$return jsonb_build_object('error','CREDENTIAL_UNLOCK_INVALID')$needle$ in def)>0 as unlock_invalid_committable,
+  position($needle$return jsonb_build_object('error','CREDENTIAL_UNLOCK_THROTTLED')$needle$ in def)>0 as unlock_throttled_committable,
+  position($needle$return jsonb_build_object('error','CREDENTIAL_REVEAL_THROTTLED')$needle$ in def)>0 as reveal_throttled_committable,
   has_function_privilege('anon',oid,'EXECUTE') as anon_execute,
   has_function_privilege('authenticated',oid,'EXECUTE') as authenticated_execute,
   has_function_privilege('service_role',oid,'EXECUTE') as service_role_execute
