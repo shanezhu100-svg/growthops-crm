@@ -1,6 +1,6 @@
 -- Read-only post-check for future public-object ACL hardening.
 -- Target after migration:
---   * postgres/public defaults grant no service_role privileges on tables/sequences/functions;
+--   * postgres/public defaults grant no PUBLIC/anon/authenticated/service_role privileges on tables/sequences/functions;
 --   * existing effective public function EXECUTE remains anon 0 / authenticated 0 / service_role 12;
 --   * all existing non-CRM public functions/procedures remain app-role denied;
 --   * the new non-CRM guard is SECURITY DEFINER, pg_catalog-pinned, externally non-executable,
@@ -19,6 +19,18 @@ with default_acl as (
     and n.nspname = 'public'
 )
 select
+  count(*) filter (
+    where defaclobjtype = 'r'
+      and grantee in ('PUBLIC','anon','authenticated','service_role')
+  ) as table_default_app_or_public_grants,
+  count(*) filter (
+    where defaclobjtype = 'S'
+      and grantee in ('PUBLIC','anon','authenticated','service_role')
+  ) as sequence_default_app_or_public_grants,
+  count(*) filter (
+    where defaclobjtype = 'f'
+      and grantee in ('PUBLIC','anon','authenticated','service_role')
+  ) as function_default_app_or_public_grants,
   count(*) filter (where defaclobjtype = 'r' and grantee = 'service_role') as table_default_service_role_grants,
   count(*) filter (where defaclobjtype = 'S' and grantee = 'service_role') as sequence_default_service_role_grants,
   count(*) filter (where defaclobjtype = 'f' and grantee = 'service_role') as function_default_service_role_grants

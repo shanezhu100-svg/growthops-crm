@@ -1,6 +1,7 @@
 -- Transactional Production acceptance probe for future public-object defaults.
 -- This file intentionally creates temporary-named public objects inside one transaction,
--- asserts their effective ACLs, rolls everything back, then proves no probe objects remain.
+-- asserts their effective ACLs for every application role, rolls everything back,
+-- then proves no probe objects remain.
 
 begin;
 
@@ -31,21 +32,35 @@ select
       and x.privilege_type = 'EXECUTE'
   ) as fn_public_execute;
 
+with roles(role_name) as (
+  values ('anon'::text), ('authenticated'::text), ('service_role'::text)
+)
 select
-  has_table_privilege('service_role', 'public.growthops_public_acl_probe_table_20260824', 'SELECT') as table_service_select,
-  has_table_privilege('service_role', 'public.growthops_public_acl_probe_table_20260824', 'INSERT') as table_service_insert,
-  has_table_privilege('service_role', 'public.growthops_public_acl_probe_table_20260824', 'UPDATE') as table_service_update,
-  has_table_privilege('service_role', 'public.growthops_public_acl_probe_table_20260824', 'DELETE') as table_service_delete,
-  has_table_privilege('service_role', 'public.growthops_public_acl_probe_table_20260824', 'TRUNCATE') as table_service_truncate,
-  has_table_privilege('service_role', 'public.growthops_public_acl_probe_table_20260824', 'REFERENCES') as table_service_references,
-  has_table_privilege('service_role', 'public.growthops_public_acl_probe_table_20260824', 'TRIGGER') as table_service_trigger;
+  role_name,
+  has_table_privilege(role_name, 'public.growthops_public_acl_probe_table_20260824', 'SELECT') as table_select,
+  has_table_privilege(role_name, 'public.growthops_public_acl_probe_table_20260824', 'INSERT') as table_insert,
+  has_table_privilege(role_name, 'public.growthops_public_acl_probe_table_20260824', 'UPDATE') as table_update,
+  has_table_privilege(role_name, 'public.growthops_public_acl_probe_table_20260824', 'DELETE') as table_delete,
+  has_table_privilege(role_name, 'public.growthops_public_acl_probe_table_20260824', 'TRUNCATE') as table_truncate,
+  has_table_privilege(role_name, 'public.growthops_public_acl_probe_table_20260824', 'REFERENCES') as table_references,
+  has_table_privilege(role_name, 'public.growthops_public_acl_probe_table_20260824', 'TRIGGER') as table_trigger
+from roles
+order by role_name;
 
+with roles(role_name) as (
+  values ('anon'::text), ('authenticated'::text), ('service_role'::text)
+)
 select
-  has_sequence_privilege('service_role', 'public.growthops_public_acl_probe_sequence_20260824', 'USAGE') as sequence_service_usage,
-  has_sequence_privilege('service_role', 'public.growthops_public_acl_probe_sequence_20260824', 'SELECT') as sequence_service_select,
-  has_sequence_privilege('service_role', 'public.growthops_public_acl_probe_sequence_20260824', 'UPDATE') as sequence_service_update;
+  role_name,
+  has_sequence_privilege(role_name, 'public.growthops_public_acl_probe_sequence_20260824', 'USAGE') as sequence_usage,
+  has_sequence_privilege(role_name, 'public.growthops_public_acl_probe_sequence_20260824', 'SELECT') as sequence_select,
+  has_sequence_privilege(role_name, 'public.growthops_public_acl_probe_sequence_20260824', 'UPDATE') as sequence_update
+from roles
+order by role_name;
 
 do $probe$
+declare
+  v_role text;
 begin
   if has_function_privilege('anon', 'public.growthops_public_acl_probe_function_20260824()', 'EXECUTE')
      or has_function_privilege('authenticated', 'public.growthops_public_acl_probe_function_20260824()', 'EXECUTE')
@@ -67,6 +82,8 @@ begin
     raise exception 'future non-CRM public function retains PUBLIC EXECUTE';
   end if;
 
+  -- Preserve the original explicit service_role checks as a stable historical
+  -- acceptance contract, then add anon/authenticated below.
   if has_table_privilege('service_role', 'public.growthops_public_acl_probe_table_20260824', 'SELECT')
      or has_table_privilege('service_role', 'public.growthops_public_acl_probe_table_20260824', 'INSERT')
      or has_table_privilege('service_role', 'public.growthops_public_acl_probe_table_20260824', 'UPDATE')
@@ -82,6 +99,26 @@ begin
      or has_sequence_privilege('service_role', 'public.growthops_public_acl_probe_sequence_20260824', 'UPDATE') then
     raise exception 'future public sequence retains service_role privilege';
   end if;
+
+  for v_role in
+    select unnest(array['anon','authenticated']::text[])
+  loop
+    if has_table_privilege(v_role, 'public.growthops_public_acl_probe_table_20260824', 'SELECT')
+       or has_table_privilege(v_role, 'public.growthops_public_acl_probe_table_20260824', 'INSERT')
+       or has_table_privilege(v_role, 'public.growthops_public_acl_probe_table_20260824', 'UPDATE')
+       or has_table_privilege(v_role, 'public.growthops_public_acl_probe_table_20260824', 'DELETE')
+       or has_table_privilege(v_role, 'public.growthops_public_acl_probe_table_20260824', 'TRUNCATE')
+       or has_table_privilege(v_role, 'public.growthops_public_acl_probe_table_20260824', 'REFERENCES')
+       or has_table_privilege(v_role, 'public.growthops_public_acl_probe_table_20260824', 'TRIGGER') then
+      raise exception 'future public table retains application-role privilege for %', v_role;
+    end if;
+
+    if has_sequence_privilege(v_role, 'public.growthops_public_acl_probe_sequence_20260824', 'USAGE')
+       or has_sequence_privilege(v_role, 'public.growthops_public_acl_probe_sequence_20260824', 'SELECT')
+       or has_sequence_privilege(v_role, 'public.growthops_public_acl_probe_sequence_20260824', 'UPDATE') then
+      raise exception 'future public sequence retains application-role privilege for %', v_role;
+    end if;
+  end loop;
 end;
 $probe$;
 
