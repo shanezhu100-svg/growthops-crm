@@ -2,6 +2,8 @@
 
 Last updated: 2026-08-22
 
+**Phase status: completed historical phase.** This file records the P2-B implementation and acceptance checkpoint. For the current Production contract, privilege shape, deployment policy, and rollback rules, use `CURRENT_STATE.md` and `ROLLBACK.md`. References below to P5 as a future phase describe the state at P2-B acceptance and are not current Production instructions.
+
 ## Scope
 
 P2-B hardens both rollback paths without changing CRM business behavior:
@@ -13,7 +15,7 @@ P2-B hardens both rollback paths without changing CRM business behavior:
 - filtered structured logs;
 - sanitized upstream error responses.
 
-P2-B does **not** revoke Supabase `anon` RPC grants. Incremental RPC revocation remains P5 and starts only after both Cloudflare and Vercel server identities are proven in real Preview/Production acceptance.
+At the P2-B checkpoint, P2-B itself did **not** revoke Supabase `anon` RPC grants. Incremental RPC revocation was intentionally deferred to P5 until both Cloudflare and Vercel server identities had been proven in real Preview/Production acceptance. P5 was subsequently completed; current Production no longer uses this transitional `anon` execution state.
 
 P2-B also does not change CSP, WAF, Cloudflare Access, DNS, session duration, credential reveal design, or CRM UI/business logic.
 
@@ -104,21 +106,23 @@ Production Supabase schema/security fingerprint after runtime acceptance remaine
 
 The temporary runtime smoke page and build hook were removed. The cleaned working head then built successfully on both Vercel Preview and Cloudflare Preview with the P2-B automated gate still passing.
 
-## Final merge gate
+## Historical final merge gate
 
-Before merge:
+At the P2-B merge checkpoint, the required sequence was:
 
 1. squash the branch to one final commit containing only the intended P2-B files;
 2. require that exact final head to be green on Cloudflare and Vercel;
 3. re-run the Production Supabase schema/security fingerprint and require the frozen `258 / d78c430cdd33757f50a5286b66c0095e3ff322d64f364eb4b61f1a517fd3d729` result;
-4. do **not** revoke `anon` RPC grants in P2-B;
+4. do **not** revoke `anon` RPC grants inside P2-B itself;
 5. only then mark Draft PR #19 Ready and merge using the expected final head SHA.
 
-## Next phase
+This gate is retained as historical acceptance evidence; it is not the current merge procedure. Current changes use the canonical gate documented in `CURRENT_STATE.md`.
 
-P5 incrementally removes remaining `anon` RPC execution only after this server-identity boundary is proven on both Cloudflare and Vercel. The first sensitive revoke group is planned for:
+## Historical next phase
+
+P5 was the planned phase after P2-B. It subsequently completed the incremental `anon` RPC revocation, beginning with:
 
 - `crm_unlock_credentials_v1`;
 - `crm_reveal_client_secret_value_v5`.
 
-Each P5 revoke group must validate both Cloudflare and Vercel rollback paths before continuing.
+The current accepted Production privilege state is documented in `CURRENT_STATE.md`; do not use this historical section to infer current RPC grants.
