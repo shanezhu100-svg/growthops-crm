@@ -135,6 +135,7 @@ python3 test_post_p5_crm_rls_alter_guard.py
 python3 test_post_p5_bcrypt_password_byte_cap.py
 python3 test_post_p5_single_workspace_membership_invariant.py
 python3 test_post_p5_bcrypt_verification_byte_caps.py
+python3 test_post_p5_rate_limit_concurrency.py
 python3 test_post_p5_user_identity_byte_caps.py
 node --check dist/cloud-adapter.js
 node --check dist/cloud-security-hotfix.js
