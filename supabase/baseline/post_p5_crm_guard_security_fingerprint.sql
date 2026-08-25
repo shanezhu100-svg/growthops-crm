@@ -2,11 +2,11 @@
 -- READ-ONLY. This supplements p0_schema_security_fingerprint.sql without changing
 -- its historical/current crm_* catalog hash contract.
 --
--- Production checkpoint on 2026-08-24 after post_p5_user_identity_byte_caps:
---   guard_inventory_lines = 6
---   guard_security_sha256 = d3491022f0827324c810d401123d6027c0c3d46498868a2b5520bbea54bae52f
+-- Production checkpoint on 2026-08-24 after post_p5_public_default_privilege_guard:
+--   guard_inventory_lines = 9
+--   guard_security_sha256 = 2a6c96fe5c2290cd30ee5b29800dcb47d9f1686d48b51344486c2c7780030140
 --
--- Scope: repository-managed GrowthOps CRM ACL/RLS DDL guard functions, their
+-- Scope: repository-managed GrowthOps Post-P5 DDL guard functions, their
 -- application-role EXECUTE truth, and the event-trigger bindings themselves.
 
 with guard_inventory as (
@@ -16,7 +16,11 @@ with guard_inventory as (
   from pg_proc p
   join pg_namespace n on n.oid = p.pronamespace
   where n.nspname='public'
-    and p.proname in ('growthops_crm_acl_guard_ddl','growthops_crm_rls_guard_ddl')
+    and p.proname in (
+      'growthops_crm_acl_guard_ddl',
+      'growthops_crm_rls_guard_ddl',
+      'growthops_public_noncrm_function_acl_guard_ddl'
+    )
 
   union all
 
@@ -27,7 +31,11 @@ with guard_inventory as (
   from pg_proc p
   join pg_namespace n on n.oid = p.pronamespace
   where n.nspname='public'
-    and p.proname in ('growthops_crm_acl_guard_ddl','growthops_crm_rls_guard_ddl')
+    and p.proname in (
+      'growthops_crm_acl_guard_ddl',
+      'growthops_crm_rls_guard_ddl',
+      'growthops_public_noncrm_function_acl_guard_ddl'
+    )
 
   union all
 
@@ -36,7 +44,11 @@ with guard_inventory as (
          '|func=' || p.proname || '|' || pg_get_function_identity_arguments(p.oid)
   from pg_event_trigger e
   join pg_proc p on p.oid=e.evtfoid
-  where e.evtname in ('growthops_crm_acl_guard_ddl','growthops_crm_rls_guard_ddl')
+  where e.evtname in (
+    'growthops_crm_acl_guard_ddl',
+    'growthops_crm_rls_guard_ddl',
+    'growthops_public_noncrm_function_acl_guard_ddl'
+  )
 )
 select count(*)::bigint as guard_inventory_lines,
        encode(
