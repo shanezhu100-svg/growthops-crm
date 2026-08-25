@@ -138,7 +138,19 @@ For the selected gate-accepted application commit:
 5. verify unauthenticated `GET /api/crm` is rejected safely (`METHOD_NOT_ALLOWED`) rather than executing an RPC;
 6. inspect Production runtime/deployment errors before declaring recovery complete.
 
-At the 2026-08-25 concurrency acceptance checkpoint, the application/database compatibility evidence includes merged `main` commit `0eefbe383d7ea8ecd7a874e7a8f7c4c9621763e6`, CRM Build Gate run #69, Vercel Production `dpl_FNtV2oBQWPYZrm8BaShVybUm57fF` (`READY`), and Cloudflare Pages Production `49a23f7f-5fbe-4894-9b8e-ad7b25005d70` (`success`). Later documentation-only `main` commits are acceptable only after their own canonical gate and hosting deployment complete successfully; they do not change the database compatibility contract by themselves.
+The runtime/database concurrency acceptance evidence remains merged `main@0eefbe383d7ea8ecd7a874e7a8f7c4c9621763e6`, CRM Build Gate #69, Vercel Production `dpl_FNtV2oBQWPYZrm8BaShVybUm57fF` (`READY`), and Cloudflare Pages Production `49a23f7f-5fbe-4894-9b8e-ad7b25005d70` (`success`).
+
+The current validated Vercel hosting/recovery checkpoint after later documentation and deployment-policy hardening is:
+
+- `main@91c0edcb24b79d282faa72d7d83435a1e1265d30`;
+- CRM Build Gate #77: completed / success;
+- Vercel Production `dpl_HiGGTxc4zYJM9zq1s13CV5Pv2tW6`: `READY`;
+- stable alias `https://growthops-crm.vercel.app` assigned;
+- homepage fetch succeeded;
+- unauthenticated `GET /api/crm` returned `405 / METHOD_NOT_ALLOWED`, `Allow: POST`, no-store cache policy, and security headers;
+- no new Production runtime-error cluster was observed in the checked recent window.
+
+The last independently verified Cloudflare Production remains `49a23f7f-5fbe-4894-9b8e-ad7b25005d70 / main@0eefbe3`, which is runtime-compatible with the current database. A later docs-only `main@5172508` deployment was skipped because a newer deployment had already been queued. Exact Cloudflare deployment freshness after that point must be reverified through Cloudflare evidence; do not infer it from Vercel or GitHub state.
 
 If credentials are available for an authorized smoke test, follow the functional checks in `ROLLBACK.md` without exposing password/2FA values in logs or screenshots.
 
@@ -152,7 +164,12 @@ For a function-definition change inside the primary `crm_*` fingerprint scope, e
 
 Recovery acceptance does not authorize Preview to use Production Supabase. If a Preview environment has a server secret, it must either use an explicit isolated staging `GROWTHOPS_SUPABASE_URL` and matching staging secret or fail closed/remove the Preview secret. Do not weaken the origin guard for recovery convenience.
 
-At the 2026-08-25 review, Cloudflare Preview still had a `GROWTHOPS_SUPABASE_SECRET_KEY` binding without an accepted isolated staging URL; the guard correctly prevented a usable Preview backend. No secret value is recorded here. Vercel Preview secret scope remained independently unverified through the available connected interface.
+At the 2026-08-25 review, **both platform Preview secret scopes were confirmed as still requiring cleanup**:
+
+- Cloudflare Preview had a `GROWTHOPS_SUPABASE_SECRET_KEY` binding without an accepted isolated staging URL; the guard correctly prevented a usable Preview backend. No secret value is recorded here.
+- Vercel Preview deployment `dpl_HfSpEkWs9D34A1a28WLiaCMrCnKY` reached `sh build.sh` and failed with `PREVIEW_SECRET_BOUNDARY_FAILED` because a server secret was present without an explicit staging Supabase URL. No secret value was printed or recorded.
+
+Vercel normal non-main Git Preview execution was then hardened by PR #86 using `"**": false` plus exact `"main": true`. Its slash-containing PR branch produced no new Vercel Preview deployment during acceptance; CRM Build Gate #76 and merged-main Gate #77 both passed, and Vercel Production remained healthy. This is a mitigation of the normal Git execution path, not proof that the Preview-scoped secret has been deleted. Complete platform acceptance still requires removing the Production secret from Preview scope or configuring a truly isolated staging backend on each provider.
 
 ## Full schema portability remains separate
 
