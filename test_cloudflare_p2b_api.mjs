@@ -93,6 +93,24 @@ for(const rpcCase of [
   }
 }
 
+// Committed DB error envelopes are needed so security audit rows survive the RPC
+// transaction. Both BFFs must restore the existing HTTP status contract.
+for(const invoke of [invokeVercel,invokeCf]){
+  const headers={...sameOrigin,cookie:'__Host-growthops_crm=cookie-session-token'};
+  let result=await invoke({headers,body:{rpc:'crm_unlock_credentials_v1',args:{p_password:'wrong'}}},()=>okJson({error:'CREDENTIAL_UNLOCK_INVALID'}));
+  assert.equal(result.status,400); assert.deepEqual(result.json,{message:'CREDENTIAL_UNLOCK_INVALID'});
+
+  result=await invoke({headers,body:{rpc:'crm_unlock_credentials_v1',args:{p_password:'wrong'}}},()=>okJson({error:'CREDENTIAL_UNLOCK_THROTTLED'}));
+  assert.equal(result.status,429); assert.deepEqual(result.json,{message:'CREDENTIAL_UNLOCK_THROTTLED'});
+
+  result=await invoke({headers,body:{rpc:'crm_reveal_client_secret_value_v5',args:{p_unlock_token:'unlock',p_client_id:'c1',p_platform:'facebook',p_field:'password'}}},()=>okJson({error:'CREDENTIAL_REVEAL_THROTTLED'}));
+  assert.equal(result.status,429); assert.deepEqual(result.json,{message:'CREDENTIAL_REVEAL_THROTTLED'});
+
+  result=await invoke({headers,body:{rpc:'crm_unlock_credentials_v1',args:{p_password:'wrong'}}},()=>okJson({error:'DO_NOT_EXPOSE_INTERNAL_ERROR'}));
+  assert.equal(result.status,502); assert.deepEqual(result.json,{message:'UPSTREAM_REQUEST_FAILED'});
+  assert.equal(JSON.stringify(result.json).includes('DO_NOT_EXPOSE_INTERNAL_ERROR'),false);
+}
+
 // Every ADMIN user-management RPC is session-gated on both BFFs. Without the
 // HttpOnly cookie the upstream must not be contacted; with the cookie, any
 // forged browser p_token must be replaced by the server-read cookie token.
@@ -136,4 +154,4 @@ for(const invoke of [invokeVercel,invokeCf]){
   assert.equal(result.status,401); assert.deepEqual(result.json,{message:'SESSION_INVALID'}); assert.match(String(result.headers['set-cookie']||''),/Max-Age=0/);
 }
 
-console.log('CLOUDFLARE_P2B_SERVER_IDENTITY_TESTS_OK: secret-key=required; publishable-fallback=none; request-id=active; logs=filtered; errors=sanitized; admin-user-rpcs=session-gated; v5-only; logout-clears-cookie');
+console.log('CLOUDFLARE_P2B_SERVER_IDENTITY_TESTS_OK: secret-key=required; publishable-fallback=none; request-id=active; logs=filtered; errors=sanitized; admin-user-rpcs=session-gated; committed-rate-errors=mapped; v5-only; logout-clears-cookie');
