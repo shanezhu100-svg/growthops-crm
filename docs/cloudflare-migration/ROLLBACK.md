@@ -10,17 +10,17 @@ Use the most recent **READY Production deployment from `main` that corresponds t
 
 Validated checkpoint at this review:
 
-- Production deployment: `dpl_FNtV2oBQWPYZrm8BaShVybUm57fF`
-- Production URL: `https://growthops-mfzngxrvn-shanezhu100-svgs-projects.vercel.app`
+- Production deployment: `dpl_HiGGTxc4zYJM9zq1s13CV5Pv2tW6`
+- Production URL: `https://growthops-8558vk7wp-shanezhu100-svgs-projects.vercel.app`
 - Stable alias: `https://growthops-crm.vercel.app`
-- Git commit: `0eefbe383d7ea8ecd7a874e7a8f7c4c9621763e6`
+- Git commit: `91c0edcb24b79d282faa72d7d83435a1e1265d30`
 - Checkpoint state: `READY`
-- Merged-main canonical gate: CRM Build Gate run #69, push-triggered, completed / success
-- Recent runtime-error inspection at review: no new Production runtime-error cluster was observed in the checked recent window
+- Merged-main canonical gate: CRM Build Gate run #77, push-triggered, completed / success
+- Change after the concurrency runtime release: Vercel Git deployment-policy hardening only; no CRM runtime or Supabase function/ACL behavior changed
 - Compatible Production database comparison anchor: primary CRM fingerprint `200 / 77ba3a7c646cf2ea04f41d20ceb1dd02aa9f041db7cbd2a0ad0386ddedbfba65`; supplemental three-guard fingerprint `9 / 2a6c96fe5c2290cd30ee5b29800dcb47d9f1686d48b51344486c2c7780030140`
 - Latest accepted database migration: `20260825075808 / post_p5_rate_limit_concurrency`
 
-Cloudflare Pages Production was also observed aligned to the same application commit at deployment `49a23f7f-5fbe-4894-9b8e-ad7b25005d70`, state `success`.
+The last Cloudflare Pages Production deployment independently verified as `success` and runtime-compatible with this database contract is `49a23f7f-5fbe-4894-9b8e-ad7b25005d70` at `main@0eefbe3`. A later documentation-only deployment for `main@5172508` (`5ddf431a-865a-4c88-9fc0-a948b908d1ec`) was skipped because a newer deployment was queued before it started. The current Cloudflare Git SHA was not reverified after the connected browser became unavailable; do not infer a newer Cloudflare deployment ID or status from Vercel/GitHub state alone.
 
 This checkpoint is evidence, not an immutable forever-pin. Before an actual rollback, verify that the selected Vercel deployment is still `READY`, maps to the intended `main` commit, passed the canonical gate, and remains compatible with the then-current Supabase function and privilege state.
 
@@ -107,7 +107,12 @@ Fix Preview by either:
 
 Never bypass the Preview boundary by weakening Production origin checks or defaulting Preview to Production Supabase.
 
-At the 2026-08-25 review, Cloudflare Preview was still observed with a `GROWTHOPS_SUPABASE_SECRET_KEY` binding while no isolated staging URL was configured; the repository guard correctly rejected that Preview configuration. No secret value is recorded here. Cloudflare platform cleanup remains an operational task. Vercel Preview environment-variable scope was not independently inspectable through the available connected interface, so its Preview secret isolation remains unverified.
+At the 2026-08-25 review, **both providers had confirmed Preview secret-scope cleanup still outstanding**:
+
+- Cloudflare Preview was observed with a `GROWTHOPS_SUPABASE_SECRET_KEY` binding and no accepted isolated staging URL. The repository guard correctly rejects that Preview configuration. No secret value is recorded here.
+- Vercel Preview was revalidated through failed Preview deployment `dpl_HfSpEkWs9D34A1a28WLiaCMrCnKY`: `sh build.sh` failed with `PREVIEW_SECRET_BOUNDARY_FAILED` because a server secret was present without an explicit staging Supabase URL. No secret value was printed or recorded.
+
+PR #86 subsequently changed Vercel Git deployment policy from bare-star deny to globstar deny (`"**": false`, `"main": true`). Its slash-containing PR branch produced no new Vercel Preview deployment during acceptance, CRM Build Gate #76 passed, and merged-main Gate #77 plus Production deployment `dpl_HiGGTxc4zYJM9zq1s13CV5Pv2tW6` were successful. This removes the normal non-main Git Preview execution path but does **not** prove the Vercel Preview-scoped secret has been deleted; manual/CLI/API Preview execution remains a reason to complete platform cleanup.
 
 ## Access/WAF rollback
 

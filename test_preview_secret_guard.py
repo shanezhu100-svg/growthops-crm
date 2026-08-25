@@ -14,6 +14,12 @@ PROD_URL = "https://avahcwyxparbcjdfglzx.supabase.co"
 SAFE_SECRET = "sb_secret_test_preview_boundary"
 LEAK_SECRET = "sb_secret_DO_NOT_LEAK_PREVIEW_BOUNDARY_20260823"
 
+CURRENT_STATE = (ROOT / "docs/cloudflare-migration/CURRENT_STATE.md").read_text(encoding="utf-8")
+ROLLBACK = (ROOT / "docs/cloudflare-migration/ROLLBACK.md").read_text(encoding="utf-8")
+CURRENT_RECOVERY = (ROOT / "docs/cloudflare-migration/CURRENT_RECOVERY_VERIFICATION.md").read_text(encoding="utf-8")
+PREVIEW_BOUNDARY = (ROOT / "docs/cloudflare-migration/POST_P5_PREVIEW_SECRET_BOUNDARY.md").read_text(encoding="utf-8")
+CONCURRENCY_ACCEPTANCE = (ROOT / "docs/cloudflare-migration/POST_P5_RATE_LIMIT_CONCURRENCY.md").read_text(encoding="utf-8")
+
 CONTROLLED = {
     "CF_PAGES",
     "CF_PAGES_BRANCH",
@@ -144,7 +150,46 @@ assert leak.returncode == 1
 assert LEAK_SECRET not in leak.stdout
 assert LEAK_SECRET not in leak.stderr
 
+# Current platform truth must remain consistent across the recovery authorities.
+# Both providers are known to have Preview secret-scope cleanup outstanding; the
+# Vercel evidence is no longer merely "unverified" because a real Preview build
+# revalidated the server-secret/no-staging condition on 2026-08-25.
+vercel_preview_evidence = "dpl_HfSpEkWs9D34A1a28WLiaCMrCnKY"
+for text, label in (
+    (CURRENT_STATE, "CURRENT_STATE"),
+    (ROLLBACK, "ROLLBACK"),
+    (CURRENT_RECOVERY, "CURRENT_RECOVERY_VERIFICATION"),
+    (PREVIEW_BOUNDARY, "POST_P5_PREVIEW_SECRET_BOUNDARY"),
+    (CONCURRENCY_ACCEPTANCE, "POST_P5_RATE_LIMIT_CONCURRENCY"),
+):
+    assert vercel_preview_evidence in text, f"{label} missing verified Vercel Preview secret-scope evidence"
+    assert "PREVIEW_SECRET_BOUNDARY_FAILED" in text, f"{label} missing fail-closed Vercel Preview evidence"
+
+for text, label in (
+    (CURRENT_STATE, "CURRENT_STATE"),
+    (ROLLBACK, "ROLLBACK"),
+    (CURRENT_RECOVERY, "CURRENT_RECOVERY_VERIFICATION"),
+    (CONCURRENCY_ACCEPTANCE, "POST_P5_RATE_LIMIT_CONCURRENCY"),
+):
+    assert "Vercel Preview secret isolation remains unverified" not in text, f"{label} regressed Vercel Preview to unverified"
+    assert "Vercel Preview secret scope remains **unverified**" not in text, f"{label} regressed Vercel Preview to unverified"
+    assert "Vercel Preview environment-variable scope was not independently inspectable" not in text, f"{label} contains stale Vercel Preview evidence"
+
+for text, label in (
+    (CURRENT_STATE, "CURRENT_STATE"),
+    (ROLLBACK, "ROLLBACK"),
+    (CURRENT_RECOVERY, "CURRENT_RECOVERY_VERIFICATION"),
+    (PREVIEW_BOUNDARY, "POST_P5_PREVIEW_SECRET_BOUNDARY"),
+    (CONCURRENCY_ACCEPTANCE, "POST_P5_RATE_LIMIT_CONCURRENCY"),
+):
+    assert "91c0edcb24b79d282faa72d7d83435a1e1265d30" in text, f"{label} missing accepted globstar/main checkpoint"
+    assert "dpl_HiGGTxc4zYJM9zq1s13CV5Pv2tW6" in text, f"{label} missing current Vercel Production checkpoint"
+
+assert '"**": false' in PREVIEW_BOUNDARY, "Preview boundary docs missing slash-safe Vercel deny rule"
+assert '"main": true' in PREVIEW_BOUNDARY, "Preview boundary docs missing Vercel main allow rule"
+
 print(
     "PREVIEW_SECRET_BOUNDARY_TESTS_OK: production=unchanged; preview-no-secret=disabled; "
-    "preview-production-target=blocked; preview-staging=allowed; malformed-target=blocked; secret-output=none"
+    "preview-production-target=blocked; preview-staging=allowed; malformed-target=blocked; "
+    "secret-output=none; platform-evidence=vercel+cloudflare-open; vercel-git-preview=main-only"
 )

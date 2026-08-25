@@ -108,7 +108,9 @@ GitHub Actions is the PR hard gate and runs without CRM/Supabase secrets. Its cu
 - complete canonical CRM build/security regression suite;
 - final Cloudflare artifact/output parity verification.
 
-For the rate-limit concurrency release, PR head `775bd321b8f09c36609da7e10afa274662582bc4` passed CRM Build Gate run #68, and the resulting merged `main` commit `0eefbe383d7ea8ecd7a874e7a8f7c4c9621763e6` passed push-triggered CRM Build Gate run #69.
+For the rate-limit concurrency runtime release, PR head `775bd321b8f09c36609da7e10afa274662582bc4` passed CRM Build Gate run #68, and merged `main@0eefbe383d7ea8ecd7a874e7a8f7c4c9621763e6` passed push-triggered run #69.
+
+Subsequent recovery/documentation authority updates passed through `main@2f651a3baca51e8d1fdb1330d40432cdbbf19433` / run #75. Vercel Git deployment-policy hardening then passed slash-branch PR run #76 and merged-main run #77 at `main@91c0edcb24b79d282faa72d7d83435a1e1265d30`.
 
 A change is not considered merge-safe merely because it is documentation-only or because one hosting platform deploys. The expected workflow remains: isolated branch → narrow diff → canonical gate → inspect final parity marker → merge with expected head SHA → verify resulting Production deployment.
 
@@ -116,29 +118,49 @@ A change is not considered merge-safe merely because it is documentation-only or
 
 ### Vercel
 
-`vercel.json` is default-deny for non-main Git deployments and enables Git deployment for `main` only. This protects Hobby deployment quota. Pull requests therefore rely on the secret-free GitHub canonical gate; merged `main` triggers Vercel Production.
+`vercel.json` is default-deny for non-main Git deployments and enables Git deployment for `main` only. The current policy uses slash-safe minimatch globstar deny (`"**": false`) plus exact `"main": true`; the prior bare-star form allowed slash-containing branch names such as `docs/...` to fall through to Vercel's unspecified-branch default. Pull requests therefore rely on the secret-free GitHub canonical gate while merged `main` triggers Vercel Production.
+
+The corrected policy was accepted by PR #86:
+
+- slash-containing branch `ops/vercel-preview-globstar-20260825` produced no new normal Vercel Preview deployment during the acceptance observation;
+- CRM Build Gate #76: completed / success;
+- merged `main`: `91c0edcb24b79d282faa72d7d83435a1e1265d30`;
+- merged-main CRM Build Gate #77: completed / success.
 
 The stable Vercel application alias is:
 
 `https://growthops-crm.vercel.app`
 
-Current accepted rate-limit concurrency Production deployment: `dpl_FNtV2oBQWPYZrm8BaShVybUm57fF`, state `READY`, Git commit `0eefbe383d7ea8ecd7a874e7a8f7c4c9621763e6`.
+Current validated Vercel Production deployment:
 
-For rollback, do not permanently pin an ancient pre-P5 build. Use a READY, gate-accepted `main` Production deployment compatible with the current database privilege state. See `ROLLBACK.md`.
+- deployment: `dpl_HiGGTxc4zYJM9zq1s13CV5Pv2tW6`;
+- state: `READY`;
+- Git commit: `91c0edcb24b79d282faa72d7d83435a1e1265d30`;
+- stable alias assigned successfully.
 
-Vercel Preview environment-variable scope was not independently inspectable through the available connected interface during the 2026-08-25 review. Treat its Preview secret isolation as **unverified**, not accepted or assumed clean.
+The current Production homepage returned successfully, and unauthenticated `GET /api/crm` returned `405` with `METHOD_NOT_ALLOWED`, `Allow: POST`, no-store caching, and the expected security headers rather than executing an RPC. Recent Production runtime-error inspection found no new error cluster in the checked window.
+
+For rollback, do not permanently pin an ancient pre-P5 build. Use a READY, gate-accepted `main` Production deployment compatible with the current database privilege/function state. See `ROLLBACK.md`.
+
+Vercel Preview secret scope is **verified open**, not unverified. PR #85 Preview deployment `dpl_HfSpEkWs9D34A1a28WLiaCMrCnKY` failed at `sh build.sh` with `PREVIEW_SECRET_BOUNDARY_FAILED` because a server secret was present without an explicit staging Supabase URL. No secret value was printed or recorded. PR #86 prevents the normal non-main Git Preview execution path, but platform cleanup remains required because the Preview-scoped secret itself has not been proven removed.
 
 ### Cloudflare Pages
 
 The Cloudflare Pages project uses `main` as the Production branch and the same canonical build/output contract. `cloudflare_p1_verify.py` requires deterministic parity for the pinned production artifacts and also guards the inert top-level 404 and static security headers.
 
-Current accepted rate-limit concurrency Production deployment: `49a23f7f-5fbe-4894-9b8e-ad7b25005d70`, `main@0eefbe3`, state `success`.
+The last independently verified Cloudflare Production runtime-compatible deployment remains:
 
-Cloudflare Preview must not silently use Production Supabase. Standard Pages Preview hosts require an explicit isolated staging `GROWTHOPS_SUPABASE_URL` when a server secret is active; otherwise the runtime is expected to fail closed. Do not weaken the origin guard to make Preview pass.
+- deployment: `49a23f7f-5fbe-4894-9b8e-ad7b25005d70`;
+- branch/commit: `main@0eefbe3`;
+- state: `success`.
 
-Cloudflare Dashboard verification on 2026-08-25 showed that Preview still has a `GROWTHOPS_SUPABASE_SECRET_KEY` binding; no secret value is recorded here. With no explicit isolated staging URL, the repository guard fails the Preview configuration closed as designed. Platform cleanup remains open: remove the Production secret from Preview or configure an explicitly isolated staging URL plus matching staging secret.
+A later documentation-only Cloudflare Production deployment `5ddf431a-865a-4c88-9fc0-a948b908d1ec` for `main@5172508` was eventually marked `skipped` because a newer deployment had been queued before its build started. After the connected Opera browser became unavailable, the newer Cloudflare deployment ID/current Git SHA could not be independently reverified. Do not infer Cloudflare's latest Git SHA from GitHub or Vercel state. The last verified `0eefbe3` Cloudflare deployment remains runtime-compatible with the accepted Supabase concurrency migration.
 
-At this checkpoint, Supabase Production, GitHub `main`, Vercel Production, and Cloudflare Pages Production are aligned on the accepted rate-limit concurrency release.
+Cloudflare Preview must not silently use Production Supabase. Standard Pages Preview hosts require an explicit isolated staging `GROWTHOPS_SUPABASE_URL` when a server secret is active; otherwise the runtime/build is expected to fail closed. Do not weaken the origin guard to make Preview pass.
+
+Cloudflare Dashboard verification on 2026-08-25 showed that Preview still has a `GROWTHOPS_SUPABASE_SECRET_KEY` binding; no secret value is recorded here. With no explicit isolated staging URL, the repository guard rejects the Preview configuration as designed. Platform cleanup remains open: remove the Production secret from Preview or configure an explicitly isolated staging URL plus matching staging secret.
+
+At this checkpoint the **runtime/database compatibility contract** is aligned: Supabase Production has the accepted concurrency migration, GitHub `main` and Vercel Production contain the compatible BFF/runtime, and the last independently verified Cloudflare Production also contains that compatible runtime. Exact Cloudflare deployment-SHA freshness after later documentation/config-only `main` commits remains unverified until the Cloudflare connection is available again.
 
 ## Security headers / static fail-closed behavior
 
@@ -176,5 +198,5 @@ Those documents intentionally preserve the state observed at their own phase. Th
 2. Do not delete files solely because their names look historical; prove they are outside build, CI, runtime and documentation dependencies first.
 3. Do not weaken fail-closed Preview/Production origin checks to accommodate platform configuration gaps.
 4. Do not reintroduce browser Supabase config, browser token persistence, broad credential reveal, `anon` CRM RPC execution, or permissive future-object defaults in `public`.
-5. Keep `ROLLBACK.md` and this file current whenever the architecture, privilege boundary, CI deployment policy, or recovery strategy materially changes.
-6. Treat unverified platform secret scope as unverified rather than assuming it is clean.
+5. Keep `ROLLBACK.md` and this file current whenever the architecture, privilege boundary, CI deployment policy, recovery strategy, or accepted hosting checkpoint materially changes.
+6. Keep platform-secret scope claims evidence-based: Vercel and Cloudflare Preview cleanup are both currently confirmed outstanding, even though normal Vercel non-main Git Preview execution is now disabled.

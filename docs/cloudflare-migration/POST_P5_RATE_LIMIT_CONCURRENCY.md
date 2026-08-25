@@ -73,40 +73,57 @@ PR #83, `Serialize security rate limits and persist rejection audits`, passed th
 - merged `main`: `0eefbe383d7ea8ecd7a874e7a8f7c4c9621763e6`;
 - merged-main gate: run #69, push-triggered, completed / success.
 
-The canonical repository build/security gate therefore accepted both the reviewed PR head and the resulting `main` commit.
+The canonical repository build/security gate therefore accepted both the reviewed PR head and the resulting runtime release commit.
 
 ## Production hosting alignment
 
-The application/database drift that existed while Production Supabase had already advanced past the old BFF commit is closed.
+The application/database drift that existed while Production Supabase had already advanced past the old BFF commit was closed at the runtime acceptance checkpoint.
 
-Vercel Production:
+Vercel Production at runtime acceptance:
 
 - deployment: `dpl_FNtV2oBQWPYZrm8BaShVybUm57fF`;
 - Git commit: `0eefbe383d7ea8ecd7a874e7a8f7c4c9621763e6`;
 - state: `READY`;
 - stable alias: `https://growthops-crm.vercel.app`.
 
-Cloudflare Pages Production:
+Cloudflare Pages Production at runtime acceptance:
 
 - deployment: `49a23f7f-5fbe-4894-9b8e-ad7b25005d70`;
 - branch/commit: `main@0eefbe3`;
 - state: `success`;
 - observed build duration: 46 seconds.
 
-At this checkpoint, Supabase Production, GitHub `main`, Vercel Production, and Cloudflare Pages Production are aligned on the accepted concurrency hardening.
+That checkpoint established compatible runtime code on Supabase Production, GitHub, Vercel, and Cloudflare for the concurrency migration.
+
+Later recovery/documentation and deployment-policy commits did not change the CRM BFF/database concurrency contract. The current validated Vercel Production checkpoint after those changes is:
+
+- Git `main`: `91c0edcb24b79d282faa72d7d83435a1e1265d30`;
+- CRM Build Gate run #77: completed / success;
+- Vercel deployment: `dpl_HiGGTxc4zYJM9zq1s13CV5Pv2tW6`;
+- state: `READY`.
+
+The last independently verified Cloudflare runtime-compatible Production deployment remains `49a23f7f-5fbe-4894-9b8e-ad7b25005d70 / main@0eefbe3`. A later documentation-only `main@5172508` deployment was skipped because a newer deployment had already been queued, and the exact newer Cloudflare deployment could not be reverified after the connected browser became unavailable. This is a deployment-freshness evidence gap, not a known concurrency-runtime incompatibility.
 
 ## Preview secret boundary remains an operational item
 
-The concurrency hardening is Production-accepted, but the previously documented Preview secret-boundary work is not fully closed at the platform layer.
+The concurrency hardening is Production-accepted, but Preview platform secret isolation is not fully closed.
+
+### Cloudflare
 
 Cloudflare Dashboard verification on 2026-08-25 showed that the Preview environment still has a `GROWTHOPS_SUPABASE_SECRET_KEY` binding. No secret value is recorded here. The repository guard correctly fails Preview closed when that server secret is present without an explicit isolated staging `GROWTHOPS_SUPABASE_URL`; this behavior must not be weakened to make Preview builds pass.
 
-The correct Cloudflare platform remediation is either:
+Correct Cloudflare remediation is either:
 
 1. remove the Production server secret from Preview when Preview has no backend; or
 2. configure an explicitly isolated staging Supabase URL and matching staging secret.
 
-Vercel Production was independently verified, but the available connected Vercel interface did not expose environment-variable scope inspection and the browser session did not provide authenticated Vercel Dashboard access. Therefore the Vercel Preview secret scope remains **unverified**, not accepted or assumed clean.
+### Vercel
+
+Vercel Preview secret scope is **verified open**, not unverified. PR #85 Preview deployment `dpl_HfSpEkWs9D34A1a28WLiaCMrCnKY` for branch `docs/current-recovery-concurrency-20260825` / commit `f162f675d5cf606f3659ad5f363ca68e3702ffa6` failed at `sh build.sh` with `PREVIEW_SECRET_BOUNDARY_FAILED` because a server secret was present without an explicit staging Supabase URL. No secret value was printed or recorded.
+
+A separate Git-deployment defect had allowed slash-containing non-main branches to reach Vercel Preview despite the intended main-only policy. PR #86 replaced the bare-star deny with globstar deny (`"**": false`, `"main": true`) and updated the CI quota guard. Its slash-containing branch produced no new normal Vercel Preview deployment during acceptance; CRM Build Gate #76 passed; merged-main Gate #77 passed; and Vercel Production `dpl_HiGGTxc4zYJM9zq1s13CV5Pv2tW6` became `READY`.
+
+This removes the normal Git PR Preview execution path but does not prove the Preview-scoped secret has been removed. Platform cleanup is still required because intentional/manual/CLI/API Preview execution could use that environment scope.
 
 ## Rollback rule
 
@@ -126,8 +143,10 @@ The rollback intentionally restores the accepted predecessor exception-based unl
 
 Production concurrency hardening: **accepted**.
 
-Production application/database alignment: **accepted**.
+Production application/database runtime alignment: **accepted**.
 
-Cloudflare Preview platform secret isolation: **open operational item; runtime remains fail-closed**.
+Vercel normal non-main Git Preview execution: **hardened and accepted under PR #86**.
 
-Vercel Preview platform secret isolation: **unverified operational item**.
+Cloudflare Preview platform secret isolation: **open operational item; guard remains fail-closed**.
+
+Vercel Preview platform secret isolation: **confirmed open operational item; normal Git PR execution path is disabled, but platform scope still requires cleanup**.
