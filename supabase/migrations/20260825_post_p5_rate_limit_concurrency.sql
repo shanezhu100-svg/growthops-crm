@@ -462,9 +462,9 @@ BEGIN
     RAISE EXCEPTION 'RATE_LIMIT_CONCURRENCY_POSTCHECK_REVEAL_LOCK';
   END IF;
 
-  IF position("return jsonb_build_object('error','CREDENTIAL_UNLOCK_INVALID')" in d_unlock) = 0
-     OR position("return jsonb_build_object('error','CREDENTIAL_UNLOCK_THROTTLED')" in d_unlock) = 0
-     OR position("return jsonb_build_object('error','CREDENTIAL_REVEAL_THROTTLED')" in d_reveal) = 0 THEN
+  IF position($needle$return jsonb_build_object('error','CREDENTIAL_UNLOCK_INVALID')$needle$ in d_unlock) = 0
+     OR position($needle$return jsonb_build_object('error','CREDENTIAL_UNLOCK_THROTTLED')$needle$ in d_unlock) = 0
+     OR position($needle$return jsonb_build_object('error','CREDENTIAL_REVEAL_THROTTLED')$needle$ in d_reveal) = 0 THEN
     RAISE EXCEPTION 'RATE_LIMIT_CONCURRENCY_POSTCHECK_COMMITTABLE_ERRORS';
   END IF;
 
