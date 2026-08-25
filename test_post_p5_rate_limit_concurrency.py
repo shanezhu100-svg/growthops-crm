@@ -152,11 +152,21 @@ for source, label in (
     (current_state, 'CURRENT_STATE'),
     (current_recovery, 'CURRENT_RECOVERY_VERIFICATION'),
     (acceptance, 'POST_P5_RATE_LIMIT_CONCURRENCY'),
-    (ledger_appendix, 'P0_MIGRATION_LEDGER_20260825_APPENDIX'),
 ):
     require(current_migration in source, f'{label} missing accepted concurrency migration')
     require(current_primary_hash in source, f'{label} missing current primary CRM fingerprint')
     require(current_guard_hash in source, f'{label} missing current three-guard fingerprint')
+
+# The ledger appendix stores version and name in separate table columns, so gate
+# the two fields independently while retaining the same fingerprint requirements.
+require('20260825075808' in ledger_appendix,
+        'P0_MIGRATION_LEDGER_20260825_APPENDIX missing concurrency migration version')
+require('post_p5_rate_limit_concurrency' in ledger_appendix,
+        'P0_MIGRATION_LEDGER_20260825_APPENDIX missing concurrency migration name')
+require(current_primary_hash in ledger_appendix,
+        'P0_MIGRATION_LEDGER_20260825_APPENDIX missing current primary CRM fingerprint')
+require(current_guard_hash in ledger_appendix,
+        'P0_MIGRATION_LEDGER_20260825_APPENDIX missing current three-guard fingerprint')
 
 require('inventory_lines = 200' in current_recovery,
         'CURRENT_RECOVERY_VERIFICATION missing current primary inventory count')
