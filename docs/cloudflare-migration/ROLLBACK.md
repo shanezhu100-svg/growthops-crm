@@ -10,13 +10,14 @@ Use the most recent **READY Production deployment from `main` that corresponds t
 
 Validated checkpoint at this review:
 
-- Production deployment: `dpl_3zL8NYGHxmSZPixUdVtUWV5g551s`
-- Production URL: `https://growthops-ec5gbp67e-shanezhu100-svgs-projects.vercel.app`
+- Production deployment: `dpl_6KPtrxhDQYPwwTyF5YpGf9RPU7fS`
+- Production URL: `https://growthops-fp8b9nl3i-shanezhu100-svgs-projects.vercel.app`
 - Stable alias: `https://growthops-crm.vercel.app`
-- Git commit: `ddcfe1ce48238c630364a5273185c47e1b0b36ed`
+- Git commit: `aed97eafcfcd1466bb95f95af45478aeeda32d1f`
 - Checkpoint state: `READY`
 - Vercel rollback-candidate state: `true`
 - 5xx runtime log check at review: no matching Production 5xx entries in the preceding 24-hour window.
+- Compatible Production database comparison anchor: `CURRENT_STATE.md` records `200 / bffaf123425bc7bddf02ecf00132848a5bfc4248e44395a5283c8ca9706b97f1` after `20260824034405 / post_p5_user_identity_byte_caps`.
 
 This checkpoint is evidence, not an immutable forever-pin. Before an actual rollback, verify that the selected Vercel deployment is still `READY`, maps to the intended `main` commit, and remains compatible with the then-current Supabase privilege state.
 
