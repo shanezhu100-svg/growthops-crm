@@ -43,6 +43,33 @@ This document records the live `supabase_migrations.schema_migrations` ledger ob
 
 The repository also contains `supabase/migrations/20260815_security_vault_enforce.sql`. It is part of the retained security migration source set, but the live ledger query captured above did not show a separate migration name `security_vault_enforce`. Do not infer a new remote history entry from the filename alone.
 
+## Post-checkpoint forward ledger re-verification
+
+The remote ledger was re-read from Production on 2026-08-24. The original 2026-08-21 checkpoint above is preserved as historical evidence; the following later applied entries are genuine forward migrations and each has a retained repository SQL file.
+
+| Remote version | Migration name | Repository file |
+| --- | --- | --- |
+| `20260822151709` | `p5_revoke_sensitive_anon_exec_group1` | `supabase/migrations/20260822_p5_revoke_sensitive_anon_exec.sql` |
+| `20260823045642` | `credential_unlock_reauth_bridge` | `supabase/migrations/20260823_credential_unlock_reauth_bridge.sql` |
+| `20260823062545` | `p5_group2_revoke_legacy_credential_status_anon_exec` | `supabase/migrations/20260823_p5_group2_revoke_legacy_credential_status_anon_exec.sql` |
+| `20260823064535` | `p5_group3_revoke_admin_user_mgmt_anon_exec` | `supabase/migrations/20260823_p5_group3_revoke_admin_user_mgmt_anon_exec.sql` |
+| `20260823071407` | `p5_group4_revoke_safe_summary_anon_exec` | `supabase/migrations/20260823_p5_group4_revoke_safe_summary_anon_exec.sql` |
+| `20260823085810` | `p5_group5_revoke_session_state_anon_exec` | `supabase/migrations/20260823_p5_group5_revoke_session_state_anon_exec.sql` |
+| `20260823101656` | `p5_group6_revoke_public_boundary_anon_exec` | `supabase/migrations/20260823_p5_group6_revoke_public_boundary_anon_exec.sql` |
+| `20260823104232` | `post_p5_revoke_browser_audit_sequence_acl` | `supabase/migrations/20260823_revoke_browser_audit_sequence_acl.sql` |
+| `20260823120150` | `post_p5_minimize_service_role_rpc_exec` | `supabase/migrations/20260823_revoke_internal_service_role_exec.sql` |
+| `20260823123328` | `post_p5_revoke_service_role_relation_acl` | `supabase/migrations/20260823_post_p5_revoke_service_role_relation_acl.sql` |
+| `20260823131002` | `post_p5_login_trusted_source_bucket` | `supabase/migrations/20260823_post_p5_login_trusted_source_bucket.sql` |
+| `20260823135410` | `post_p5_crm_acl_event_guard` | `supabase/migrations/20260823_post_p5_crm_acl_event_guard.sql` |
+| `20260823143620` | `post_p5_crm_rls_alter_guard` | `supabase/migrations/20260823_post_p5_crm_rls_alter_guard.sql` |
+| `20260824005806` | `post_p5_v5_direct_scalar` | `supabase/migrations/20260824_post_p5_v5_direct_scalar.sql` |
+| `20260824023041` | `post_p5_bcrypt_password_byte_cap` | `supabase/migrations/20260824_post_p5_bcrypt_password_byte_cap.sql` |
+| `20260824031539` | `post_p5_single_workspace_membership_invariant` | `supabase/migrations/20260824_post_p5_single_workspace_membership_invariant.sql` |
+| `20260824031938` | `post_p5_bcrypt_verification_byte_caps` | `supabase/migrations/20260824_post_p5_bcrypt_verification_byte_caps.sql` |
+| `20260824034405` | `post_p5_user_identity_byte_caps` | `supabase/migrations/20260824_post_p5_user_identity_byte_caps.sql` |
+
+As of this re-verification, there is no newly observed remote-history-only migration after 2026-08-14. The unresolved historical gap remains exactly the eleven 2026-08-13/14 entries listed above; do not blur that known gap with later forward migrations that are present in GitHub.
+
 ## Recovery rule
 
 The eleven 2026-08-13/14 entries above are historical facts, but their original SQL is not present in the current repository. We must not synthesize guessed SQL and label it as the historical original.
@@ -55,6 +82,8 @@ For recovery and Cloudflare migration safety:
 4. Use a real database schema dump/export when available as the authoritative structural snapshot.
 5. Treat later schema changes as forward migrations committed to the repository.
 6. Before a destructive database restore, verify Vault handling separately; ordinary backups must not contain credential values.
+
+The deterministic catalog fingerprint recorded in `CURRENT_STATE.md` is a comparison anchor only. It does not replace the outstanding full schema-only `pg_dump`/equivalent recovery export.
 
 ## Cloudflare migration implication
 
