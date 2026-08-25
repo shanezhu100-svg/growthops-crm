@@ -61,6 +61,14 @@ A fresh read-only Production inventory was captured on 2026-08-24 after the late
 - ordinary workspace sensitive-key matches: `0`;
 - server audit sensitive-payload-value matches: `0`.
 
+Two repository-managed Post-P5 DDL guards live outside the primary fingerprint's historical `crm_*` function namespace. Current recovery comparison therefore also uses the read-only supplemental query in `supabase/baseline/post_p5_crm_guard_security_fingerprint.sql`, documented in `POST_P5_GUARD_FINGERPRINT.md`. Its accepted Production checkpoint is:
+
+- guard inventory lines: `6`;
+- guard SHA-256: `d3491022f0827324c810d401123d6027c0c3d46498868a2b5520bbea54bae52f`;
+- scope: both `growthops_crm_acl_guard_ddl` and `growthops_crm_rls_guard_ddl` function definitions/owners, application-role EXECUTE truth, and event-trigger event/enabled/tags/function bindings.
+
+The supplemental guard checkpoint does not alter or replace the primary `200 / bffaf123...` comparison contract. Refresh both checkpoints after a future schema/ACL/function change that can affect their respective scopes.
+
 This is the **current catalog/security comparison anchor**, not a replacement for a full database schema export. The historical P0 fingerprints remain valid evidence for their own phases, including the accepted `195 / edfcd23e...` relation-ACL checkpoint before later Post-P5 function/constraint changes. The outstanding full schema-only `pg_dump`/equivalent export remains a separate P0 recovery deliverable; do not claim full disaster-recovery schema portability from this fingerprint alone.
 
 ## Current credential/storage boundary
@@ -123,7 +131,7 @@ Operational rollback instructions are in:
 
 The core rule is: **hosting rollback and database privilege rollback are separate operations**. Route back to a compatible validated Vercel server-boundary build first; change Supabase privileges only when a specific database security migration is proven to be the cause, and then only through its exact reviewed rollback artifact.
 
-`P0_MIGRATION_LEDGER.md` preserves the remote migration history and repository mapping. Historical 2026-08-13/14 SQL gaps remain explicitly unresolved rather than reconstructed from guesses. Later forward migrations must remain mapped to genuine repository SQL, and the current Production catalog/security checkpoint above should be refreshed after any future schema/ACL/function change.
+`P0_MIGRATION_LEDGER.md` preserves the remote migration history and repository mapping. Historical 2026-08-13/14 SQL gaps remain explicitly unresolved rather than reconstructed from guesses. Later forward migrations must remain mapped to genuine repository SQL, and the current Production catalog/security checkpoints above should be refreshed after any future schema/ACL/function change.
 
 ## Historical phase documents
 
