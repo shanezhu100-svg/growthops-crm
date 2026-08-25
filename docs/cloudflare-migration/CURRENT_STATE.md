@@ -1,6 +1,6 @@
 # GrowthOps CRM Current State
 
-Last reviewed: 2026-08-24
+Last reviewed: 2026-08-25
 
 This file is the **current-state authority** for the CRM hosting/security migration. Phase documents in this directory (P0, P1, P2-A, P2-B, P3/P4, P5, and Post-P5) are retained as implementation and acceptance evidence; when a phase document describes a future step that has since been completed, this file and the current canonical build gates take precedence.
 
@@ -32,6 +32,10 @@ Current enforced behavior includes:
 
 Current input/resource guards include a 4 MiB API body limit, top-level object request envelope, UTF-8 byte bounds for login/admin/unlock passwords and user identity fields, and a bounded session-token contract. The canonical tests are authoritative for exact limits and failure semantics.
 
+### Post-P5 rate-limit concurrency
+
+Production migration `20260825075808 / post_p5_rate_limit_concurrency` serializes the reviewed login trusted-source/user bucket and per-workspace/user unlock/reveal rate-limit subjects with transaction-level advisory locks while preserving the existing thresholds and authentication order. Unlock/reveal rejected outcomes that require durable audit evidence use bounded safe JSON envelopes; both BFF implementations map only the reviewed envelopes to the established 400/429 contract and fail unknown envelopes closed. Detailed acceptance evidence is retained in `POST_P5_RATE_LIMIT_CONCURRENCY.md`.
+
 ## Current Supabase privilege state
 
 The canonical repository gates encode the accepted post-P5 Production privilege shape:
@@ -53,10 +57,10 @@ Do not restore `anon` RPC execution, broad service-role relation/function access
 
 ## Current Production database checkpoint
 
-A fresh read-only Production inventory was revalidated on 2026-08-24 after the applied migration `20260825040850 / post_p5_public_default_privilege_guard`. Using the same deterministic catalog query retained in `supabase/baseline/p0_schema_security_fingerprint.sql`, the current CRM schema/security checkpoint is:
+A fresh read-only Production inventory was revalidated on 2026-08-25 after the applied migration `20260825075808 / post_p5_rate_limit_concurrency`. The preceding accepted migration `20260825040850 / post_p5_public_default_privilege_guard` remains applied and authoritative for future-object default-deny behavior. Using the same deterministic catalog query retained in `supabase/baseline/p0_schema_security_fingerprint.sql`, the current CRM schema/security checkpoint is:
 
 - inventory lines: `200`;
-- SHA-256: `bffaf123425bc7bddf02ecf00132848a5bfc4248e44395a5283c8ca9706b97f1`;
+- SHA-256: `77ba3a7c646cf2ea04f41d20ceb1dd02aa9f041db7cbd2a0ad0386ddedbfba65`;
 - effective function EXECUTE boundary across all `public` functions for `anon / authenticated / service_role`: `0 / 0 / 12`;
 - postgres/public future default `service_role` grants for tables / sequences / functions: `0 / 0 / 0`;
 - existing non-CRM public functions/procedures executable by `anon`, `authenticated`, or `service_role`: `0`;
@@ -66,13 +70,15 @@ A fresh read-only Production inventory was revalidated on 2026-08-24 after the a
 - ordinary workspace sensitive-key matches: `0`;
 - server audit sensitive-payload-value matches: `0`.
 
+The primary fingerprint changed from the preceding `200 / bffaf123425bc7bddf02ecf00132848a5bfc4248e44395a5283c8ca9706b97f1` checkpoint because the rate-limit concurrency migration intentionally replaced three `crm_*` function definitions. The older hash remains historical evidence for its accepted phase.
+
 Three repository-managed Post-P5 DDL guards live outside the primary fingerprint's historical `crm_*` function namespace. Current recovery comparison therefore also uses the read-only supplemental query in `supabase/baseline/post_p5_crm_guard_security_fingerprint.sql`, documented in `POST_P5_GUARD_FINGERPRINT.md`. Its accepted Production checkpoint is:
 
 - guard inventory lines: `9`;
 - guard SHA-256: `2a6c96fe5c2290cd30ee5b29800dcb47d9f1686d48b51344486c2c7780030140`;
 - scope: `growthops_crm_acl_guard_ddl`, `growthops_crm_rls_guard_ddl`, and `growthops_public_noncrm_function_acl_guard_ddl` function definitions/owners, application-role EXECUTE truth, and event-trigger event/enabled/tags/function bindings.
 
-The supplemental guard checkpoint does not alter or replace the primary `200 / bffaf123...` comparison contract. Refresh both checkpoints after a future schema/ACL/function/guard change that can affect their respective scopes.
+The supplemental guard checkpoint does not alter or replace the primary `200 / 77ba3a7c...` comparison contract. Refresh both checkpoints after a future schema/ACL/function/guard change that can affect their respective scopes.
 
 This is the **current catalog/security comparison anchor**, not a replacement for a full database schema export. The historical P0 fingerprints remain valid evidence for their own phases, including the accepted `195 / edfcd23e...` relation-ACL checkpoint before later Post-P5 function/constraint changes. The outstanding full schema-only `pg_dump`/equivalent export remains a separate P0 recovery deliverable; do not claim full disaster-recovery schema portability from this fingerprint alone.
 
@@ -102,6 +108,8 @@ GitHub Actions is the PR hard gate and runs without CRM/Supabase secrets. Its cu
 - complete canonical CRM build/security regression suite;
 - final Cloudflare artifact/output parity verification.
 
+For the rate-limit concurrency release, PR head `775bd321b8f09c36609da7e10afa274662582bc4` passed CRM Build Gate run #68, and the resulting merged `main` commit `0eefbe383d7ea8ecd7a874e7a8f7c4c9621763e6` passed push-triggered CRM Build Gate run #69.
+
 A change is not considered merge-safe merely because it is documentation-only or because one hosting platform deploys. The expected workflow remains: isolated branch → narrow diff → canonical gate → inspect final parity marker → merge with expected head SHA → verify resulting Production deployment.
 
 ## Hosting/deployment policy
@@ -114,13 +122,23 @@ The stable Vercel application alias is:
 
 `https://growthops-crm.vercel.app`
 
+Current accepted rate-limit concurrency Production deployment: `dpl_FNtV2oBQWPYZrm8BaShVybUm57fF`, state `READY`, Git commit `0eefbe383d7ea8ecd7a874e7a8f7c4c9621763e6`.
+
 For rollback, do not permanently pin an ancient pre-P5 build. Use a READY, gate-accepted `main` Production deployment compatible with the current database privilege state. See `ROLLBACK.md`.
+
+Vercel Preview environment-variable scope was not independently inspectable through the available connected interface during the 2026-08-25 review. Treat its Preview secret isolation as **unverified**, not accepted or assumed clean.
 
 ### Cloudflare Pages
 
 The Cloudflare Pages project uses `main` as the Production branch and the same canonical build/output contract. `cloudflare_p1_verify.py` requires deterministic parity for the pinned production artifacts and also guards the inert top-level 404 and static security headers.
 
+Current accepted rate-limit concurrency Production deployment: `49a23f7f-5fbe-4894-9b8e-ad7b25005d70`, `main@0eefbe3`, state `success`.
+
 Cloudflare Preview must not silently use Production Supabase. Standard Pages Preview hosts require an explicit isolated staging `GROWTHOPS_SUPABASE_URL` when a server secret is active; otherwise the runtime is expected to fail closed. Do not weaken the origin guard to make Preview pass.
+
+Cloudflare Dashboard verification on 2026-08-25 showed that Preview still has a `GROWTHOPS_SUPABASE_SECRET_KEY` binding; no secret value is recorded here. With no explicit isolated staging URL, the repository guard fails the Preview configuration closed as designed. Platform cleanup remains open: remove the Production secret from Preview or configure an explicitly isolated staging URL plus matching staging secret.
+
+At this checkpoint, Supabase Production, GitHub `main`, Vercel Production, and Cloudflare Pages Production are aligned on the accepted rate-limit concurrency release.
 
 ## Security headers / static fail-closed behavior
 
@@ -136,7 +154,7 @@ Operational rollback instructions are in:
 
 The core rule is: **hosting rollback and database privilege rollback are separate operations**. Route back to a compatible validated Vercel server-boundary build first; change Supabase privileges only when a specific database security migration is proven to be the cause, and then only through its exact reviewed rollback artifact.
 
-`P0_MIGRATION_LEDGER.md` preserves the remote migration history and repository mapping. Historical 2026-08-13/14 SQL gaps remain explicitly unresolved rather than reconstructed from guesses. Later forward migrations must remain mapped to genuine repository SQL, and the current Production catalog/security checkpoints above should be refreshed after any future schema/ACL/function change.
+`P0_MIGRATION_LEDGER.md` preserves the remote migration history and repository mapping. Historical 2026-08-13/14 SQL gaps remain explicitly unresolved rather than reconstructed from guesses. Later forward migrations must remain mapped to genuine repository SQL, and the current Production catalog/security checkpoints above should be refreshed after any future schema/ACL/function change. The repository-backed `20260825075808 / post_p5_rate_limit_concurrency` mapping is recorded in `P0_MIGRATION_LEDGER_20260825_APPENDIX.md` and `POST_P5_RATE_LIMIT_CONCURRENCY.md` pending the next consolidated historical-ledger refresh.
 
 ## Historical phase documents
 
@@ -148,7 +166,7 @@ Use phase documents for detailed evidence:
 - `P2B_SERVER_IDENTITY.md`: server-only Supabase identity, request IDs, log filtering and error sanitization;
 - `P3P4_ATTACK_REGRESSION.md`: attack-style BFF regression and pre-P5 inventory;
 - `P5_*.md`: incremental `anon` RPC revocation history;
-- `POST_P5_*.md`: service-role minimization, relation ACL, trusted-source login buckets, ACL/RLS guards, future-object default-deny, and later input/schema invariants.
+- `POST_P5_*.md`: service-role minimization, relation ACL, trusted-source login buckets, ACL/RLS guards, future-object default-deny, later input/schema invariants, Preview secret boundary, and rate-limit concurrency hardening.
 
 Those documents intentionally preserve the state observed at their own phase. Their historical fingerprints, grant counts, “next phase” sections, or Preview assumptions must not be interpreted as the current Production contract when they differ from this file or the canonical build gates.
 
@@ -159,3 +177,4 @@ Those documents intentionally preserve the state observed at their own phase. Th
 3. Do not weaken fail-closed Preview/Production origin checks to accommodate platform configuration gaps.
 4. Do not reintroduce browser Supabase config, browser token persistence, broad credential reveal, `anon` CRM RPC execution, or permissive future-object defaults in `public`.
 5. Keep `ROLLBACK.md` and this file current whenever the architecture, privilege boundary, CI deployment policy, or recovery strategy materially changes.
+6. Treat unverified platform secret scope as unverified rather than assuming it is clean.
