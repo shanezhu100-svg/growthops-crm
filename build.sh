@@ -5,6 +5,8 @@ set -eu
 python3 preview_secret_guard.py
 # Validate CI/quota policy before any expensive build/finalizer work.
 python3 test_ci_quota_guard.py
+# Keep the full-schema recovery procedure pinned to current Production truth.
+python3 test_full_schema_export_recovery.py
 python3 verify_final_source.py
 python3 runtime_config_compat.py
 trap 'rm -f index.html' 0

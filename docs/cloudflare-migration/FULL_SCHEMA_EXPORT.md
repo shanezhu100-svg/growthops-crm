@@ -1,6 +1,6 @@
 # Full Schema Export Recovery Procedure
 
-Last reviewed: 2026-08-24
+Last reviewed: 2026-08-25
 
 This runbook defines the trusted path for closing the outstanding P0 **full schema-only export** recovery deliverable. It complements, but does not replace, the deterministic comparison checks in `CURRENT_RECOVERY_VERIFICATION.md`.
 
@@ -8,7 +8,15 @@ This runbook defines the trusted path for closing the outstanding P0 **full sche
 
 The full schema-only export is **not yet complete**.
 
-Current automation can query the Production database and recompute the accepted recovery fingerprints, but that is not equivalent to a portable schema dump. The connected Supabase automation surface does not currently expose a database-password retrieval action, temporary/JIT database-access action, or schema/backup export action. The current execution environment was also rechecked at this review and does not provide the Supabase CLI, `pg_dump`, `psql`, or Docker.
+Current automation can query the Production database and recompute the accepted recovery fingerprints, but that is not equivalent to a portable schema dump. The connected Supabase automation surface does not currently expose a database-password retrieval action, temporary/JIT database-access action, or schema/backup export action.
+
+The execution environment was rechecked on 2026-08-25 and did not provide any of:
+
+- Supabase CLI;
+- `pg_dump`;
+- `psql`;
+- Docker;
+- Podman.
 
 Do not mark this deliverable complete until a real export artifact has been produced through an authorized database connection and independently verified.
 
@@ -77,15 +85,17 @@ A schema file existing on disk is not enough. Verify the artifact against curren
 
 1. Re-run `supabase/baseline/p0_schema_security_fingerprint.sql` on Production and confirm the accepted current primary checkpoint unless a reviewed migration intentionally changed it.
 2. Re-run `supabase/baseline/post_p5_crm_guard_security_fingerprint.sql` and confirm the accepted guard checkpoint unless a reviewed guard migration intentionally changed it.
-3. Record the migration-ledger head from `P0_MIGRATION_LEDGER.md` / current Production.
+3. Confirm the current Production migration head against `P0_MIGRATION_LEDGER.md`, `P0_MIGRATION_LEDGER_20260825_APPENDIX.md`, and the live migration ledger.
 4. Prefer restoring the schema into an empty isolated recovery target and re-running `CURRENT_RECOVERY_VERIFICATION.md` before declaring the dump proven restorable.
 5. Keep `supabase/baseline/p0_cloud_recovery_acceptance.sql` restricted to a disposable empty isolated recovery project; never run that synthetic-data acceptance script on Production.
 
 Current comparison checkpoints at this review are:
 
-- primary CRM fingerprint: `200 / bffaf123425bc7bddf02ecf00132848a5bfc4248e44395a5283c8ca9706b97f1`;
+- primary CRM fingerprint: `200 / 77ba3a7c646cf2ea04f41d20ceb1dd02aa9f041db7cbd2a0ad0386ddedbfba65`;
 - supplemental CRM guard fingerprint: `9 / 2a6c96fe5c2290cd30ee5b29800dcb47d9f1686d48b51344486c2c7780030140`;
-- accepted Production migration head: `20260825040850 / post_p5_public_default_privilege_guard`.
+- accepted Production migration head: `20260825075808 / post_p5_rate_limit_concurrency`.
+
+The preceding `200 / bffaf123425bc7bddf02ecf00132848a5bfc4248e44395a5283c8ca9706b97f1` primary fingerprint and `20260825040850 / post_p5_public_default_privilege_guard` migration head are historical pre-concurrency checkpoints and must not be used as the current export-verification anchor.
 
 ## What does not count as completion
 
@@ -94,7 +104,8 @@ None of the following closes the full-schema deliverable by itself:
 - `p0_schema_security_fingerprint.sql` output;
 - the supplemental guard fingerprint;
 - `p0_recovery_inventory.sql` output;
-- a list of tables, columns, functions, or extensions returned by the management connector;
+- a list of tables, columns, functions, triggers, indexes, extensions, or other catalog objects returned by the management connector;
+- a generated catalog/DDL manifest or manually reconstructed SQL;
 - generated TypeScript database types;
 - repository migration files alone while the known 2026-08-13/14 migration-history gap remains;
 - copying SQL definitions manually from catalog queries;
@@ -109,7 +120,9 @@ The current blocker is operational authorization/tooling, not a known Production
 
 - no database password/credential-bearing connection string is available through the connected automation tools;
 - no temporary/JIT database-access or schema-export/download action is exposed by the connected Supabase tool surface;
-- the current execution environment has no Supabase CLI / Docker / `pg_dump` / `psql` toolchain;
+- the current execution environment has no Supabase CLI / Docker / Podman / `pg_dump` / `psql` toolchain;
 - the public repository contains no database dump credential.
+
+Installing a dump tool by itself would not close the blocker because an authorized database connection credential is still required. Do not manufacture, reset, or expose a Production database password merely to satisfy this recovery checkbox.
 
 Therefore the safe next action is to perform the official dump in a trusted operator environment once an authorized database connection and toolchain are available. Until then, keep this item explicitly **open** and continue using the current read-only fingerprints/inventory for comparison—not as a substitute for the dump.
