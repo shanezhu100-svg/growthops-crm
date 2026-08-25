@@ -1,10 +1,11 @@
 # P0 Supabase Migration Ledger
 
-Checkpoint date: 2026-08-21
+Original checkpoint date: 2026-08-21
+Last consolidated from Production: 2026-08-25
 
-This document records the live `supabase_migrations.schema_migrations` ledger observed before Cloudflare migration and distinguishes it from SQL files currently present in the repository.
+This document records the live `supabase_migrations.schema_migrations` ledger observed for GrowthOps CRM and distinguishes it from SQL files currently present in the repository. The original 2026-08-21 baseline remains visible below; later forward migrations are consolidated into the same authority without rewriting or guessing the unresolved 2026-08-13/14 historical SQL gap.
 
-## Live remote ledger
+## Original live remote ledger checkpoint
 
 | Remote version | Migration name | Repository status |
 | --- | --- | --- |
@@ -41,11 +42,11 @@ This document records the live `supabase_migrations.schema_migrations` ledger ob
 
 ## Additional repository migration
 
-The repository also contains `supabase/migrations/20260815_security_vault_enforce.sql`. It is part of the retained security migration source set, but the live ledger query captured above did not show a separate migration name `security_vault_enforce`. Do not infer a new remote history entry from the filename alone.
+The repository also contains `supabase/migrations/20260815_security_vault_enforce.sql`. It is part of the retained security migration source set, but the live ledger does not show a separate migration name `security_vault_enforce`. Do not infer a new remote history entry from the filename alone.
 
-## Post-checkpoint forward ledger re-verification
+## Consolidated forward ledger
 
-The remote ledger was re-read from Production on 2026-08-24 and rechecked after the later all-public EXECUTE and future-object default-privilege hardening. The original 2026-08-21 checkpoint above is preserved as historical evidence; the following later applied entries are genuine forward migrations and each has a retained repository SQL file.
+The Production ledger was re-read on 2026-08-25 after the Post-P5 concurrency deployment. The entries below are genuine forward migrations after the original 2026-08-21 checkpoint and each maps to retained repository SQL.
 
 | Remote version | Migration name | Repository file |
 | --- | --- | --- |
@@ -69,8 +70,30 @@ The remote ledger was re-read from Production on 2026-08-24 and rechecked after 
 | `20260824034405` | `post_p5_user_identity_byte_caps` | `supabase/migrations/20260824_post_p5_user_identity_byte_caps.sql` |
 | `20260825032049` | `post_p5_revoke_rls_auto_enable_service_role_exec` | `supabase/migrations/20260824_post_p5_revoke_rls_auto_enable_service_role_exec.sql` |
 | `20260825040850` | `post_p5_public_default_privilege_guard` | `supabase/migrations/20260824_post_p5_public_default_privilege_guard.sql` |
+| `20260825075808` | `post_p5_rate_limit_concurrency` | `supabase/migrations/20260825_post_p5_rate_limit_concurrency.sql` |
 
-As of this re-verification, there is no newly observed remote-history-only migration after 2026-08-14. The unresolved historical gap remains exactly the eleven 2026-08-13/14 entries listed above; do not blur that known gap with later forward migrations that are present in GitHub.
+The `20260825075808` migration also retains its exact rollback, preflight, read-only post-check, canonical regression test, and acceptance record:
+
+- `supabase/rollback/20260825_post_p5_rate_limit_concurrency.sql`;
+- `supabase/baseline/post_p5_rate_limit_concurrency_preflight.sql`;
+- `supabase/baseline/post_p5_rate_limit_concurrency_check.sql`;
+- `test_post_p5_rate_limit_concurrency.py`;
+- `docs/cloudflare-migration/POST_P5_RATE_LIMIT_CONCURRENCY.md`.
+
+As of the 2026-08-25 Production re-read, there is no newly observed remote-history-only migration after 2026-08-14. The unresolved historical gap remains exactly the eleven 2026-08-13/14 entries listed above; do not blur that known gap with later forward migrations that are present in GitHub.
+
+`P0_MIGRATION_LEDGER_20260825_APPENDIX.md` is retained as the point-in-time acceptance note that first recorded the concurrency migration. Its information is now consolidated here; the appendix is no longer required to determine the current migration head.
+
+## Current recovery comparison anchors
+
+At the same current recovery checkpoint:
+
+- primary CRM fingerprint: `200 / 77ba3a7c646cf2ea04f41d20ceb1dd02aa9f041db7cbd2a0ad0386ddedbfba65`;
+- supplemental three-guard fingerprint: `9 / 2a6c96fe5c2290cd30ee5b29800dcb47d9f1686d48b51344486c2c7780030140`;
+- supplemental wider-public recovery fingerprint: `225 / a0078c5da6c5844a6d02c96e5c486d3fd8b13bb859a640073fb13cbacc6032ab`;
+- current Production migration head: `20260825075808 / post_p5_rate_limit_concurrency`.
+
+These deterministic fingerprints are comparison anchors only. They do not replace the outstanding full schema-only `pg_dump`/`supabase db dump` recovery artifact.
 
 ## Recovery rule
 
@@ -85,10 +108,8 @@ For recovery and Cloudflare migration safety:
 5. Treat later schema changes as forward migrations committed to the repository.
 6. Before a destructive database restore, verify Vault handling separately; ordinary backups must not contain credential values.
 
-The deterministic catalog fingerprint recorded in `CURRENT_STATE.md` is a comparison anchor only. It does not replace the outstanding full schema-only `pg_dump`/equivalent recovery export.
-
 ## Cloudflare migration implication
 
-This ledger gap blocks claiming “all historical Supabase migrations are stored in GitHub,” but it does **not** require reconstructing historical SQL before P1 static Preview. P1 changes hosting only and must not change Supabase.
+This ledger gap blocks claiming “all historical Supabase migrations are stored in GitHub,” but it does **not** require reconstructing historical SQL before hosting work. Hosting changes must not alter Supabase unless they are accompanied by an explicit reviewed database migration.
 
-Before any P2/P5 database permission change, the current schema/security baseline and new migration SQL must be committed and independently validated.
+Before any later database permission/function/schema change, the current schema/security baseline, wider recovery fingerprint when relevant, and new migration SQL must be committed and independently validated.
