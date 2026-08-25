@@ -82,10 +82,12 @@ for marker in (
     '`anon / authenticated / service_role`: `0 / 0 / 12`',
     '`rls_auto_enable()`',
     '`ensure_rls`',
-    '`20260825032049 / post_p5_revoke_rls_auto_enable_service_role_exec`',
+    'postgres-only for direct EXECUTE',
 ):
     require(marker in current_state, f'CURRENT_STATE missing accepted all-public boundary marker: {marker}')
 
+# The exact migration that established this boundary remains historical ledger
+# evidence even after later accepted migrations become the current Production head.
 ledger = (root / 'docs' / 'cloudflare-migration' / 'P0_MIGRATION_LEDGER.md').read_text(encoding='utf-8')
 require('`20260825032049` | `post_p5_revoke_rls_auto_enable_service_role_exec` | `supabase/migrations/20260824_post_p5_revoke_rls_auto_enable_service_role_exec.sql`' in ledger, 'migration ledger missing applied all-public boundary migration mapping')
 

@@ -14,6 +14,7 @@ Use this runbook with `CURRENT_STATE.md` and `ROLLBACK.md`. Older P0/P5/Post-P5 
 - Do not broaden `anon`, `authenticated`, `service_role`, table, sequence, Vault, or RLS privileges to make a restored application work.
 - Do not select or decrypt customer Vault secret values for verification.
 - `supabase/baseline/p0_cloud_recovery_acceptance.sql` is **not** a Production check. It creates synthetic test data inside a transaction and is restricted to an empty disposable isolated recovery project.
+- `supabase/baseline/post_p5_public_default_privilege_guard_probe.sql` is a reviewed Production acceptance probe that creates named synthetic objects only inside one explicit transaction, asserts their future-object ACL behavior, rolls the transaction back, and then proves all probe objects are absent. Do not remove its rollback/no-COMMIT safety checks.
 
 ## 1. Confirm the migration ledger
 
@@ -25,7 +26,7 @@ Compare the result with `P0_MIGRATION_LEDGER.md` and the current repository migr
 
 For the accepted 2026-08-24 Production checkpoint, the latest recorded migration is:
 
-`20260824034405 / post_p5_user_identity_byte_caps`
+`20260825040850 / post_p5_public_default_privilege_guard`
 
 A newer legitimate migration requires updating the current checkpoints after its reviewed Production acceptance.
 
@@ -42,6 +43,8 @@ Accepted Production checkpoint:
 
 This fingerprint covers the retained `crm_*` catalog/security contract, including CRM columns, constraints, indexes, table triggers, `crm_*` function definitions and effective application-role EXECUTE truth, direct application-role table grants, RLS flags, and policies.
 
+The future-object default-privilege hardening intentionally sits outside this historical `crm_*` contract, so its accepted application did not change the `200 / bffaf123...` primary checkpoint.
+
 If it differs unexpectedly, stop and identify the exact catalog/ACL/function change before using any rollback artifact.
 
 ## 3. Recompute the Post-P5 guard fingerprint
@@ -52,15 +55,18 @@ Run:
 
 Accepted Production checkpoint:
 
-- `guard_inventory_lines = 6`
-- `guard_security_sha256 = d3491022f0827324c810d401123d6027c0c3d46498868a2b5520bbea54bae52f`
+- `guard_inventory_lines = 9`
+- `guard_security_sha256 = 2a6c96fe5c2290cd30ee5b29800dcb47d9f1686d48b51344486c2c7780030140`
 
-This supplemental fingerprint covers the two repository-managed DDL security guards that sit outside the historical `crm_*` function namespace:
+This supplemental fingerprint covers the three repository-managed DDL security guards that sit outside the historical `crm_*` function namespace:
 
 - `growthops_crm_acl_guard_ddl`
 - `growthops_crm_rls_guard_ddl`
+- `growthops_public_noncrm_function_acl_guard_ddl`
 
 It includes their complete function definitions/owners, effective `anon` / `authenticated` / `service_role` EXECUTE truth, and event-trigger event/enabled/tags/function bindings.
+
+The third guard is intentionally public-only and non-`crm_*`: it closes future function/procedure EXECUTE exposure while leaving Supabase platform schemas outside GrowthOps ownership.
 
 Do not extend this checkpoint by guessing ownership of unrelated Supabase/platform or historical event triggers.
 
@@ -74,8 +80,10 @@ Interpret them against **current** `CURRENT_STATE.md`, not the old P0 privilege 
 
 - CRM RLS enabled on `9 / 9` CRM business tables;
 - browser-facing CRM policies: `0` under the current RPC-only/default-deny design;
-- CRM RPC EXECUTE for `anon / authenticated / service_role`: `0 / 0 / 12`;
+- effective public function EXECUTE for `anon / authenticated / service_role`: `0 / 0 / 12`;
 - direct CRM table grants for those application roles: `0 / 0 / 0`;
+- postgres/public future default `service_role` grants for tables / sequences / functions: `0 / 0 / 0`;
+- existing non-CRM public functions/procedures executable by an application role: `0`;
 - current Vault secret row count: `1` unless a reviewed credential-model change intentionally changes it;
 - ordinary workspace sensitive-key matches: `0`;
 - server audit sensitive-payload-value matches: `0`.
@@ -86,6 +94,13 @@ The Vault count is an integrity signal only. Do not inspect customer secret valu
 
 If recovery included a reviewed database migration or rollback, run the exact retained read-only preflight/post-check package for that control in `supabase/baseline/` and verify its corresponding canonical repository gate remains green.
 
+For the current future-object boundary, run:
+
+- `supabase/baseline/post_p5_public_default_privilege_guard_check.sql` for the read-only catalog/default-ACL verification;
+- the transaction-contained `supabase/baseline/post_p5_public_default_privilege_guard_probe.sql` only when a real future-object behavior acceptance check is warranted.
+
+The accepted Production probe created a synthetic non-CRM function, table, and sequence, found no prohibited application-role/default exposure, rolled back, and confirmed all three probe objects absent.
+
 Do not substitute a broad privilege restoration for a failed migration-specific post-check.
 
 Current high-level boundaries that must remain true include:
@@ -93,8 +108,9 @@ Current high-level boundaries that must remain true include:
 - `anon` CRM RPC EXECUTE remains `0`;
 - service-role CRM RPC entry surface remains the reviewed `12` functions (`11` BFF entries plus server-only bootstrap);
 - direct service-role CRM table and sequence grants remain `0`;
+- future postgres-created public objects do not silently regain broad service-role/default function exposure;
 - browser roles cannot execute broad/internal credential reveal paths;
-- session, workspace-secret, login-source, ACL and RLS guard controls remain intact.
+- session, workspace-secret, login-source, ACL, RLS, and future-object guards remain intact.
 
 ## 6. Verify the application boundary after recovery
 

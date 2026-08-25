@@ -45,7 +45,7 @@ The repository also contains `supabase/migrations/20260815_security_vault_enforc
 
 ## Post-checkpoint forward ledger re-verification
 
-The remote ledger was re-read from Production on 2026-08-24 and rechecked after the later all-public EXECUTE boundary hardening. The original 2026-08-21 checkpoint above is preserved as historical evidence; the following later applied entries are genuine forward migrations and each has a retained repository SQL file.
+The remote ledger was re-read from Production on 2026-08-24 and rechecked after the later all-public EXECUTE and future-object default-privilege hardening. The original 2026-08-21 checkpoint above is preserved as historical evidence; the following later applied entries are genuine forward migrations and each has a retained repository SQL file.
 
 | Remote version | Migration name | Repository file |
 | --- | --- | --- |
@@ -68,6 +68,7 @@ The remote ledger was re-read from Production on 2026-08-24 and rechecked after 
 | `20260824031938` | `post_p5_bcrypt_verification_byte_caps` | `supabase/migrations/20260824_post_p5_bcrypt_verification_byte_caps.sql` |
 | `20260824034405` | `post_p5_user_identity_byte_caps` | `supabase/migrations/20260824_post_p5_user_identity_byte_caps.sql` |
 | `20260825032049` | `post_p5_revoke_rls_auto_enable_service_role_exec` | `supabase/migrations/20260824_post_p5_revoke_rls_auto_enable_service_role_exec.sql` |
+| `20260825040850` | `post_p5_public_default_privilege_guard` | `supabase/migrations/20260824_post_p5_public_default_privilege_guard.sql` |
 
 As of this re-verification, there is no newly observed remote-history-only migration after 2026-08-14. The unresolved historical gap remains exactly the eleven 2026-08-13/14 entries listed above; do not blur that known gap with later forward migrations that are present in GitHub.
 

@@ -7,6 +7,11 @@ rollback_path = root / 'supabase' / 'rollback' / '20260824_post_p5_public_defaul
 preflight_path = root / 'supabase' / 'baseline' / 'post_p5_public_default_privilege_guard_preflight.sql'
 postcheck_path = root / 'supabase' / 'baseline' / 'post_p5_public_default_privilege_guard_check.sql'
 probe_path = root / 'supabase' / 'baseline' / 'post_p5_public_default_privilege_guard_probe.sql'
+fingerprint_path = root / 'supabase' / 'baseline' / 'post_p5_crm_guard_security_fingerprint.sql'
+current_state_path = root / 'docs' / 'cloudflare-migration' / 'CURRENT_STATE.md'
+current_recovery_path = root / 'docs' / 'cloudflare-migration' / 'CURRENT_RECOVERY_VERIFICATION.md'
+guard_doc_path = root / 'docs' / 'cloudflare-migration' / 'POST_P5_GUARD_FINGERPRINT.md'
+ledger_path = root / 'docs' / 'cloudflare-migration' / 'P0_MIGRATION_LEDGER.md'
 
 
 def require(condition, message):
@@ -23,6 +28,11 @@ rollback = rollback_path.read_text(encoding='utf-8')
 preflight = preflight_path.read_text(encoding='utf-8')
 postcheck = postcheck_path.read_text(encoding='utf-8')
 probe = probe_path.read_text(encoding='utf-8')
+fingerprint = fingerprint_path.read_text(encoding='utf-8')
+current_state = current_state_path.read_text(encoding='utf-8')
+current_recovery = current_recovery_path.read_text(encoding='utf-8')
+guard_doc = guard_doc_path.read_text(encoding='utf-8')
+ledger = ledger_path.read_text(encoding='utf-8')
 build = (root / 'build.sh').read_text(encoding='utf-8')
 existing_function_boundary = (root / 'test_post_p5_public_function_exec_boundary.py').read_text(encoding='utf-8')
 existing_crm_guard = (root / 'supabase' / 'migrations' / '20260823_post_p5_crm_acl_event_guard.sql').read_text(encoding='utf-8')
@@ -141,9 +151,37 @@ require("like 'crm\\_%' escape '\\'" in existing_crm_guard,
 require(build.count('python3 test_post_p5_public_default_privilege_guard.py') == 1,
         'build must execute public default-privilege guard gate exactly once')
 
+# Stage-C current-state authority must match the freshly verified Production state.
+new_guard = 'growthops_public_noncrm_function_acl_guard_ddl'
+new_hash = '2a6c96fe5c2290cd30ee5b29800dcb47d9f1686d48b51344486c2c7780030140'
+new_migration = '20260825040850 / post_p5_public_default_privilege_guard'
+for source, label in (
+    (fingerprint, 'guard fingerprint SQL'),
+    (guard_doc, 'guard fingerprint documentation'),
+    (current_state, 'current state'),
+    (current_recovery, 'current recovery verification'),
+):
+    require(new_guard in source, f'{label} missing third guard')
+    require(new_hash in source, f'{label} missing accepted three-guard fingerprint')
+    require('guard_inventory_lines = 9' in source or 'guard inventory lines: `9`' in source,
+            f'{label} missing guard inventory count 9')
+
+require(new_migration in current_state,
+        'CURRENT_STATE missing latest accepted Production migration')
+require(new_migration in current_recovery,
+        'CURRENT_RECOVERY_VERIFICATION missing latest accepted Production migration')
+require('postgres/public future default `service_role` grants for tables / sequences / functions: `0 / 0 / 0`' in current_state,
+        'CURRENT_STATE missing future default service-role boundary')
+require('future-object default-privilege hardening' in current_recovery,
+        'CURRENT_RECOVERY_VERIFICATION missing future-object acceptance context')
+require('20260825040850' in ledger and
+        'post_p5_public_default_privilege_guard' in ledger and
+        'supabase/migrations/20260824_post_p5_public_default_privilege_guard.sql' in ledger,
+        'migration ledger missing applied #78 mapping')
+
 print(
     'POST_P5_PUBLIC_DEFAULT_PRIVILEGE_GUARD_PACKAGE_OK: '
     'postgres-public=service-default-deny; noncrm-function=event-guard; '
     'crm-allowlist=preserved; supabase-platform-schemas=untouched; '
-    'probe=transactional-rollback; production-change=pending'
+    'probe=transactional-rollback; production-change=applied+verified'
 )

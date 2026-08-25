@@ -109,7 +109,11 @@ guard_body = '\n'.join(
 for forbidden in ('create ', 'drop ', 'alter ', 'grant ', 'revoke ', 'truncate ', 'delete from ', 'insert into ', 'update '):
     require(forbidden not in guard_body,
             f'guard fingerprint must remain read-only: {forbidden.strip()}')
-for name in ('growthops_crm_acl_guard_ddl', 'growthops_crm_rls_guard_ddl'):
+for name in (
+    'growthops_crm_acl_guard_ddl',
+    'growthops_crm_rls_guard_ddl',
+    'growthops_public_noncrm_function_acl_guard_ddl',
+):
     require(name in guard_body, f'guard fingerprint lost {name}')
 require('from pg_event_trigger' in guard_body,
         'guard fingerprint lost event-trigger inventory')
@@ -121,12 +125,13 @@ require("has_function_privilege('anon'" in guard_body and
         'guard fingerprint lost application-role EXECUTE coverage')
 require('e.evtenabled::text' in guard_body and 'array_to_string(e.evttags' in guard_body,
         'guard fingerprint lost event enabled/tag coverage')
-require('guard_inventory_lines = 6' in guard_fingerprint and
-        'd3491022f0827324c810d401123d6027c0c3d46498868a2b5520bbea54bae52f' in guard_fingerprint,
+require('guard_inventory_lines = 9' in guard_fingerprint and
+        '2a6c96fe5c2290cd30ee5b29800dcb47d9f1686d48b51344486c2c7780030140' in guard_fingerprint,
         'guard fingerprint lost accepted Production checkpoint')
 for expected in (
-    'guard_inventory_lines = 6',
-    'd3491022f0827324c810d401123d6027c0c3d46498868a2b5520bbea54bae52f',
+    'guard_inventory_lines = 9',
+    '2a6c96fe5c2290cd30ee5b29800dcb47d9f1686d48b51344486c2c7780030140',
+    'growthops_public_noncrm_function_acl_guard_ddl',
     'p0_schema_security_fingerprint.sql',
     'not a full schema backup',
 ):
@@ -154,6 +159,6 @@ print(
     'POST_P5_CRM_ACL_EVENT_GUARD_OK: '
     'scope=public.crm_*; create+alter=covered; procedures=deny; '
     'service-allowlist=12; relations=deny; default-privileges=unchanged; '
-    'fingerprint=a69eba75; guard-fingerprint=d3491022; '
+    'fingerprint=a69eba75; guard-fingerprint=2a6c96fe; '
     'production-change=applied+verified'
 )
