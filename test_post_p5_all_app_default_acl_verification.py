@@ -42,8 +42,9 @@ for marker in (
     require(marker in postcheck, f'post-check missing all-app default ACL marker: {marker}')
 
 # Probe must stay transaction-contained and evaluate table/sequence effective
-# privileges for anon, authenticated, and service_role. has_*_privilege also
-# catches privileges inherited through PUBLIC.
+# privileges for all three application roles. The historical service_role checks
+# remain explicit; anon/authenticated share a loop. has_*_privilege also catches
+# privileges inherited through PUBLIC.
 probe_body = strip_comments(probe)
 require(len(re.findall(r'(?im)^\s*begin\s*;', probe_body)) == 1,
         'all-app probe must start exactly one transaction')
@@ -51,12 +52,16 @@ require(len(re.findall(r'(?im)^\s*rollback\s*;', probe_body)) == 1,
         'all-app probe must roll back exactly once')
 require(not re.search(r'(?im)^\s*commit\b', probe_body),
         'all-app probe must never COMMIT')
-require("array['anon','authenticated','service_role']::text[]" in probe,
-        'probe must iterate every application role')
+require("array['anon','authenticated']::text[]" in probe,
+        'probe must iterate anon and authenticated roles')
+require("has_table_privilege('service_role'" in probe,
+        'probe must preserve explicit service_role table checks')
+require("has_sequence_privilege('service_role'" in probe,
+        'probe must preserve explicit service_role sequence checks')
 require("has_table_privilege(v_role" in probe,
-        'probe must check table effective privileges per application role')
+        'probe must check anon/authenticated table effective privileges')
 require("has_sequence_privilege(v_role" in probe,
-        'probe must check sequence effective privileges per application role')
+        'probe must check anon/authenticated sequence effective privileges')
 for privilege in ('SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'):
     require(f"'{privilege}'" in probe, f'probe missing table privilege: {privilege}')
 for privilege in ('USAGE', 'SELECT', 'UPDATE'):
