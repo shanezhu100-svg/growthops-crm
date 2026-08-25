@@ -76,7 +76,28 @@ The third guard is intentionally public-only and non-`crm_*`: it closes future f
 
 Do not extend this checkpoint by guessing ownership of unrelated Supabase/platform or historical event triggers.
 
-## 4. Run the retained data-safety/access inventory
+## 4. Recompute the wider public-schema recovery fingerprint
+
+Run:
+
+`supabase/baseline/p0_public_schema_recovery_fingerprint.sql`
+
+Accepted Production checkpoint:
+
+- `inventory_lines = 225`
+- `public_recovery_sha256 = a0078c5da6c5844a6d02c96e5c486d3fd8b13bb859a640073fb13cbacc6032ab`
+
+This supplemental read-only fingerprint broadens recovery comparison beyond the historical `crm_*` primary scope and the three GrowthOps guard functions. It hashes deterministic metadata for the `public` schema and relations, columns, constraints, indexes, user triggers, all public routine definitions/ACLs, application-role EXECUTE truth, policies, event triggers whose handler is in `public`, relevant default ACL rows, and installed extension metadata.
+
+The query emits only the inventory count and digest. It does not emit customer rows, Vault plaintext, credential values, or the underlying function definitions.
+
+At the accepted checkpoint, a separate count inventory observed 9 public tables, 1 public sequence, 27 indexes, 30 constraints, 5 user triggers, 44 public routines (40 `crm_*` plus the three GrowthOps guards and `rls_auto_enable()`), zero public policies, and four event triggers bound to public handler functions.
+
+The query was executed twice consecutively against Production with the same `225 / a0078c5d...` result. Extension-version changes can legitimately alter this wider fingerprint, so a difference is an investigation trigger rather than automatic rollback authorization. See `PUBLIC_SCHEMA_RECOVERY_FINGERPRINT.md`.
+
+This fingerprint is comparison evidence only. It does not replace an authorized portable schema dump.
+
+## 5. Run the retained data-safety/access inventory
 
 Run the remaining read-only sections of:
 
@@ -96,7 +117,7 @@ Interpret them against **current** `CURRENT_STATE.md`, not the old P0 privilege 
 
 The Vault count is an integrity signal only. Do not inspect customer secret values to explain a count difference.
 
-## 5. Re-run migration-specific post-checks when a database rollback/change occurred
+## 6. Re-run migration-specific post-checks when a database rollback/change occurred
 
 If recovery included a reviewed database migration or rollback, run the exact retained read-only preflight/post-check package for that control in `supabase/baseline/` and verify its corresponding canonical repository gate remains green.
 
@@ -127,7 +148,7 @@ Current high-level boundaries that must remain true include:
 - login/unlock/reveal concurrency serialization and reviewed committable rejection-audit semantics remain compatible with the selected application build;
 - session, workspace-secret, login-source, ACL, RLS, and future-object guards remain intact.
 
-## 6. Verify the application boundary after recovery
+## 7. Verify the application boundary after recovery
 
 For the selected gate-accepted application commit:
 
@@ -150,15 +171,17 @@ The current validated Vercel hosting/recovery checkpoint after later documentati
 - unauthenticated `GET /api/crm` returned `405 / METHOD_NOT_ALLOWED`, `Allow: POST`, no-store cache policy, and security headers;
 - no new Production runtime-error cluster was observed in the checked recent window.
 
+Later recovery-documentation commits do not alter the runtime/database compatibility contract by themselves; each still requires its own canonical Gate and healthy Production deployment before becoming a preferred hosting recovery checkpoint.
+
 The last independently verified Cloudflare Production remains `49a23f7f-5fbe-4894-9b8e-ad7b25005d70 / main@0eefbe3`, which is runtime-compatible with the current database. A later docs-only `main@5172508` deployment was skipped because a newer deployment had already been queued. Exact Cloudflare deployment freshness after that point must be reverified through Cloudflare evidence; do not infer it from Vercel or GitHub state.
 
 If credentials are available for an authorized smoke test, follow the functional checks in `ROLLBACK.md` without exposing password/2FA values in logs or screenshots.
 
-## 7. Record the new accepted checkpoint when state intentionally changes
+## 8. Record the new accepted checkpoint when state intentionally changes
 
 After a legitimate schema/ACL/function/guard migration is applied and verified, update the relevant current fingerprints, this runbook, `CURRENT_STATE.md`, and migration mapping from fresh read-only Production evidence. Preserve historical checkpoint documents rather than rewriting their old values.
 
-For a function-definition change inside the primary `crm_*` fingerprint scope, explicitly recompute the primary hash even when the table/schema shape did not change.
+For a function-definition change inside the primary `crm_*` fingerprint scope, explicitly recompute the primary hash even when the table/schema shape did not change. For any accepted public-schema/ACL/extension change, also recompute the wider public-schema recovery fingerprint.
 
 ## Preview isolation remains a separate platform check
 
@@ -173,6 +196,6 @@ Vercel normal non-main Git Preview execution was then hardened by PR #86 using `
 
 ## Full schema portability remains separate
 
-The two deterministic fingerprints and the retained read-only inventory are comparison/acceptance controls. They are **not** a complete schema export.
+The three deterministic fingerprints and the retained read-only inventory are comparison/acceptance controls. They are **not** a complete schema export.
 
 A trusted full schema-only `pg_dump`/equivalent snapshot remains an outstanding P0 recovery deliverable. Until that artifact exists, do not claim that the repository alone can recreate every historical database object from zero, especially the known 2026-08-13/14 migration gap.

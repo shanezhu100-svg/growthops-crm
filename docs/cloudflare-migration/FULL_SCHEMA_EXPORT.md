@@ -85,15 +85,19 @@ A schema file existing on disk is not enough. Verify the artifact against curren
 
 1. Re-run `supabase/baseline/p0_schema_security_fingerprint.sql` on Production and confirm the accepted current primary checkpoint unless a reviewed migration intentionally changed it.
 2. Re-run `supabase/baseline/post_p5_crm_guard_security_fingerprint.sql` and confirm the accepted guard checkpoint unless a reviewed guard migration intentionally changed it.
-3. Confirm the current Production migration head against `P0_MIGRATION_LEDGER.md`, `P0_MIGRATION_LEDGER_20260825_APPENDIX.md`, and the live migration ledger.
-4. Prefer restoring the schema into an empty isolated recovery target and re-running `CURRENT_RECOVERY_VERIFICATION.md` before declaring the dump proven restorable.
-5. Keep `supabase/baseline/p0_cloud_recovery_acceptance.sql` restricted to a disposable empty isolated recovery project; never run that synthetic-data acceptance script on Production.
+3. Re-run `supabase/baseline/p0_public_schema_recovery_fingerprint.sql` and confirm the accepted wider-public checkpoint unless an understood schema/ACL/extension change intentionally changed it.
+4. Confirm the current Production migration head against `P0_MIGRATION_LEDGER.md`, `P0_MIGRATION_LEDGER_20260825_APPENDIX.md`, and the live migration ledger.
+5. Prefer restoring the schema into an empty isolated recovery target and re-running `CURRENT_RECOVERY_VERIFICATION.md` before declaring the dump proven restorable.
+6. Keep `supabase/baseline/p0_cloud_recovery_acceptance.sql` restricted to a disposable empty isolated recovery project; never run that synthetic-data acceptance script on Production.
 
 Current comparison checkpoints at this review are:
 
 - primary CRM fingerprint: `200 / 77ba3a7c646cf2ea04f41d20ceb1dd02aa9f041db7cbd2a0ad0386ddedbfba65`;
 - supplemental CRM guard fingerprint: `9 / 2a6c96fe5c2290cd30ee5b29800dcb47d9f1686d48b51344486c2c7780030140`;
+- supplemental wider-public recovery fingerprint: `225 / a0078c5da6c5844a6d02c96e5c486d3fd8b13bb859a640073fb13cbacc6032ab`;
 - accepted Production migration head: `20260825075808 / post_p5_rate_limit_concurrency`.
+
+The wider-public fingerprint was recomputed twice consecutively on Production with the same result. It includes extension metadata, so a reviewed platform extension-version change can legitimately alter it without changing the narrower CRM security contract. Investigate the cause before refreshing the checkpoint; do not roll back solely because this supplemental hash changed.
 
 The preceding `200 / bffaf123425bc7bddf02ecf00132848a5bfc4248e44395a5283c8ca9706b97f1` primary fingerprint and `20260825040850 / post_p5_public_default_privilege_guard` migration head are historical pre-concurrency checkpoints and must not be used as the current export-verification anchor.
 
@@ -103,6 +107,7 @@ None of the following closes the full-schema deliverable by itself:
 
 - `p0_schema_security_fingerprint.sql` output;
 - the supplemental guard fingerprint;
+- the supplemental wider-public recovery fingerprint;
 - `p0_recovery_inventory.sql` output;
 - a list of tables, columns, functions, triggers, indexes, extensions, or other catalog objects returned by the management connector;
 - a generated catalog/DDL manifest or manually reconstructed SQL;
