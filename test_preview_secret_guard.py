@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -199,10 +200,25 @@ for text, label in (
 ):
     assert accepted_globstar_deployment in text, f"{label} missing accepted PR #86 Production deployment evidence"
 
-current_main_checkpoint = "9e440a51b0d552562d73ae235ceaab175a26ec45"
-current_vercel_deployment = "dpl_2FZY4Lfoy5LDwHgkwgCq9mEnBXfv"
-assert current_main_checkpoint in CURRENT_STATE, "CURRENT_STATE missing latest gate-accepted main checkpoint"
-assert current_vercel_deployment in CURRENT_STATE, "CURRENT_STATE missing latest validated Vercel Production deployment"
+# CURRENT_STATE is intentionally a moving authority. Verify that its current
+# Vercel checkpoint has the required evidence shape instead of pinning a specific
+# deployment/SHA here and making every legitimate checkpoint refresh fail CI.
+current_vercel_section = re.search(
+    r"Current validated Vercel Production deployment:\s*\n\s*"
+    r"- deployment: `(dpl_[A-Za-z0-9]+)`;\s*\n"
+    r"- state: `READY`;\s*\n"
+    r"- Git commit: `([0-9a-f]{40})`;\s*\n"
+    r"- merged-main CRM Build Gate #(\d+): completed / success;\s*\n"
+    r"- stable alias assigned successfully\.",
+    CURRENT_STATE,
+)
+assert current_vercel_section, "CURRENT_STATE missing structurally complete validated Vercel Production checkpoint"
+current_deployment, current_commit, current_gate = current_vercel_section.groups()
+assert current_deployment != vercel_preview_evidence, "CURRENT_STATE current Production deployment cannot be Preview evidence"
+assert current_commit != accepted_globstar_commit or current_deployment != accepted_globstar_deployment, (
+    "CURRENT_STATE current checkpoint must be independently advanceable beyond historical PR #86 evidence"
+)
+assert int(current_gate) > 0, "CURRENT_STATE current merged-main Gate number must be positive"
 
 assert '"**": false' in PREVIEW_BOUNDARY, "Preview boundary docs missing slash-safe Vercel deny rule"
 assert '"main": true' in PREVIEW_BOUNDARY, "Preview boundary docs missing Vercel main allow rule"
@@ -210,5 +226,6 @@ assert '"main": true' in PREVIEW_BOUNDARY, "Preview boundary docs missing Vercel
 print(
     "PREVIEW_SECRET_BOUNDARY_TESTS_OK: production=unchanged; preview-no-secret=disabled; "
     "preview-production-target=blocked; preview-staging=allowed; malformed-target=blocked; "
-    "secret-output=none; platform-evidence=vercel+cloudflare-open; vercel-git-preview=main-only"
+    "secret-output=none; platform-evidence=vercel+cloudflare-open; vercel-git-preview=main-only; "
+    "current-vercel-checkpoint=dynamic-evidence-shape"
 )
