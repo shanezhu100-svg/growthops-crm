@@ -175,6 +175,13 @@ for text, label in (
     assert "Vercel Preview secret scope remains **unverified**" not in text, f"{label} regressed Vercel Preview to unverified"
     assert "Vercel Preview environment-variable scope was not independently inspectable" not in text, f"{label} contains stale Vercel Preview evidence"
 
+# Keep the accepted PR #86 globstar/main policy checkpoint as historical evidence
+# without forcing its then-current Production deployment to remain the forever
+# current deployment in CURRENT_STATE. Later gate-accepted main deployments may
+# become the current hosting/recovery checkpoint while the PR #86 acceptance
+# evidence remains valid in its historical/recovery documents.
+accepted_globstar_commit = "91c0edcb24b79d282faa72d7d83435a1e1265d30"
+accepted_globstar_deployment = "dpl_HiGGTxc4zYJM9zq1s13CV5Pv2tW6"
 for text, label in (
     (CURRENT_STATE, "CURRENT_STATE"),
     (ROLLBACK, "ROLLBACK"),
@@ -182,8 +189,20 @@ for text, label in (
     (PREVIEW_BOUNDARY, "POST_P5_PREVIEW_SECRET_BOUNDARY"),
     (CONCURRENCY_ACCEPTANCE, "POST_P5_RATE_LIMIT_CONCURRENCY"),
 ):
-    assert "91c0edcb24b79d282faa72d7d83435a1e1265d30" in text, f"{label} missing accepted globstar/main checkpoint"
-    assert "dpl_HiGGTxc4zYJM9zq1s13CV5Pv2tW6" in text, f"{label} missing current Vercel Production checkpoint"
+    assert accepted_globstar_commit in text, f"{label} missing accepted globstar/main checkpoint"
+
+for text, label in (
+    (ROLLBACK, "ROLLBACK"),
+    (CURRENT_RECOVERY, "CURRENT_RECOVERY_VERIFICATION"),
+    (PREVIEW_BOUNDARY, "POST_P5_PREVIEW_SECRET_BOUNDARY"),
+    (CONCURRENCY_ACCEPTANCE, "POST_P5_RATE_LIMIT_CONCURRENCY"),
+):
+    assert accepted_globstar_deployment in text, f"{label} missing accepted PR #86 Production deployment evidence"
+
+current_main_checkpoint = "9e440a51b0d552562d73ae235ceaab175a26ec45"
+current_vercel_deployment = "dpl_2FZY4Lfoy5LDwHgkwgCq9mEnBXfv"
+assert current_main_checkpoint in CURRENT_STATE, "CURRENT_STATE missing latest gate-accepted main checkpoint"
+assert current_vercel_deployment in CURRENT_STATE, "CURRENT_STATE missing latest validated Vercel Production deployment"
 
 assert '"**": false' in PREVIEW_BOUNDARY, "Preview boundary docs missing slash-safe Vercel deny rule"
 assert '"main": true' in PREVIEW_BOUNDARY, "Preview boundary docs missing Vercel main allow rule"
