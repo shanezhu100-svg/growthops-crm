@@ -35,5 +35,13 @@ jobs:
         run: |
           node --version
           python3 --version
+      - name: Diagnose Preview secret guard
+        run: python3 preview_secret_guard.py
+      - name: Diagnose CI quota guard
+        run: python3 test_ci_quota_guard.py
+      - name: Diagnose full-schema recovery guard
+        run: python3 test_full_schema_export_recovery.py
+      - name: Diagnose migration-ledger recovery guard
+        run: python3 test_migration_ledger_recovery.py
       - name: Run canonical CRM build gates
         run: sh build.sh && python3 cloudflare_p1_verify.py
