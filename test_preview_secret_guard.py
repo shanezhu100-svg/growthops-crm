@@ -200,11 +200,13 @@ for text, label in (
 ):
     assert accepted_globstar_deployment in text, f"{label} missing accepted PR #86 Production deployment evidence"
 
-# CURRENT_STATE is intentionally a moving authority. Verify that its current
-# Vercel checkpoint has the required evidence shape instead of pinning a specific
-# deployment/SHA here and making every legitimate checkpoint refresh fail CI.
+# CURRENT_STATE is intentionally a moving authority. Verify that its validated
+# runtime/security checkpoint has the required evidence shape instead of pinning
+# a specific deployment/SHA here and making legitimate documentation refreshes
+# fail CI. Documentation/test-only Production deployments may be newer without
+# superseding this explicitly validated runtime/security checkpoint.
 current_vercel_section = re.search(
-    r"Current validated Vercel Production deployment:\s*\n\s*"
+    r"Current validated runtime/security checkpoint deployment:\s*\n\s*"
     r"- deployment: `(dpl_[A-Za-z0-9]+)`;\s*\n"
     r"- state: `READY`;\s*\n"
     r"- Git commit: `([0-9a-f]{40})`;\s*\n"
@@ -212,13 +214,16 @@ current_vercel_section = re.search(
     r"- stable alias assigned successfully\.",
     CURRENT_STATE,
 )
-assert current_vercel_section, "CURRENT_STATE missing structurally complete validated Vercel Production checkpoint"
+assert current_vercel_section, "CURRENT_STATE missing structurally complete validated Vercel runtime/security checkpoint"
 current_deployment, current_commit, current_gate = current_vercel_section.groups()
-assert current_deployment != vercel_preview_evidence, "CURRENT_STATE current Production deployment cannot be Preview evidence"
+assert current_deployment != vercel_preview_evidence, "CURRENT_STATE runtime checkpoint cannot be Preview evidence"
 assert current_commit != accepted_globstar_commit or current_deployment != accepted_globstar_deployment, (
-    "CURRENT_STATE current checkpoint must be independently advanceable beyond historical PR #86 evidence"
+    "CURRENT_STATE runtime checkpoint must be independently advanceable beyond historical PR #86 evidence"
 )
 assert int(current_gate) > 0, "CURRENT_STATE current merged-main Gate number must be positive"
+assert "documentation/test-only may exist without superseding this checkpoint" in CURRENT_STATE, (
+    "CURRENT_STATE must prevent documentation-only deployment self-reference"
+)
 
 assert '"**": false' in PREVIEW_BOUNDARY, "Preview boundary docs missing slash-safe Vercel deny rule"
 assert '"main": true' in PREVIEW_BOUNDARY, "Preview boundary docs missing Vercel main allow rule"
@@ -227,5 +232,5 @@ print(
     "PREVIEW_SECRET_BOUNDARY_TESTS_OK: production=unchanged; preview-no-secret=disabled; "
     "preview-production-target=blocked; preview-staging=allowed; malformed-target=blocked; "
     "secret-output=none; platform-evidence=vercel+cloudflare-open; vercel-git-preview=main-only; "
-    "current-vercel-checkpoint=dynamic-evidence-shape"
+    "current-vercel-checkpoint=dynamic-runtime-evidence-shape"
 )
