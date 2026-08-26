@@ -1,0 +1,108 @@
+name: Recovery Schema-Only Export
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_project_ref:
+        description: "Type the authorized Production project ref to run the schema-only export"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: recovery-schema-only-export
+  cancel-in-progress: false
+
+jobs:
+  dump-schema:
+    name: dump-schema
+    if: inputs.confirm_project_ref == 'avahcwyxparbcjdfglzx'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      EXPECTED_PROJECT_REF: avahcwyxparbcjdfglzx
+
+    steps:
+      - name: Validate authorized Production target
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${SUPABASE_DB_URL:-}" ]; then
+            echo "::error::SUPABASE_DB_URL repository secret is not configured."
+            exit 1
+          fi
+          echo "::add-mask::${SUPABASE_DB_URL}"
+          case "${SUPABASE_DB_URL}" in
+            postgres://*|postgresql://*) ;;
+            *)
+              echo "::error::SUPABASE_DB_URL is not a PostgreSQL connection URL."
+              exit 1
+              ;;
+          esac
+          case "${SUPABASE_DB_URL}" in
+            *"${EXPECTED_PROJECT_REF}"*) ;;
+            *)
+              echo "::error::SUPABASE_DB_URL does not target the authorized Production project ref."
+              exit 1
+              ;;
+          esac
+          echo "Authorized Production project ref matched without printing the connection URL."
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Record CLI version
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase --version | tee supabase-cli-version.txt
+
+      - name: Generate schema-only dump
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase db dump --db-url "${SUPABASE_DB_URL}" -f schema.sql
+
+      - name: Verify artifact and record checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s schema.sql
+          SCHEMA_BYTES="$(wc -c < schema.sql | tr -d ' ')"
+          if [ "${SCHEMA_BYTES}" -lt 1024 ]; then
+            echo "::error::schema.sql is unexpectedly small (${SCHEMA_BYTES} bytes)."
+            exit 1
+          fi
+          sha256sum schema.sql | tee schema.sql.sha256
+          SCHEMA_SHA="$(awk '{print $1}' schema.sql.sha256)"
+          CLI_VERSION="$(cat supabase-cli-version.txt | tr -d '\r\n')"
+          {
+            echo "generated_at_utc=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            echo "project_ref=${EXPECTED_PROJECT_REF}"
+            echo "tool=supabase-cli"
+            echo "tool_version=${CLI_VERSION}"
+            echo "artifact_file=schema.sql"
+            echo "schema_bytes=${SCHEMA_BYTES}"
+            echo "sha256=${SCHEMA_SHA}"
+            echo "workflow_run_id=${GITHUB_RUN_ID}"
+            echo "source_commit=${GITHUB_SHA}"
+          } > recovery-metadata.txt
+          echo "Schema-only artifact generated: ${SCHEMA_BYTES} bytes"
+          echo "Schema SHA-256: ${SCHEMA_SHA}"
+
+      - name: Upload private recovery artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: growthops-schema-only-${{ github.run_id }}
+          path: |
+            schema.sql
+            schema.sql.sha256
+            recovery-metadata.txt
+            supabase-cli-version.txt
+          if-no-files-found: error
+          retention-days: 7
