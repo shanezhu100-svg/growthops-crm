@@ -1,24 +1,24 @@
 name: Recovery Schema-Only Export
 
 on:
-  push:
-    branches:
-      - recovery/schema-only-export-20260826
-  pull_request:
-    branches:
-      - main
+  workflow_dispatch:
+    inputs:
+      confirm_project_ref:
+        description: "Type the authorized Production project ref to run the schema-only export"
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: recovery-schema-only-export-20260826
+  group: recovery-schema-only-export
   cancel-in-progress: false
 
 jobs:
   dump-schema:
     name: dump-schema
-    if: github.event_name == 'push' || github.head_ref == 'recovery/schema-only-export-20260826'
+    if: inputs.confirm_project_ref == 'avahcwyxparbcjdfglzx'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
