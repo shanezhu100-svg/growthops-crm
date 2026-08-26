@@ -67,6 +67,58 @@ jobs:
         run: python3 credential_status_loading_finalize.py
       - name: Account asset typography finalize
         run: python3 account_asset_value_typography_finalize.py
+      - name: Credential status UI output test
+        run: python3 test_credential_status_ui_output.py
+      - name: Account asset context output test
+        run: python3 test_account_asset_client_context_output.py
+      - name: Credential status loading output test
+        run: python3 test_credential_status_loading_output.py
+      - name: Account asset typography output test
+        run: python3 test_account_asset_value_typography_output.py
+      - name: Account login identifier v2 finalize
+        run: python3 account_login_identifier_v2_finalize.py
+      - name: Credential secure reveal finalize
+        run: python3 credential_secure_reveal_finalize.py
+      - name: Security hotfix output test
+        run: python3 test_security_hotfix_output.py
+      - name: Security reveal UI output test
+        run: python3 test_security_reveal_ui_output.py
+      - name: Credential template output test
+        run: python3 test_credential_template_initial_output.py
+      - name: Account login identifier output test
+        run: python3 test_account_login_identifier_output.py
+      - name: Credential unlock v4 output test
+        run: python3 test_credential_unlock_v4_output.py
+      - name: Credential client detail v4 finalize
+        run: python3 credential_client_detail_v4_finalize.py
+      - name: Credential client detail v4 output test
+        run: python3 test_credential_client_detail_v4_output.py
+      - name: Assets all clients output test
+        run: python3 test_assets_all_clients_output.py
+      - name: Workspace state secret hard guard
+        run: python3 test_workspace_state_secret_hard_guard.py
+      - name: Backup security output test
+        run: python3 test_backup_security_output.py
+      - name: Preview secret output test
+        run: python3 test_preview_secret_guard.py
+      - name: Post-P5 v5 direct scalar test
+        run: python3 test_post_p5_v5_direct_scalar.py
+      - name: Vercel security headers test
+        run: python3 test_vercel_security_headers.py
+      - name: Cloudflare headers finalize
+        run: python3 cloudflare_headers_finalize.py
+      - name: Cloudflare fail-closed 404 finalize
+        run: python3 cloudflare_failopen_404_finalize.py
+      - name: Cloudflare fail-closed 404 test
+        run: python3 test_cloudflare_failopen_404.py
+      - name: Cloudflare P1 verify guard test
+        run: python3 test_cloudflare_p1_verify_guard.py
+      - name: Cloudflare function security headers test
+        run: node test_cloudflare_function_security_headers.mjs
+      - name: RPC surface hardening test
+        run: python3 test_rpc_surface_hardening.py
+      - name: Session security migrations test
+        run: python3 test_session_security_migrations.py
 
   build:
     runs-on: ubuntu-latest
