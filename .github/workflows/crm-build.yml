@@ -43,5 +43,9 @@ jobs:
         run: python3 test_full_schema_export_recovery.py
       - name: Diagnose migration-ledger recovery guard
         run: python3 test_migration_ledger_recovery.py
+      - name: Diagnose canonical source integrity
+        run: python3 verify_final_source.py
+      - name: Diagnose runtime config compatibility
+        run: python3 runtime_config_compat.py
       - name: Run canonical CRM build gates
         run: sh build.sh && python3 cloudflare_p1_verify.py
