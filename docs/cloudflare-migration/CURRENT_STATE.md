@@ -1,6 +1,6 @@
 # GrowthOps CRM Current State
 
-Last reviewed: 2026-08-25
+Last reviewed: 2026-08-26
 
 This file is the **current-state authority** for the CRM hosting/security migration. Phase documents in this directory (P0, P1, P2-A, P2-B, P3/P4, P5, and Post-P5) are retained as implementation and acceptance evidence; when a phase document describes a future step that has since been completed, this file and the current canonical build gates take precedence.
 
@@ -57,7 +57,7 @@ Do not restore `anon` RPC execution, broad service-role relation/function access
 
 ## Current Production database checkpoint
 
-A fresh read-only Production inventory was revalidated on 2026-08-25 after the applied migration `20260825075808 / post_p5_rate_limit_concurrency`. The preceding accepted migration `20260825040850 / post_p5_public_default_privilege_guard` remains applied and authoritative for future-object default-deny behavior. Using the same deterministic catalog query retained in `supabase/baseline/p0_schema_security_fingerprint.sql`, the current CRM schema/security checkpoint is:
+A fresh read-only Production inventory was revalidated again on 2026-08-26 after the recovery-authority consolidation merged at `main@f8ee22ab3644a45fa960bf8821d12d630c56f0b2`. The applied migration head remains `20260825075808 / post_p5_rate_limit_concurrency`; the preceding accepted migration `20260825040850 / post_p5_public_default_privilege_guard` remains applied and authoritative for future-object default-deny behavior. Using the same deterministic catalog query retained in `supabase/baseline/p0_schema_security_fingerprint.sql`, the current CRM schema/security checkpoint is:
 
 - inventory lines: `200`;
 - SHA-256: `77ba3a7c646cf2ea04f41d20ceb1dd02aa9f041db7cbd2a0ad0386ddedbfba65`;
@@ -86,7 +86,7 @@ Recovery comparison also has a wider read-only `public`-schema fingerprint from 
 - wider-public SHA-256: `a0078c5da6c5844a6d02c96e5c486d3fd8b13bb859a640073fb13cbacc6032ab`;
 - scope includes `public` schema/relations/columns/constraints/indexes/triggers, all public routine definitions and application-role EXECUTE truth, public policies, public-function event triggers, relevant default ACL rows, and installed extension metadata.
 
-The wider-public hash was reproduced twice against Production. Because it intentionally includes extension metadata, a reviewed platform extension-version change may legitimately alter it without changing the narrower CRM security boundary. Treat wider-public drift as an investigation trigger, not automatic rollback authorization.
+The wider-public hash was reproduced twice against Production on its original acceptance and matched again in the 2026-08-26 post-merge revalidation. Because it intentionally includes extension metadata, a reviewed platform extension-version change may legitimately alter it without changing the narrower CRM security boundary. Treat wider-public drift as an investigation trigger, not automatic rollback authorization.
 
 The primary and three-guard fingerprints remain the narrower security comparison authorities; the wider-public fingerprint is supplemental recovery evidence. None replaces a full database schema export. The historical P0 fingerprints remain valid evidence for their own phases, including the accepted `195 / edfcd23e...` relation-ACL checkpoint before later Post-P5 function/constraint changes. The outstanding full schema-only `pg_dump`/equivalent export remains a separate P0 recovery deliverable; do not claim full disaster-recovery schema portability from fingerprints alone.
 
@@ -106,7 +106,7 @@ The canonical local/CI build is:
 
 `sh build.sh && python3 cloudflare_p1_verify.py`
 
-GitHub Actions is the PR hard gate and runs without CRM/Supabase secrets. Its current quota/security contract includes:
+GitHub Actions provides the canonical PR build/security gate and runs without CRM/Supabase secrets. Its current quota/security contract includes:
 
 - `contents: read` token permissions;
 - checkout credentials not persisted;
@@ -116,9 +116,11 @@ GitHub Actions is the PR hard gate and runs without CRM/Supabase secrets. Its cu
 - complete canonical CRM build/security regression suite;
 - final Cloudflare artifact/output parity verification.
 
+Repository-administration audit on 2026-08-26 found that `main` is not currently protected, required-status-check enforcement is off, and no repository ruleset is active. Therefore the canonical Gate is presently the reviewed release/merge authority but is not yet an unavoidable GitHub repository control. Issue #91 tracks the required branch-protection/ruleset change; until that platform control is accepted, maintain the explicit isolated-branch → green Gate → expected-head merge discipline and do not treat a failed Gate as merge-safe.
+
 For the rate-limit concurrency runtime release, PR head `775bd321b8f09c36609da7e10afa274662582bc4` passed CRM Build Gate run #68, and merged `main@0eefbe383d7ea8ecd7a874e7a8f7c4c9621763e6` passed push-triggered run #69.
 
-Subsequent recovery/documentation authority updates passed through `main@2f651a3baca51e8d1fdb1330d40432cdbbf19433` / run #75. Vercel Git deployment-policy hardening passed slash-branch PR run #76 and merged-main run #77 at `main@91c0edcb24b79d282faa72d7d83435a1e1265d30`. The wider-public recovery fingerprint then passed PR run #82 and merged-main run #83 at `main@9e440a51b0d552562d73ae235ceaab175a26ec45`.
+Subsequent recovery/documentation authority updates passed through `main@2f651a3baca51e8d1fdb1330d40432cdbbf19433` / run #75. Vercel Git deployment-policy hardening passed slash-branch PR run #76 and merged-main run #77 at `main@91c0edcb24b79d282faa72d7d83435a1e1265d30`. The wider-public recovery fingerprint then passed PR run #82 and merged-main run #83 at `main@9e440a51b0d552562d73ae235ceaab175a26ec45`. PR #90 consolidated the current Production migration ledger and corrected a stale Preview-test checkpoint assumption; its final clean PR Gate #90 passed, and squash-merged `main@f8ee22ab3644a45fa960bf8821d12d630c56f0b2` passed push-triggered Gate #91.
 
 A change is not considered merge-safe merely because it is documentation-only or because one hosting platform deploys. The expected workflow remains: isolated branch → narrow diff → canonical gate → inspect final parity marker → merge with expected head SHA → verify resulting Production deployment.
 
@@ -135,7 +137,7 @@ The corrected policy was accepted by PR #86:
 - merged `main`: `91c0edcb24b79d282faa72d7d83435a1e1265d30`;
 - merged-main CRM Build Gate #77: completed / success.
 
-Subsequent slash-containing recovery/documentation PR branches, including PR #89, continued to produce no normal Vercel Preview deployments during their acceptance windows.
+Subsequent slash-containing recovery/documentation PR branches, including PR #89 and PR #90, continued to produce no normal Vercel Preview deployments during their acceptance windows.
 
 The stable Vercel application alias is:
 
@@ -143,17 +145,17 @@ The stable Vercel application alias is:
 
 Current validated Vercel Production deployment:
 
-- deployment: `dpl_2FZY4Lfoy5LDwHgkwgCq9mEnBXfv`;
+- deployment: `dpl_Ahv2D7cs39vzwXDjTFNxionsQvn5`;
 - state: `READY`;
-- Git commit: `9e440a51b0d552562d73ae235ceaab175a26ec45`;
-- merged-main CRM Build Gate #83: completed / success;
+- Git commit: `f8ee22ab3644a45fa960bf8821d12d630c56f0b2`;
+- merged-main CRM Build Gate #91: completed / success;
 - stable alias assigned successfully.
 
-The previously validated server-boundary smoke behavior remains the expected Production contract: homepage success and unauthenticated `GET /api/crm` rejected with `405 / METHOD_NOT_ALLOWED`, `Allow: POST`, no-store caching, and security headers rather than executing an RPC. A later documentation/recovery-only deployment does not by itself alter that runtime contract.
+The current Production homepage returned successfully. An unauthenticated `GET /api/crm` returned `405 / METHOD_NOT_ALLOWED` with `Allow: POST`, `Cache-Control: no-store, max-age=0`, HSTS, CSP, frame-deny and related security headers rather than executing an RPC. Vercel's grouped runtime-error inspection found no Production runtime errors in the checked 24-hour window.
 
 For rollback, do not permanently pin an ancient pre-P5 build. Use a READY, gate-accepted `main` Production deployment compatible with the current database privilege/function state. See `ROLLBACK.md`.
 
-Vercel Preview secret scope is **verified open**, not unverified. PR #85 Preview deployment `dpl_HfSpEkWs9D34A1a28WLiaCMrCnKY` failed at `sh build.sh` with `PREVIEW_SECRET_BOUNDARY_FAILED` because a server secret was present without an explicit staging Supabase URL. No secret value was printed or recorded. PR #86 prevents the normal non-main Git Preview execution path, but platform cleanup remains required because the Preview-scoped secret itself has not been proven removed. The connected Vercel tool available at this review does not expose environment-variable scope mutation.
+Vercel Preview secret scope is **verified open**, not unverified. PR #85 Preview deployment `dpl_HfSpEkWs9D34A1a28WLiaCMrCnKY` failed at `sh build.sh` with `PREVIEW_SECRET_BOUNDARY_FAILED` because a server secret was present without an explicit staging Supabase URL. No secret value was printed or recorded. PR #86 prevents the normal non-main Git Preview execution path, but platform cleanup remains required because the Preview-scoped secret itself has not been proven removed. Issue #92 tracks removal of Production Supabase secret material from Preview scope (or replacement with an explicitly isolated staging backend). The connected Vercel tool available at this review does not expose environment-variable scope mutation.
 
 ### Cloudflare Pages
 
@@ -169,7 +171,7 @@ A later documentation-only Cloudflare Production deployment `5ddf431a-865a-4c88-
 
 Cloudflare Preview must not silently use Production Supabase. Standard Pages Preview hosts require an explicit isolated staging `GROWTHOPS_SUPABASE_URL` when a server secret is active; otherwise the runtime/build is expected to fail closed. Do not weaken the origin guard to make Preview pass.
 
-Cloudflare Dashboard verification on 2026-08-25 showed that Preview still has a `GROWTHOPS_SUPABASE_SECRET_KEY` binding; no secret value is recorded here. With no explicit isolated staging URL, the repository guard rejects the Preview configuration as designed. Platform cleanup remains open: remove the Production secret from Preview or configure an explicitly isolated staging URL plus matching staging secret.
+Cloudflare Dashboard verification on 2026-08-25 showed that Preview still has a `GROWTHOPS_SUPABASE_SECRET_KEY` binding; no secret value is recorded here. With no explicit isolated staging URL, the repository guard rejects the Preview configuration as designed. Platform cleanup remains open and is tracked by issue #92: remove the Production secret from Preview or configure an explicitly isolated staging URL plus matching staging secret.
 
 At this checkpoint the **runtime/database compatibility contract** is aligned: Supabase Production has the accepted concurrency migration, GitHub `main` and Vercel Production contain the compatible BFF/runtime, and the last independently verified Cloudflare Production also contains that compatible runtime. Exact Cloudflare deployment-SHA freshness after later documentation/config-only `main` commits remains unverified until the Cloudflare connection is available again.
 
@@ -188,6 +190,8 @@ Operational rollback instructions are in:
 The core rule is: **hosting rollback and database privilege rollback are separate operations**. Route back to a compatible validated Vercel server-boundary build first; change Supabase privileges only when a specific database security migration is proven to be the cause, and then only through its exact reviewed rollback artifact.
 
 `P0_MIGRATION_LEDGER.md` is now the consolidated current remote migration-history and repository-mapping authority through `20260825075808 / post_p5_rate_limit_concurrency`. Historical 2026-08-13/14 SQL gaps remain explicitly unresolved rather than reconstructed from guesses. `P0_MIGRATION_LEDGER_20260825_APPENDIX.md` is retained as point-in-time acceptance evidence, not as a required second source for determining the current migration head. Later forward migrations must continue to map to genuine repository SQL, and the current Production fingerprints must be refreshed when a reviewed schema/ACL/function/guard/extension change affects their respective scopes.
+
+The full authorized schema-only export remains open and is tracked by issue #93. Current fingerprints and migration-ledger checks are comparison evidence only; they do not substitute for a portable schema dump and disposable-target restore verification.
 
 ## Historical phase documents
 
@@ -211,3 +215,4 @@ Those documents intentionally preserve the state observed at their own phase. Th
 4. Do not reintroduce browser Supabase config, browser token persistence, broad credential reveal, `anon` CRM RPC execution, or permissive future-object defaults in `public`.
 5. Keep `ROLLBACK.md` and this file current whenever the architecture, privilege boundary, CI deployment policy, recovery strategy, or accepted hosting checkpoint materially changes.
 6. Keep platform-secret scope claims evidence-based: Vercel and Cloudflare Preview cleanup are both currently confirmed outstanding, even though normal Vercel non-main Git Preview execution is now disabled.
+7. Keep issue #91 open until GitHub main protection is technically enforced, issue #92 open until Preview Production-secret cleanup is independently verified, and issue #93 open until a real authorized schema-only export has been produced and verified.
