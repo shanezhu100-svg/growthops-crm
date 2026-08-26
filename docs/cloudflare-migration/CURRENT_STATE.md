@@ -143,7 +143,7 @@ The stable Vercel application alias is:
 
 `https://growthops-crm.vercel.app`
 
-Current validated Vercel Production deployment:
+Current validated runtime/security checkpoint deployment:
 
 - deployment: `dpl_Ahv2D7cs39vzwXDjTFNxionsQvn5`;
 - state: `READY`;
@@ -151,7 +151,9 @@ Current validated Vercel Production deployment:
 - merged-main CRM Build Gate #91: completed / success;
 - stable alias assigned successfully.
 
-The current Production homepage returned successfully. An unauthenticated `GET /api/crm` returned `405 / METHOD_NOT_ALLOWED` with `Allow: POST`, `Cache-Control: no-store, max-age=0`, HSTS, CSP, frame-deny and related security headers rather than executing an RPC. Vercel's grouped runtime-error inspection found no Production runtime errors in the checked 24-hour window.
+This checkpoint is the latest independently validated deployment for the CRM runtime/security contract. A later `main` deployment whose accepted diff is documentation/test-only may exist without superseding this checkpoint; advance the checkpoint only when runtime/security artifacts change or when a later deployment is explicitly revalidated as the new runtime/security authority. This prevents current-state documentation from becoming self-referential merely because editing this file itself triggers a Production deployment.
+
+The checkpoint Production homepage returned successfully. An unauthenticated `GET /api/crm` returned `405 / METHOD_NOT_ALLOWED` with `Allow: POST`, `Cache-Control: no-store, max-age=0`, HSTS, CSP, frame-deny and related security headers rather than executing an RPC. Vercel's grouped runtime-error inspection found no Production runtime errors in the checked 24-hour window.
 
 For rollback, do not permanently pin an ancient pre-P5 build. Use a READY, gate-accepted `main` Production deployment compatible with the current database privilege/function state. See `ROLLBACK.md`.
 
