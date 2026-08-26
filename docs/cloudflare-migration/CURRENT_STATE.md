@@ -80,7 +80,15 @@ Three repository-managed Post-P5 DDL guards live outside the primary fingerprint
 
 The supplemental guard checkpoint does not alter or replace the primary `200 / 77ba3a7c...` comparison contract. Refresh both checkpoints after a future schema/ACL/function/guard change that can affect their respective scopes.
 
-This is the **current catalog/security comparison anchor**, not a replacement for a full database schema export. The historical P0 fingerprints remain valid evidence for their own phases, including the accepted `195 / edfcd23e...` relation-ACL checkpoint before later Post-P5 function/constraint changes. The outstanding full schema-only `pg_dump`/equivalent export remains a separate P0 recovery deliverable; do not claim full disaster-recovery schema portability from this fingerprint alone.
+Recovery comparison also has a wider read-only `public`-schema fingerprint from `supabase/baseline/p0_public_schema_recovery_fingerprint.sql`, documented in `PUBLIC_SCHEMA_RECOVERY_FINGERPRINT.md`:
+
+- wider-public inventory lines: `225`;
+- wider-public SHA-256: `a0078c5da6c5844a6d02c96e5c486d3fd8b13bb859a640073fb13cbacc6032ab`;
+- scope includes `public` schema/relations/columns/constraints/indexes/triggers, all public routine definitions and application-role EXECUTE truth, public policies, public-function event triggers, relevant default ACL rows, and installed extension metadata.
+
+The wider-public hash was reproduced twice against Production. Because it intentionally includes extension metadata, a reviewed platform extension-version change may legitimately alter it without changing the narrower CRM security boundary. Treat wider-public drift as an investigation trigger, not automatic rollback authorization.
+
+The primary and three-guard fingerprints remain the narrower security comparison authorities; the wider-public fingerprint is supplemental recovery evidence. None replaces a full database schema export. The historical P0 fingerprints remain valid evidence for their own phases, including the accepted `195 / edfcd23e...` relation-ACL checkpoint before later Post-P5 function/constraint changes. The outstanding full schema-only `pg_dump`/equivalent export remains a separate P0 recovery deliverable; do not claim full disaster-recovery schema portability from fingerprints alone.
 
 ## Current credential/storage boundary
 
@@ -110,7 +118,7 @@ GitHub Actions is the PR hard gate and runs without CRM/Supabase secrets. Its cu
 
 For the rate-limit concurrency runtime release, PR head `775bd321b8f09c36609da7e10afa274662582bc4` passed CRM Build Gate run #68, and merged `main@0eefbe383d7ea8ecd7a874e7a8f7c4c9621763e6` passed push-triggered run #69.
 
-Subsequent recovery/documentation authority updates passed through `main@2f651a3baca51e8d1fdb1330d40432cdbbf19433` / run #75. Vercel Git deployment-policy hardening then passed slash-branch PR run #76 and merged-main run #77 at `main@91c0edcb24b79d282faa72d7d83435a1e1265d30`.
+Subsequent recovery/documentation authority updates passed through `main@2f651a3baca51e8d1fdb1330d40432cdbbf19433` / run #75. Vercel Git deployment-policy hardening passed slash-branch PR run #76 and merged-main run #77 at `main@91c0edcb24b79d282faa72d7d83435a1e1265d30`. The wider-public recovery fingerprint then passed PR run #82 and merged-main run #83 at `main@9e440a51b0d552562d73ae235ceaab175a26ec45`.
 
 A change is not considered merge-safe merely because it is documentation-only or because one hosting platform deploys. The expected workflow remains: isolated branch → narrow diff → canonical gate → inspect final parity marker → merge with expected head SHA → verify resulting Production deployment.
 
@@ -127,22 +135,25 @@ The corrected policy was accepted by PR #86:
 - merged `main`: `91c0edcb24b79d282faa72d7d83435a1e1265d30`;
 - merged-main CRM Build Gate #77: completed / success.
 
+Subsequent slash-containing recovery/documentation PR branches, including PR #89, continued to produce no normal Vercel Preview deployments during their acceptance windows.
+
 The stable Vercel application alias is:
 
 `https://growthops-crm.vercel.app`
 
 Current validated Vercel Production deployment:
 
-- deployment: `dpl_HiGGTxc4zYJM9zq1s13CV5Pv2tW6`;
+- deployment: `dpl_2FZY4Lfoy5LDwHgkwgCq9mEnBXfv`;
 - state: `READY`;
-- Git commit: `91c0edcb24b79d282faa72d7d83435a1e1265d30`;
+- Git commit: `9e440a51b0d552562d73ae235ceaab175a26ec45`;
+- merged-main CRM Build Gate #83: completed / success;
 - stable alias assigned successfully.
 
-The current Production homepage returned successfully, and unauthenticated `GET /api/crm` returned `405` with `METHOD_NOT_ALLOWED`, `Allow: POST`, no-store caching, and the expected security headers rather than executing an RPC. Recent Production runtime-error inspection found no new error cluster in the checked window.
+The previously validated server-boundary smoke behavior remains the expected Production contract: homepage success and unauthenticated `GET /api/crm` rejected with `405 / METHOD_NOT_ALLOWED`, `Allow: POST`, no-store caching, and security headers rather than executing an RPC. A later documentation/recovery-only deployment does not by itself alter that runtime contract.
 
 For rollback, do not permanently pin an ancient pre-P5 build. Use a READY, gate-accepted `main` Production deployment compatible with the current database privilege/function state. See `ROLLBACK.md`.
 
-Vercel Preview secret scope is **verified open**, not unverified. PR #85 Preview deployment `dpl_HfSpEkWs9D34A1a28WLiaCMrCnKY` failed at `sh build.sh` with `PREVIEW_SECRET_BOUNDARY_FAILED` because a server secret was present without an explicit staging Supabase URL. No secret value was printed or recorded. PR #86 prevents the normal non-main Git Preview execution path, but platform cleanup remains required because the Preview-scoped secret itself has not been proven removed.
+Vercel Preview secret scope is **verified open**, not unverified. PR #85 Preview deployment `dpl_HfSpEkWs9D34A1a28WLiaCMrCnKY` failed at `sh build.sh` with `PREVIEW_SECRET_BOUNDARY_FAILED` because a server secret was present without an explicit staging Supabase URL. No secret value was printed or recorded. PR #86 prevents the normal non-main Git Preview execution path, but platform cleanup remains required because the Preview-scoped secret itself has not been proven removed. The connected Vercel tool available at this review does not expose environment-variable scope mutation.
 
 ### Cloudflare Pages
 
@@ -176,7 +187,7 @@ Operational rollback instructions are in:
 
 The core rule is: **hosting rollback and database privilege rollback are separate operations**. Route back to a compatible validated Vercel server-boundary build first; change Supabase privileges only when a specific database security migration is proven to be the cause, and then only through its exact reviewed rollback artifact.
 
-`P0_MIGRATION_LEDGER.md` preserves the remote migration history and repository mapping. Historical 2026-08-13/14 SQL gaps remain explicitly unresolved rather than reconstructed from guesses. Later forward migrations must remain mapped to genuine repository SQL, and the current Production catalog/security checkpoints above should be refreshed after any future schema/ACL/function change. The repository-backed `20260825075808 / post_p5_rate_limit_concurrency` mapping is recorded in `P0_MIGRATION_LEDGER_20260825_APPENDIX.md` and `POST_P5_RATE_LIMIT_CONCURRENCY.md` pending the next consolidated historical-ledger refresh.
+`P0_MIGRATION_LEDGER.md` is now the consolidated current remote migration-history and repository-mapping authority through `20260825075808 / post_p5_rate_limit_concurrency`. Historical 2026-08-13/14 SQL gaps remain explicitly unresolved rather than reconstructed from guesses. `P0_MIGRATION_LEDGER_20260825_APPENDIX.md` is retained as point-in-time acceptance evidence, not as a required second source for determining the current migration head. Later forward migrations must continue to map to genuine repository SQL, and the current Production fingerprints must be refreshed when a reviewed schema/ACL/function/guard/extension change affects their respective scopes.
 
 ## Historical phase documents
 

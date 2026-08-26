@@ -7,6 +7,8 @@ python3 preview_secret_guard.py
 python3 test_ci_quota_guard.py
 # Keep the full-schema recovery procedure pinned to current Production truth.
 python3 test_full_schema_export_recovery.py
+# Keep the consolidated remote migration ledger pinned to current Production truth.
+python3 test_migration_ledger_recovery.py
 python3 verify_final_source.py
 python3 runtime_config_compat.py
 trap 'rm -f index.html' 0
