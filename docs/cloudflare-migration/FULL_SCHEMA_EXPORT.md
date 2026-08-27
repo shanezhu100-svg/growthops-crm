@@ -1,133 +1,109 @@
 # Full Schema Export Recovery Procedure
 
-Last reviewed: 2026-08-25
+Last reviewed: 2026-08-27
 
-This runbook defines the trusted path for closing the outstanding P0 **full schema-only export** recovery deliverable. It complements, but does not replace, the deterministic comparison checks in `CURRENT_RECOVERY_VERIFICATION.md`.
+This runbook defines the trusted path for the outstanding P0 **portable schema recovery** deliverable. It complements, but does not replace, the deterministic comparison checks in `CURRENT_RECOVERY_VERIFICATION.md`.
 
 ## Current status
 
-The full schema-only export is **not yet complete**.
+A real authorized Production schema-only export **has been produced and independently checksum-verified**, but zero-to-current recovery is **not yet accepted**.
 
-Current automation can query the Production database and recompute the accepted recovery fingerprints, but that is not equivalent to a portable schema dump. The connected Supabase automation surface does not currently expose a database-password retrieval action, temporary/JIT database-access action, or schema/backup export action.
+The first successful export was generated from protected `main@e77e9232c737015132b390c4d1de549c19ce1761` by GitHub Actions workflow run `32983830368` using Supabase CLI `2.116.0` against canonical Production project `avahcwyxparbcjdfglzx`.
 
-The execution environment was rechecked on 2026-08-25 and did not provide any of:
+First-artifact evidence:
 
-- Supabase CLI;
-- `pg_dump`;
-- `psql`;
-- Docker;
-- Podman.
+- artifact name: `growthops-schema-only-32983830368`;
+- `schema.sql` size: `100993` bytes;
+- `schema.sql` SHA-256: `37a49bb03df429b0e25fe0a52c3be5383bdac93b17d92ba7e257dd574fd748e2`;
+- temporary GitHub ZIP digest: `189e165d4c6e86352d239d79a89f51bb845cc06108fbe5bbd46b9e21b3d994c7`;
+- a private operator copy was saved outside the temporary 7-day GitHub artifact.
 
-Do not mark this deliverable complete until a real export artifact has been produced through an authorized database connection and independently verified.
+The first artifact is useful and must be retained, but a completeness review found two recovery gaps that prevent it from being treated as a self-sufficient zero-to-current bundle:
 
-## Preferred export path
+1. the filtered Supabase schema dump contains the four public event-trigger **handler functions** but contains **zero `CREATE EVENT TRIGGER` objects**;
+2. the dump contains no `supabase_migrations.schema_migrations` history, while Supabase's restore guidance treats migration-history preservation as a separate step.
 
-Use the current Supabase CLI database dump workflow with an authorized database connection string.
+Production currently has four enabled postgres-owned event triggers whose handlers are in `public`:
 
-Supabase's CLI `db dump` path is preferred over assembling schema from catalog queries because it runs the PostgreSQL dump machinery with Supabase-specific filtering for managed/internal schemas and reserved roles.
+- `ensure_rls` → `public.rls_auto_enable()`;
+- `growthops_crm_acl_guard_ddl` → `public.growthops_crm_acl_guard_ddl()`;
+- `growthops_crm_rls_guard_ddl` → `public.growthops_crm_rls_guard_ddl()`;
+- `growthops_public_noncrm_function_acl_guard_ddl` → `public.growthops_public_noncrm_function_acl_guard_ddl()`.
 
-For a schema-only recovery artifact, the normal CLI dump is the relevant form:
+The three GrowthOps guard bindings are part of the accepted supplemental guard fingerprint. A restore that contains the handler functions but not the event-trigger objects is therefore not security-equivalent to Production.
 
-```sh
-supabase db dump --db-url "$SUPABASE_DB_URL" -f schema.sql
-```
+## Recovery bundle v2
 
-Do not add `--data-only` or `--role-only` to the schema artifact. If roles or data are ever required for a broader recovery package, create them as separate reviewed artifacts rather than mixing customer data into this schema-only deliverable.
+The protected manual recovery workflow is being hardened to generate a **schema recovery bundle** rather than treating `schema.sql` alone as complete. The bundle contains no customer rows and no Vault plaintext.
 
-## Required prerequisites
+Required bundle files:
 
-Before running the dump, all of these must be true:
+- `schema.sql` — authoritative Supabase CLI filtered schema dump;
+- `event-triggers.sql` — database-level event-trigger recovery adjunct generated from the authorized Production catalog;
+- `event-trigger-inventory.txt` — safe event-trigger event/enabled/tag/handler/owner inventory;
+- `migration-ledger.txt` — safe `version|name` migration ledger;
+- `migration-ledger.sql` — recovery-only `version/name` ledger reconstruction for a new isolated Supabase target;
+- `recovery-files.sha256` — checksum manifest for the bundle;
+- `recovery-metadata.txt` — project ref, tool versions, source commit, counts, heads, and checksums;
+- tool-version files.
 
-1. an authorized Production database connection string is available through the Supabase Connect/Database settings flow;
-2. the database password is available to the authorized operator without committing or logging it;
-3. Supabase CLI is installed in a trusted environment;
-4. Docker is available for the CLI dump workflow, or another officially supported Supabase dump environment is used;
-5. the target directory is outside the public repository and is access-controlled;
-6. the operator has confirmed the connection points to the canonical Production project `avahcwyxparbcjdfglzx` before the command is run.
+The workflow must fail closed unless all four expected event-trigger names are present, all are enabled in normal/origin mode, all are postgres-owned, the migration ledger has exactly `51` entries, and its head is `20260825075808 / post_p5_rate_limit_concurrency`.
 
-A service-role/API secret is **not** a PostgreSQL database password and must not be substituted into a Postgres connection string.
+The safe migration-ledger artifacts intentionally exclude the `statements` and `rollback` arrays from `supabase_migrations.schema_migrations`. Those historical SQL arrays are not required to prove the current schema/security state and are not uploaded to the public-repository-associated temporary artifact without a separate sensitivity review. The safe ledger preserves the applied `version/name` authority used for current recovery-head verification; it is **not** a forensic copy of every historical migration statement.
 
 ## Credential safety rules
 
 - Never commit the database password or complete credential-bearing connection string to GitHub.
 - Never paste the password into issue/PR descriptions, build logs, screenshots, chat transcripts, Pages/Vercel logs, or normal CRM backups.
-- Prefer an ephemeral environment variable or an approved local secret store for the connection URL.
-- Do not reset the Production database password merely to make an automated dump possible without an explicit credential-rotation decision and approval.
-- Do not create a temporary privileged database role/password solely to bypass the normal backup path without a separately reviewed security change.
-- Delete local credential-bearing shell history/files after the authorized export workflow according to the operator's secret-handling policy.
+- A service-role/API secret is **not** a PostgreSQL database password and must never be substituted into a Postgres connection string.
+- The workflow may reference the encrypted `SUPABASE_DB_URL` repository secret but must mask it and never print it.
+- Do not export customer table rows or Vault plaintext as part of this schema-recovery deliverable.
+- Do not commit generated `schema.sql`, recovery SQL artifacts, or connection material to this public repository.
 
-## Export procedure
+## Restore verification target
 
-1. Obtain the current Session Pooler or direct database connection string from the authorized Supabase project Connect flow.
-2. Supply the database password only in the trusted export environment.
-3. Confirm the target project ref is `avahcwyxparbcjdfglzx`.
-4. Run the schema export to a non-repository path:
+A bundle existing on disk is not enough. The final acceptance must use a **new, isolated, disposable Supabase project** that has never previously been modified to mirror Production.
 
-```sh
-mkdir -p ./private-recovery-export
-supabase db dump --db-url "$SUPABASE_DB_URL" -f ./private-recovery-export/schema.sql
-```
+The existing `growthops-p0-recovery-test` project is useful for historical testing but already contains CRM schema and therefore is not accepted as proof of a from-zero restore.
 
-5. Confirm the command exits successfully and the artifact is non-empty.
-6. Compute a local checksum without printing database credentials:
+For a new hosted Supabase recovery target, use this order:
 
-```sh
-sha256sum ./private-recovery-export/schema.sql
-```
+1. confirm the target is the disposable recovery project and **not Production**;
+2. restore `schema.sql` with `psql --single-transaction --variable ON_ERROR_STOP=1` using the new project's authorized database connection;
+3. restore `event-triggers.sql` after the handler functions exist;
+4. apply `migration-ledger.sql` only to the disposable recovery project so its safe version/name ledger reflects the accepted Production migration head;
+5. run the read-only checks in `CURRENT_RECOVERY_VERIFICATION.md`;
+6. require the primary, three-guard, and wider-public fingerprints to match the accepted checkpoint unless a reviewed platform-only difference is explicitly understood;
+7. run `supabase/baseline/p0_cloud_recovery_acceptance.sql` only on the empty disposable recovery project; its synthetic test data must remain transaction-contained and rolled back;
+8. verify the application/recovery boundary without introducing Production secrets into Preview or the recovery target;
+9. pause/delete the disposable target after evidence is captured according to the approved recovery-test lifecycle.
 
-7. Inspect the artifact for obvious credential leakage before long-term storage. A schema-only artifact may legitimately contain object/function definitions and privilege statements, but it must not contain live customer password/2FA values or the Production database password.
-8. Store the artifact in an approved access-controlled backup location. Do **not** commit the full dump to this public repository unless a separate security review has established that the exact artifact is safe for public source control.
-9. Record only safe metadata in the repository recovery documentation: export date, tool/version, project ref, artifact checksum, storage authority/location label, and verification result. Do not record the credential-bearing connection string.
+Never run the synthetic cloud recovery acceptance script against Production.
 
-## Verification after export
-
-A schema file existing on disk is not enough. Verify the artifact against current Production recovery truth:
-
-1. Re-run `supabase/baseline/p0_schema_security_fingerprint.sql` on Production and confirm the accepted current primary checkpoint unless a reviewed migration intentionally changed it.
-2. Re-run `supabase/baseline/post_p5_crm_guard_security_fingerprint.sql` and confirm the accepted guard checkpoint unless a reviewed guard migration intentionally changed it.
-3. Re-run `supabase/baseline/p0_public_schema_recovery_fingerprint.sql` and confirm the accepted wider-public checkpoint unless an understood schema/ACL/extension change intentionally changed it.
-4. Confirm the current Production migration head against `P0_MIGRATION_LEDGER.md`, `P0_MIGRATION_LEDGER_20260825_APPENDIX.md`, and the live migration ledger.
-5. Prefer restoring the schema into an empty isolated recovery target and re-running `CURRENT_RECOVERY_VERIFICATION.md` before declaring the dump proven restorable.
-6. Keep `supabase/baseline/p0_cloud_recovery_acceptance.sql` restricted to a disposable empty isolated recovery project; never run that synthetic-data acceptance script on Production.
-
-Current comparison checkpoints at this review are:
+## Current comparison checkpoints
 
 - primary CRM fingerprint: `200 / 77ba3a7c646cf2ea04f41d20ceb1dd02aa9f041db7cbd2a0ad0386ddedbfba65`;
 - supplemental CRM guard fingerprint: `9 / 2a6c96fe5c2290cd30ee5b29800dcb47d9f1686d48b51344486c2c7780030140`;
 - supplemental wider-public recovery fingerprint: `225 / a0078c5da6c5844a6d02c96e5c486d3fd8b13bb859a640073fb13cbacc6032ab`;
 - accepted Production migration head: `20260825075808 / post_p5_rate_limit_concurrency`.
 
-The wider-public fingerprint was recomputed twice consecutively on Production with the same result. It includes extension metadata, so a reviewed platform extension-version change can legitimately alter it without changing the narrower CRM security contract. Investigate the cause before refreshing the checkpoint; do not roll back solely because this supplemental hash changed.
-
-The preceding `200 / bffaf123425bc7bddf02ecf00132848a5bfc4248e44395a5283c8ca9706b97f1` primary fingerprint and `20260825040850 / post_p5_public_default_privilege_guard` migration head are historical pre-concurrency checkpoints and must not be used as the current export-verification anchor.
+The known 2026-08-13/14 migration-history gap remains relevant: repository migrations alone must not be presented as a zero-to-current replacement for the portable Production schema snapshot.
 
 ## What does not count as completion
 
-None of the following closes the full-schema deliverable by itself:
+None of the following closes the recovery deliverable by itself:
 
-- `p0_schema_security_fingerprint.sql` output;
-- the supplemental guard fingerprint;
-- the supplemental wider-public recovery fingerprint;
-- `p0_recovery_inventory.sql` output;
-- a list of tables, columns, functions, triggers, indexes, extensions, or other catalog objects returned by the management connector;
-- a generated catalog/DDL manifest or manually reconstructed SQL;
-- generated TypeScript database types;
+- fingerprints or catalog inventories without a portable dump;
+- the first `schema.sql` artifact without its missing database-level event-trigger bindings;
 - repository migration files alone while the known 2026-08-13/14 migration-history gap remains;
-- copying SQL definitions manually from catalog queries;
+- a generated catalog/DDL manifest used **instead of** the Supabase CLI schema dump;
+- restoring into a project that already contains the CRM schema;
+- a successful restore that does not reproduce the three accepted fingerprints/security boundaries;
 - a Production dashboard screenshot;
-- a data backup whose schema contents have not been independently verified.
+- a data backup whose schema/security contents have not been independently verified.
 
-These are useful evidence, but they do not replace a trusted portable dump.
+The event-trigger adjunct is not a substitute for the dump: it is a narrowly scoped supplement for database-global security objects that the reviewed filtered schema artifact omitted.
 
-## Current blocker and safe next action
+## Closure condition
 
-The current blocker is operational authorization/tooling, not a known Production database defect:
-
-- no database password/credential-bearing connection string is available through the connected automation tools;
-- no temporary/JIT database-access or schema-export/download action is exposed by the connected Supabase tool surface;
-- the current execution environment has no Supabase CLI / Docker / Podman / `pg_dump` / `psql` toolchain;
-- the public repository contains no database dump credential.
-
-Installing a dump tool by itself would not close the blocker because an authorized database connection credential is still required. Do not manufacture, reset, or expose a Production database password merely to satisfy this recovery checkbox.
-
-Therefore the safe next action is to perform the official dump in a trusted operator environment once an authorized database connection and toolchain are available. Until then, keep this item explicitly **open** and continue using the current read-only fingerprints/inventory for comparison—not as a substitute for the dump.
+Issue #93 remains open until a freshly generated recovery bundle v2 is independently checksum-inspected, restored into a truly empty disposable Supabase target, and passes `CURRENT_RECOVERY_VERIFICATION.md` plus the synthetic recovery acceptance restricted to that target.
