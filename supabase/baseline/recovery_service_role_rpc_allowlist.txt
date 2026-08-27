@@ -1,0 +1,12 @@
+crm_bootstrap_admin|text, text, text, text
+crm_client_account_safe_summary|text, text
+crm_delete_user|text, uuid
+crm_list_users|text
+crm_load_state_v3|text
+crm_login_v3|text, text
+crm_logout|text
+crm_public_status|
+crm_reveal_client_secret_value_v5|text, text, text, text, text, text
+crm_save_state|text, jsonb, bigint
+crm_unlock_credentials_v1|text, text
+crm_upsert_user|text, uuid, text, text, text, text, boolean
