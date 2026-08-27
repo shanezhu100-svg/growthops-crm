@@ -85,8 +85,36 @@ ordered = order_text[order_text.find('Required restore order'):]
 positions = [ordered.find(x) for x in ('schema.sql', 'event-triggers.sql', 'post-schema-security.sql', 'migration-ledger.sql')]
 require(all(p >= 0 for p in positions) and positions == sorted(positions),
         'Recovery v3 restore order must be schema -> event triggers -> post-schema security -> migration ledger')
+
+# Pin the first accepted v3 artifact so current recovery authority cannot silently
+# drift to an unreviewed bundle/run.
+for fragment in (
+    '33079493119',
+    '89e1904a521c41ab1b35eb29ef25c2834bf76538',
+    'growthops-schema-recovery-bundle-v3-33079493119',
+    '9649406110',
+    'c18833d5833239e330af686ad407d3dc472c499356651b2ff51bea36eb8876f7',
+    '22424',
+    '100993',
+    '37a49bb03df429b0e25fe0a52c3be5383bdac93b17d92ba7e257dd574fd748e2',
+    'd811cfa142e2268b4ef4746f7bc87f837cc21b590b3716a3f834b68b36abbfe0',
+):
+    require(fragment in v3_doc, f'Recovery v3 authority missing accepted artifact evidence: {fragment}')
+require('artifact file count: `12`' in v3_doc,
+        'Recovery v3 authority must pin accepted artifact file count')
+require('exactly four `CREATE EVENT TRIGGER` statements' in v3_doc,
+        'Recovery v3 authority must pin event-trigger count')
+require('exactly 12 explicit CRM `service_role EXECUTE` grants' in v3_doc,
+        'Recovery v3 authority must pin service_role RPC count')
+require('every file listed in `recovery-files.sha256` independently verified `OK`' in v3_doc,
+        'Recovery v3 authority must record checksum-manifest verification')
+require('integrity and scope of the v3 artifact' in v3_doc,
+        'Recovery v3 authority must distinguish artifact acceptance from #93 closure')
+
 plain_v3 = v3_doc.replace('**', '')
 require('has not yet been executed successfully' in plain_v3,
         'Recovery v3 authority must not claim blocked full synthetic acceptance passed')
+require('second truly fresh hosted disposable Supabase project' in plain_v3,
+        'Recovery v3 authority must require a second fresh hosted restore before closure')
 
-print('RECOVERY_BUNDLE_V3_OK: postgres/public ACL reconciliation pinned; service-role RPC=12; supabase_admin untouched')
+print('RECOVERY_BUNDLE_V3_OK: artifact=33079493119/c18833d5; postgres/public ACL reconciliation pinned; service-role RPC=12; supabase_admin untouched; fresh-v3-restore=open')
