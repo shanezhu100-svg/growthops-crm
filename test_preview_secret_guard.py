@@ -151,10 +151,9 @@ assert leak.returncode == 1
 assert LEAK_SECRET not in leak.stdout
 assert LEAK_SECRET not in leak.stderr
 
-# Current platform truth must remain consistent across the recovery authorities.
-# Both providers are known to have Preview secret-scope cleanup outstanding; the
-# Vercel evidence is no longer merely "unverified" because a real Preview build
-# revalidated the server-secret/no-staging condition on 2026-08-25.
+# Preserve the historical 2026-08-25 fail-closed evidence. It proves the guard
+# worked while a Production secret was still present in Preview; it is no longer
+# evidence that cleanup is currently open.
 vercel_preview_evidence = "dpl_HfSpEkWs9D34A1a28WLiaCMrCnKY"
 for text, label in (
     (CURRENT_STATE, "CURRENT_STATE"),
@@ -163,8 +162,8 @@ for text, label in (
     (PREVIEW_BOUNDARY, "POST_P5_PREVIEW_SECRET_BOUNDARY"),
     (CONCURRENCY_ACCEPTANCE, "POST_P5_RATE_LIMIT_CONCURRENCY"),
 ):
-    assert vercel_preview_evidence in text, f"{label} missing verified Vercel Preview secret-scope evidence"
-    assert "PREVIEW_SECRET_BOUNDARY_FAILED" in text, f"{label} missing fail-closed Vercel Preview evidence"
+    assert vercel_preview_evidence in text, f"{label} missing historical Vercel Preview fail-closed evidence"
+    assert "PREVIEW_SECRET_BOUNDARY_FAILED" in text, f"{label} missing historical fail-closed Vercel Preview evidence"
 
 for text, label in (
     (CURRENT_STATE, "CURRENT_STATE"),
@@ -176,11 +175,33 @@ for text, label in (
     assert "Vercel Preview secret scope remains **unverified**" not in text, f"{label} regressed Vercel Preview to unverified"
     assert "Vercel Preview environment-variable scope was not independently inspectable" not in text, f"{label} contains stale Vercel Preview evidence"
 
+# The moving current authorities must now record the independently verified
+# platform cleanup accepted on 2026-08-27. Historical phase/rollback docs may
+# retain their point-in-time open-state evidence.
+cleanup_marker = "Preview Production-secret cleanup accepted on 2026-08-27"
+for text, label in (
+    (CURRENT_STATE, "CURRENT_STATE"),
+    (CURRENT_RECOVERY, "CURRENT_RECOVERY_VERIFICATION"),
+):
+    assert cleanup_marker in text, f"{label} missing accepted Preview cleanup marker"
+    assert "Vercel Preview: no project environment variables" in text, f"{label} missing Vercel Preview cleanup evidence"
+    assert "Cloudflare Preview: `GROWTHOPS_SUPABASE_SECRET_KEY` removed" in text, f"{label} missing Cloudflare Preview cleanup evidence"
+    assert "Issue #92: closed / completed" in text, f"{label} must record #92 closure"
+
+for stale in (
+    "platform cleanup remains required because the Preview-scoped secret itself has not been proven removed",
+    "Platform cleanup remains open and is tracked by issue #92",
+    "both platform Preview secret scopes were confirmed as still requiring cleanup",
+    "Complete platform acceptance still requires removing the Production secret from Preview scope",
+    "Vercel and Cloudflare Preview cleanup are both currently confirmed outstanding",
+    "Keep issue #92 open until Preview Production-secret cleanup is independently verified",
+):
+    assert stale not in CURRENT_STATE, f"CURRENT_STATE contains stale Preview-open claim: {stale}"
+    assert stale not in CURRENT_RECOVERY, f"CURRENT_RECOVERY_VERIFICATION contains stale Preview-open claim: {stale}"
+
 # Keep the accepted PR #86 globstar/main policy checkpoint as historical evidence
 # without forcing its then-current Production deployment to remain the forever
-# current deployment in CURRENT_STATE. Later gate-accepted main deployments may
-# become the current hosting/recovery checkpoint while the PR #86 acceptance
-# evidence remains valid in its historical/recovery documents.
+# current deployment in CURRENT_STATE.
 accepted_globstar_commit = "91c0edcb24b79d282faa72d7d83435a1e1265d30"
 accepted_globstar_deployment = "dpl_HiGGTxc4zYJM9zq1s13CV5Pv2tW6"
 for text, label in (
@@ -202,9 +223,7 @@ for text, label in (
 
 # CURRENT_STATE is intentionally a moving authority. Verify that its validated
 # runtime/security checkpoint has the required evidence shape instead of pinning
-# a specific deployment/SHA here and making legitimate documentation refreshes
-# fail CI. Documentation/test-only Production deployments may be newer without
-# superseding this explicitly validated runtime/security checkpoint.
+# a forever-current deployment/SHA here.
 current_vercel_section = re.search(
     r"Current validated runtime/security checkpoint deployment:\s*\n\s*"
     r"- deployment: `(dpl_[A-Za-z0-9]+)`;\s*\n"
@@ -231,6 +250,6 @@ assert '"main": true' in PREVIEW_BOUNDARY, "Preview boundary docs missing Vercel
 print(
     "PREVIEW_SECRET_BOUNDARY_TESTS_OK: production=unchanged; preview-no-secret=disabled; "
     "preview-production-target=blocked; preview-staging=allowed; malformed-target=blocked; "
-    "secret-output=none; platform-evidence=vercel+cloudflare-open; vercel-git-preview=main-only; "
-    "current-vercel-checkpoint=dynamic-runtime-evidence-shape"
+    "secret-output=none; historical-open-evidence=retained; platform-cleanup=accepted-20260827; "
+    "vercel-git-preview=main-only; current-vercel-checkpoint=dynamic-runtime-evidence-shape"
 )
