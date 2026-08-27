@@ -119,8 +119,8 @@ require('vault.decrypted_secrets' not in workflow.lower(),
         'schema recovery workflow must never read Vault plaintext')
 require('select version, coalesce(name' in workflow,
         'recovery workflow must restrict public migration-ledger inventory to version/name')
-require('statements' not in re.sub(r'contains_migration_statement_arrays=false', '', workflow),
-        'recovery workflow must not select/export historical migration statement arrays')
+require('select statements' not in workflow.lower() and 'select rollback' not in workflow.lower(),
+        'recovery workflow must not select historical migration statement/rollback arrays')
 
 # The wider-public query must stay catalog-only and emit only comparison metadata.
 require('Read-only catalog inspection only' in public_recovery_sql,
