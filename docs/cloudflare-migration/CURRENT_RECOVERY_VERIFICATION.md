@@ -33,6 +33,8 @@ Preceding accepted future-object migration:
 
 `20260825040850 / post_p5_public_default_privilege_guard`
 
+This migration is the accepted **future-object default-privilege hardening** boundary for postgres-created objects in `public`; its read-only check and transaction-contained probe remain part of recovery acceptance.
+
 Production currently has 51 application migration ledger entries. A newer legitimate migration requires updating the current checkpoints after its reviewed Production acceptance.
 
 For a **new disposable recovery target**, recovery bundle v2 includes `migration-ledger.sql`, generated from only the Production `version/name` fields. It intentionally excludes the historical `statements` and `rollback` arrays. Apply it only after `schema.sql` to reconstruct the safe version/name recovery ledger; it is not a forensic copy of every historical migration statement.
