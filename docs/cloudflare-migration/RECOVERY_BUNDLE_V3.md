@@ -70,20 +70,47 @@ After applying the exact post-schema security reconciliation and exact original 
 
 The future-object default-privilege probe also passed on the disposable target and proved its synthetic table, sequence, and function were all rolled back.
 
-Supabase Security Advisor returned only the expected `RLS enabled / no policy` INFO notices for the RPC-only/default-deny CRM tables. Performance Advisor returned only unused-index INFO notices expected on a newly restored database with no business traffic. Those notices do not authorize schema changes.
+The final `post-schema-security.sql` merged to protected main was re-applied to that disposable target as an idempotence check. After re-application, all three accepted fingerprints remained unchanged and the temporary validation migration entry was removed so the recovery ledger returned to exactly 51 entries with the accepted head.
+
+## Accepted Recovery Bundle v3 artifact
+
+Recovery Schema Bundle v3 workflow run `33079493119` completed successfully from protected:
+
+`main@89e1904a521c41ab1b35eb29ef25c2834bf76538`
+
+Accepted artifact evidence:
+
+- artifact: `growthops-schema-recovery-bundle-v3-33079493119`;
+- artifact ID: `9649406110`;
+- artifact ZIP SHA-256: `c18833d5833239e330af686ad407d3dc472c499356651b2ff51bea36eb8876f7`;
+- artifact size: `22424` bytes;
+- artifact file count: `12`;
+- `schema.sql`: `100993` bytes;
+- `schema.sql` SHA-256: `37a49bb03df429b0e25fe0a52c3be5383bdac93b17d92ba7e257dd574fd748e2`;
+- `event-triggers.sql`: exactly four `CREATE EVENT TRIGGER` statements;
+- `migration-ledger.txt`: exactly 51 entries with head `20260825075808|post_p5_rate_limit_concurrency`;
+- `post-schema-security.sql`: exactly 12 explicit CRM `service_role EXECUTE` grants;
+- `post-schema-security.sql` SHA-256: `d811cfa142e2268b4ef4746f7bc87f837cc21b590b3716a3f834b68b36abbfe0`;
+- zero `supabase_admin` default-ACL alterations in `post-schema-security.sql`;
+- zero `anon` / `authenticated` grants in `post-schema-security.sql`;
+- every file listed in `recovery-files.sha256` independently verified `OK`;
+- metadata records `contains_customer_rows=false`, `contains_migration_statement_arrays=false`, `touches_supabase_admin_defaults=false`, and `empty_target_restore_required=true`.
+
+The workflow logs kept `SUPABASE_DB_URL` masked as `***`; no database password, complete PostgreSQL URL, or Supabase server secret was observed in the run logs.
+
+This accepts the **integrity and scope of the v3 artifact**. It does not by itself close #93.
 
 ## What is still required
 
-Issue #93 remains open. The current evidence proves that **the v3 security reconciliation design** can converge a fresh hosted target to the accepted Production catalog/security state, but final closure still requires:
+Issue #93 remains open. PR/Gate acceptance, v3 workflow merge, fresh artifact generation, and independent artifact/checksum inspection are now complete.
 
-1. PR/Gate acceptance and merge of the v3 workflow/control files;
-2. a fresh Recovery Bundle v3 artifact generated from protected `main`;
-3. independent checksum/artifact inspection;
-4. restoration using the v3 files in their exact documented order, without ad-hoc security repair;
-5. re-running the three accepted fingerprints and 51-entry migration-head check;
-6. running `supabase/baseline/p0_cloud_recovery_acceptance.sql` only on a disposable target and requiring its synthetic transaction to roll back.
+Final closure still requires:
 
-The full synthetic cloud acceptance script has been statically reviewed: it uses generated synthetic values, requires the recovery CRM target to be empty, begins an explicit transaction, emits `P0_CLOUD_RECOVERY_ACCEPTANCE_OK` only after assertions, and ends with `ROLLBACK`. The connected SQL execution safety layer blocked execution of the full credential/reveal test payload, so **that script has not yet been executed successfully in this recovery run**. Do not claim otherwise.
+1. a **second truly fresh hosted disposable Supabase project** restored directly from the accepted v3 artifact in the exact documented order, with no ad-hoc ACL or function-definition repair;
+2. exact matches for the primary, guard, and wider-public fingerprints plus the 51-entry migration-head check on that fresh v3 restore;
+3. `supabase/baseline/p0_cloud_recovery_acceptance.sql` executed only on a disposable target and its synthetic transaction proven rolled back.
+
+The full synthetic cloud acceptance script has been statically reviewed: it uses generated synthetic values, requires the recovery CRM target to be empty, begins an explicit transaction, emits `P0_CLOUD_RECOVERY_ACCEPTANCE_OK` only after assertions, and ends with `ROLLBACK`. The connected SQL execution safety layer blocked execution of the credential/reveal payload, so **that script has not yet been executed successfully in this recovery run**. Do not claim otherwise.
 
 ## Safety boundaries
 
