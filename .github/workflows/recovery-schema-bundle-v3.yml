@@ -1,0 +1,245 @@
+name: Recovery Schema Bundle v3
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_project_ref:
+        description: "Type the authorized Production project ref"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: recovery-schema-bundle-v3
+  cancel-in-progress: false
+
+jobs:
+  build-recovery-bundle-v3:
+    name: build-recovery-bundle-v3
+    if: inputs.confirm_project_ref == 'avahcwyxparbcjdfglzx'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      EXPECTED_PROJECT_REF: avahcwyxparbcjdfglzx
+      EXPECTED_MIGRATION_COUNT: '51'
+      EXPECTED_MIGRATION_HEAD: '20260825075808|post_p5_rate_limit_concurrency'
+
+    steps:
+      - name: Checkout protected source
+        uses: actions/checkout@v4
+
+      - name: Validate authorized Production target
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${SUPABASE_DB_URL:-}" ]; then
+            echo "::error::SUPABASE_DB_URL repository secret is not configured."
+            exit 1
+          fi
+          echo "::add-mask::${SUPABASE_DB_URL}"
+          case "${SUPABASE_DB_URL}" in
+            postgres://*|postgresql://*) ;;
+            *) echo "::error::SUPABASE_DB_URL is not a PostgreSQL connection URL."; exit 1 ;;
+          esac
+          case "${SUPABASE_DB_URL}" in
+            *"${EXPECTED_PROJECT_REF}"*) ;;
+            *) echo "::error::SUPABASE_DB_URL does not target authorized Production."; exit 1 ;;
+          esac
+          echo "Authorized Production project ref matched without printing the connection URL."
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.116.0
+
+      - name: Install PostgreSQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+
+      - name: Record tool versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase --version | tee supabase-cli-version.txt
+          psql --version | tee postgres-client-version.txt
+
+      - name: Generate authoritative schema dump
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase db dump --db-url "${SUPABASE_DB_URL}" -f schema.sql
+          test -s schema.sql
+          test "$(wc -c < schema.sql | tr -d ' ')" -ge 1024
+          if grep -Eiq '^CREATE EVENT TRIGGER ' schema.sql; then
+            echo "::error::schema.sql now contains event-trigger objects; review duplicate adjunct authority."
+            exit 1
+          fi
+
+      - name: Export safe migration ledger
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "${SUPABASE_DB_URL}" -X -v ON_ERROR_STOP=1 -At -F '|' \
+            -c "select version, coalesce(name,'') from supabase_migrations.schema_migrations order by version" \
+            > migration-ledger.txt
+          test "$(wc -l < migration-ledger.txt | tr -d ' ')" = "${EXPECTED_MIGRATION_COUNT}"
+          test "$(tail -n 1 migration-ledger.txt)" = "${EXPECTED_MIGRATION_HEAD}"
+          {
+            echo "-- GrowthOps recovery-only migration ledger; version/name only."
+            echo "-- Apply only after schema/event-trigger/post-schema-security restore."
+            echo "begin;"
+          } > migration-ledger.sql
+          psql "${SUPABASE_DB_URL}" -X -v ON_ERROR_STOP=1 -At \
+            -c "select format('insert into supabase_migrations.schema_migrations (version,name) values (%L,%L) on conflict (version) do update set name=excluded.name;', version, coalesce(name,'')) from supabase_migrations.schema_migrations order by version" \
+            >> migration-ledger.sql
+          echo "commit;" >> migration-ledger.sql
+
+      - name: Export database-level event trigger adjunct
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "${SUPABASE_DB_URL}" -X -v ON_ERROR_STOP=1 -At -F '|' <<'SQL' > event-trigger-inventory.txt
+          select e.evtname, e.evtevent, e.evtenabled,
+                 coalesce(array_to_string(e.evttags, ','), ''),
+                 n.nspname || '.' || p.proname,
+                 pg_get_userbyid(e.evtowner)
+          from pg_event_trigger e
+          join pg_proc p on p.oid=e.evtfoid
+          join pg_namespace n on n.oid=p.pronamespace
+          where n.nspname='public'
+          order by e.evtname;
+          SQL
+          cat > expected-event-trigger-names.txt <<'EOF'
+          ensure_rls
+          growthops_crm_acl_guard_ddl
+          growthops_crm_rls_guard_ddl
+          growthops_public_noncrm_function_acl_guard_ddl
+          EOF
+          cut -d'|' -f1 event-trigger-inventory.txt > actual-event-trigger-names.txt
+          diff -u expected-event-trigger-names.txt actual-event-trigger-names.txt
+          test "$(wc -l < event-trigger-inventory.txt | tr -d ' ')" = '4'
+          if cut -d'|' -f3 event-trigger-inventory.txt | grep -vx 'O' >/dev/null; then exit 1; fi
+          if cut -d'|' -f6 event-trigger-inventory.txt | grep -vx 'postgres' >/dev/null; then exit 1; fi
+          cat > event-triggers.sql <<'EOF'
+          -- GrowthOps database-level event-trigger recovery adjunct.
+          -- Apply only after schema.sql on a new isolated disposable target.
+          EOF
+          psql "${SUPABASE_DB_URL}" -X -v ON_ERROR_STOP=1 -At <<'SQL' >> event-triggers.sql
+          select format(
+            'drop event trigger if exists %I;%screate event trigger %I%son %s%s%sexecute function %I.%I();',
+            e.evtname, E'\n', e.evtname, E'\n', e.evtevent,
+            case when e.evttags is null then '' else E'\nwhen tag in (' || (
+              select string_agg(quote_literal(u.tag), ', ' order by u.ord)
+              from unnest(e.evttags) with ordinality as u(tag,ord)
+            ) || ')' end,
+            E'\n', n.nspname, p.proname
+          )
+          from pg_event_trigger e
+          join pg_proc p on p.oid=e.evtfoid
+          join pg_namespace n on n.oid=p.pronamespace
+          where n.nspname='public'
+          order by e.evtname;
+          SQL
+          test "$(grep -ci '^create event trigger ' event-triggers.sql)" = '4'
+
+      - name: Verify Production security origin and prepare reconciliation
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "${SUPABASE_DB_URL}" -X -v ON_ERROR_STOP=1 -At -F '|' \
+            -c "select p.proname, oidvectortypes(p.proargtypes) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname like 'crm_%' and has_function_privilege('service_role',p.oid,'EXECUTE') order by p.proname, oidvectortypes(p.proargtypes)" \
+            > service-role-rpc-origin.txt
+          diff -u supabase/baseline/recovery_service_role_rpc_allowlist.txt service-role-rpc-origin.txt
+
+          psql "${SUPABASE_DB_URL}" -X -v ON_ERROR_STOP=1 -At <<'SQL' > post-schema-security-origin.txt
+          select 'crm_exec|anon|' || count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname like 'crm_%' and has_function_privilege('anon',p.oid,'EXECUTE');
+          select 'crm_exec|authenticated|' || count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname like 'crm_%' and has_function_privilege('authenticated',p.oid,'EXECUTE');
+          select 'crm_exec|service_role|' || count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname like 'crm_%' and has_function_privilege('service_role',p.oid,'EXECUTE');
+          select 'crm_relation_grants|' || count(*) from information_schema.role_table_grants where table_schema='public' and table_name like 'crm_%' and grantee in ('anon','authenticated','service_role');
+          select 'crm_sequence_app_grants|' || count(*)
+          from pg_class c join pg_namespace n on n.oid=c.relnamespace
+          cross join lateral aclexplode(coalesce(c.relacl,acldefault('S',c.relowner))) x
+          join pg_roles g on g.oid=x.grantee
+          where n.nspname='public' and c.relkind='S' and c.relname like 'crm_%' and g.rolname in ('anon','authenticated','service_role');
+          select 'postgres_public_default_app_or_public_grants|' || count(*)
+          from pg_default_acl d
+          join pg_roles owner_role on owner_role.oid=d.defaclrole
+          join pg_namespace n on n.oid=d.defaclnamespace
+          cross join lateral aclexplode(d.defaclacl) x
+          left join pg_roles grantee_role on grantee_role.oid=x.grantee
+          where owner_role.rolname='postgres' and n.nspname='public'
+            and (x.grantee=0 or grantee_role.rolname in ('anon','authenticated','service_role'));
+          SQL
+          cat > expected-post-schema-security-origin.txt <<'EOF'
+          crm_exec|anon|0
+          crm_exec|authenticated|0
+          crm_exec|service_role|12
+          crm_relation_grants|0
+          crm_sequence_app_grants|0
+          postgres_public_default_app_or_public_grants|0
+          EOF
+          diff -u expected-post-schema-security-origin.txt post-schema-security-origin.txt
+
+          cp supabase/baseline/recovery_post_schema_security.sql post-schema-security.sql
+          test "$(grep -Eic '^grant execute on function public\.crm_.* to service_role;$' post-schema-security.sql)" = '12'
+          if grep -Eiq 'alter default privileges for role[[:space:]]+supabase_admin' post-schema-security.sql; then exit 1; fi
+          if grep -Eiq '^grant .* (anon|authenticated)([,; ]|$)' post-schema-security.sql; then exit 1; fi
+          sed -nE 's/^grant execute on function public\.([^(]+)\(([^)]*)\) to service_role;$/\1|\2/p' post-schema-security.sql | tr -d ' ' | sort > script-rpc.txt
+          tr -d ' ' < supabase/baseline/recovery_service_role_rpc_allowlist.txt | sort > expected-rpc.txt
+          diff -u expected-rpc.txt script-rpc.txt
+
+      - name: Verify bundle and record checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in schema.sql migration-ledger.txt migration-ledger.sql event-trigger-inventory.txt event-triggers.sql post-schema-security.sql post-schema-security-origin.txt service-role-rpc-origin.txt supabase-cli-version.txt postgres-client-version.txt; do test -s "$f"; done
+          sha256sum schema.sql migration-ledger.txt migration-ledger.sql event-trigger-inventory.txt event-triggers.sql post-schema-security.sql post-schema-security-origin.txt service-role-rpc-origin.txt supabase-cli-version.txt postgres-client-version.txt > recovery-files.sha256
+          SCHEMA_SHA="$(sha256sum schema.sql | awk '{print $1}')"
+          EVENT_SHA="$(sha256sum event-triggers.sql | awk '{print $1}')"
+          SECURITY_SHA="$(sha256sum post-schema-security.sql | awk '{print $1}')"
+          LEDGER_SHA="$(sha256sum migration-ledger.sql | awk '{print $1}')"
+          {
+            echo "bundle_version=3"
+            echo "generated_at_utc=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            echo "project_ref=${EXPECTED_PROJECT_REF}"
+            echo "source_commit=${GITHUB_SHA}"
+            echo "workflow_run_id=${GITHUB_RUN_ID}"
+            echo "schema_sha256=${SCHEMA_SHA}"
+            echo "event_triggers_sha256=${EVENT_SHA}"
+            echo "post_schema_security_sha256=${SECURITY_SHA}"
+            echo "migration_ledger_sha256=${LEDGER_SHA}"
+            echo "migration_count=${EXPECTED_MIGRATION_COUNT}"
+            echo "migration_head=${EXPECTED_MIGRATION_HEAD}"
+            echo "service_role_rpc_count=12"
+            echo "contains_customer_rows=false"
+            echo "contains_migration_statement_arrays=false"
+            echo "touches_supabase_admin_defaults=false"
+            echo "empty_target_restore_required=true"
+          } > recovery-metadata.txt
+          echo "Recovery Bundle v3 checksums generated."
+
+      - name: Upload temporary Recovery Bundle v3
+        uses: actions/upload-artifact@v4
+        with:
+          name: growthops-schema-recovery-bundle-v3-${{ github.run_id }}
+          path: |
+            schema.sql
+            migration-ledger.txt
+            migration-ledger.sql
+            event-trigger-inventory.txt
+            event-triggers.sql
+            post-schema-security.sql
+            post-schema-security-origin.txt
+            service-role-rpc-origin.txt
+            recovery-files.sha256
+            recovery-metadata.txt
+            supabase-cli-version.txt
+            postgres-client-version.txt
+          if-no-files-found: error
+          retention-days: 7
