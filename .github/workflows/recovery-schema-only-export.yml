@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       confirm_project_ref:
-        description: "Type the authorized Production project ref to run the schema-only export"
+        description: "Type the authorized Production project ref to run the schema-only recovery export"
         required: true
         type: string
 
@@ -20,10 +20,12 @@ jobs:
     name: dump-schema
     if: inputs.confirm_project_ref == 'avahcwyxparbcjdfglzx'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     env:
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
       EXPECTED_PROJECT_REF: avahcwyxparbcjdfglzx
+      EXPECTED_MIGRATION_COUNT: '51'
+      EXPECTED_MIGRATION_HEAD: '20260825075808|post_p5_rate_limit_concurrency'
 
     steps:
       - name: Validate authorized Production target
@@ -56,53 +58,208 @@ jobs:
         with:
           version: latest
 
-      - name: Record CLI version
+      - name: Install PostgreSQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+
+      - name: Record tool versions
         shell: bash
         run: |
           set -euo pipefail
           supabase --version | tee supabase-cli-version.txt
+          psql --version | tee postgres-client-version.txt
 
-      - name: Generate schema-only dump
+      - name: Generate Supabase schema-only dump
         shell: bash
         run: |
           set -euo pipefail
           supabase db dump --db-url "${SUPABASE_DB_URL}" -f schema.sql
 
-      - name: Verify artifact and record checksum
+      - name: Export safe migration ledger
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "${SUPABASE_DB_URL}" -X -v ON_ERROR_STOP=1 -At -F '|' \
+            -c "select version, coalesce(name,'') from supabase_migrations.schema_migrations order by version" \
+            > migration-ledger.txt
+
+          MIGRATION_COUNT="$(wc -l < migration-ledger.txt | tr -d ' ')"
+          MIGRATION_HEAD="$(tail -n 1 migration-ledger.txt)"
+          if [ "${MIGRATION_COUNT}" != "${EXPECTED_MIGRATION_COUNT}" ]; then
+            echo "::error::Unexpected migration count: ${MIGRATION_COUNT}."
+            exit 1
+          fi
+          if [ "${MIGRATION_HEAD}" != "${EXPECTED_MIGRATION_HEAD}" ]; then
+            echo "::error::Unexpected migration head: ${MIGRATION_HEAD}."
+            exit 1
+          fi
+
+          {
+            echo "-- GrowthOps recovery-only migration ledger."
+            echo "-- Contains version/name only; historical statements/rollback arrays are intentionally excluded."
+            echo "-- Apply only to a new isolated disposable recovery project after schema.sql."
+            echo "begin;"
+          } > migration-ledger.sql
+          psql "${SUPABASE_DB_URL}" -X -v ON_ERROR_STOP=1 -At \
+            -c "select format('insert into supabase_migrations.schema_migrations (version,name) values (%L,%L) on conflict (version) do update set name=excluded.name;', version, coalesce(name,'')) from supabase_migrations.schema_migrations order by version" \
+            >> migration-ledger.sql
+          echo "commit;" >> migration-ledger.sql
+
+          echo "Verified safe migration ledger: ${MIGRATION_COUNT} entries; head ${MIGRATION_HEAD}."
+
+      - name: Export database-level event trigger adjunct
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "${SUPABASE_DB_URL}" -X -v ON_ERROR_STOP=1 -At -F '|' <<'SQL' > event-trigger-inventory.txt
+          select e.evtname,
+                 e.evtevent,
+                 e.evtenabled,
+                 coalesce(array_to_string(e.evttags, ','), ''),
+                 n.nspname || '.' || p.proname,
+                 pg_get_userbyid(e.evtowner)
+          from pg_event_trigger e
+          join pg_proc p on p.oid = e.evtfoid
+          join pg_namespace n on n.oid = p.pronamespace
+          where n.nspname = 'public'
+          order by e.evtname;
+          SQL
+
+          cat > expected-event-trigger-names.txt <<'EOF'
+          ensure_rls
+          growthops_crm_acl_guard_ddl
+          growthops_crm_rls_guard_ddl
+          growthops_public_noncrm_function_acl_guard_ddl
+          EOF
+          cut -d'|' -f1 event-trigger-inventory.txt > actual-event-trigger-names.txt
+          diff -u expected-event-trigger-names.txt actual-event-trigger-names.txt
+          test "$(wc -l < event-trigger-inventory.txt | tr -d ' ')" = '4'
+          if cut -d'|' -f3 event-trigger-inventory.txt | grep -vx 'O' >/dev/null; then
+            echo "::error::Expected all recovery event triggers to be enabled in origin mode."
+            exit 1
+          fi
+          if cut -d'|' -f6 event-trigger-inventory.txt | grep -vx 'postgres' >/dev/null; then
+            echo "::error::Expected all recovery event triggers to be owned by postgres."
+            exit 1
+          fi
+
+          cat > event-triggers.sql <<'EOF'
+          -- GrowthOps database-level event trigger recovery adjunct.
+          -- Generated from the authorized Production pg_event_trigger catalog.
+          -- Apply only after schema.sql has restored the referenced handler functions.
+          -- Apply only to a new isolated disposable recovery project; never to Production as a recovery test.
+          EOF
+          psql "${SUPABASE_DB_URL}" -X -v ON_ERROR_STOP=1 -At <<'SQL' >> event-triggers.sql
+          select format(
+            'drop event trigger if exists %I;%screate event trigger %I%son %s%s%sexecute function %I.%I();',
+            e.evtname,
+            E'\n',
+            e.evtname,
+            E'\n',
+            e.evtevent,
+            case
+              when e.evttags is null then ''
+              else E'\nwhen tag in (' || (
+                select string_agg(quote_literal(u.tag), ', ' order by u.ord)
+                from unnest(e.evttags) with ordinality as u(tag, ord)
+              ) || ')'
+            end,
+            E'\n',
+            n.nspname,
+            p.proname
+          )
+          from pg_event_trigger e
+          join pg_proc p on p.oid = e.evtfoid
+          join pg_namespace n on n.oid = p.pronamespace
+          where n.nspname = 'public'
+          order by e.evtname;
+          SQL
+
+          test "$(grep -ci '^create event trigger ' event-triggers.sql)" = '4'
+          echo "Verified four Production database-level event triggers for recovery."
+
+      - name: Verify bundle and record checksums
         shell: bash
         run: |
           set -euo pipefail
           test -s schema.sql
+          test -s migration-ledger.txt
+          test -s migration-ledger.sql
+          test -s event-trigger-inventory.txt
+          test -s event-triggers.sql
+
           SCHEMA_BYTES="$(wc -c < schema.sql | tr -d ' ')"
           if [ "${SCHEMA_BYTES}" -lt 1024 ]; then
             echo "::error::schema.sql is unexpectedly small (${SCHEMA_BYTES} bytes)."
             exit 1
           fi
-          sha256sum schema.sql | tee schema.sql.sha256
-          SCHEMA_SHA="$(awk '{print $1}' schema.sql.sha256)"
+
+          # Supabase's filtered schema dump currently omits database-level event
+          # trigger objects. Fail if this changes so the adjunct is reviewed rather
+          # than silently creating duplicate restore authority.
+          if grep -Eiq '^CREATE EVENT TRIGGER ' schema.sql; then
+            echo "::error::schema.sql now contains event trigger objects; review/remove duplicate adjunct generation."
+            exit 1
+          fi
+
+          sha256sum \
+            schema.sql \
+            migration-ledger.txt \
+            migration-ledger.sql \
+            event-trigger-inventory.txt \
+            event-triggers.sql \
+            supabase-cli-version.txt \
+            postgres-client-version.txt \
+            > recovery-files.sha256
+
+          SCHEMA_SHA="$(sha256sum schema.sql | awk '{print $1}')"
+          EVENT_TRIGGER_SHA="$(sha256sum event-triggers.sql | awk '{print $1}')"
+          MIGRATION_LEDGER_SHA="$(sha256sum migration-ledger.sql | awk '{print $1}')"
           CLI_VERSION="$(cat supabase-cli-version.txt | tr -d '\r\n')"
+          PSQL_VERSION="$(cat postgres-client-version.txt | tr -d '\r\n')"
           {
+            echo "bundle_version=2"
             echo "generated_at_utc=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
             echo "project_ref=${EXPECTED_PROJECT_REF}"
-            echo "tool=supabase-cli"
-            echo "tool_version=${CLI_VERSION}"
-            echo "artifact_file=schema.sql"
+            echo "tool=supabase-cli+psql"
+            echo "supabase_cli_version=${CLI_VERSION}"
+            echo "postgres_client_version=${PSQL_VERSION}"
+            echo "schema_file=schema.sql"
             echo "schema_bytes=${SCHEMA_BYTES}"
-            echo "sha256=${SCHEMA_SHA}"
+            echo "schema_sha256=${SCHEMA_SHA}"
+            echo "event_trigger_count=4"
+            echo "event_triggers_sha256=${EVENT_TRIGGER_SHA}"
+            echo "migration_count=${EXPECTED_MIGRATION_COUNT}"
+            echo "migration_head=${EXPECTED_MIGRATION_HEAD}"
+            echo "migration_ledger_sha256=${MIGRATION_LEDGER_SHA}"
             echo "workflow_run_id=${GITHUB_RUN_ID}"
             echo "source_commit=${GITHUB_SHA}"
+            echo "contains_customer_rows=false"
+            echo "contains_migration_statement_arrays=false"
+            echo "empty_target_restore_required=true"
           } > recovery-metadata.txt
-          echo "Schema-only artifact generated: ${SCHEMA_BYTES} bytes"
-          echo "Schema SHA-256: ${SCHEMA_SHA}"
 
-      - name: Upload private recovery artifact
+          echo "Recovery schema bundle generated: ${SCHEMA_BYTES} schema bytes"
+          echo "Schema SHA-256: ${SCHEMA_SHA}"
+          echo "Event-trigger adjunct SHA-256: ${EVENT_TRIGGER_SHA}"
+          echo "Migration-ledger adjunct SHA-256: ${MIGRATION_LEDGER_SHA}"
+
+      - name: Upload temporary recovery bundle
         uses: actions/upload-artifact@v4
         with:
-          name: growthops-schema-only-${{ github.run_id }}
+          name: growthops-schema-recovery-bundle-${{ github.run_id }}
           path: |
             schema.sql
-            schema.sql.sha256
+            migration-ledger.txt
+            migration-ledger.sql
+            event-trigger-inventory.txt
+            event-triggers.sql
+            recovery-files.sha256
             recovery-metadata.txt
             supabase-cli-version.txt
+            postgres-client-version.txt
           if-no-files-found: error
           retention-days: 7
