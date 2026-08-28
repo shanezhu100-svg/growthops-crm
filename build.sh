@@ -90,6 +90,9 @@ python3 test_admin_password_byte_cap_output.py
 # rather than the historical browser-local prototype.
 python3 production_auth_copy_finalize.py
 python3 test_production_auth_copy_output.py
+# Pin browser CDN dependencies before the shipped HTML is verified/deployed.
+python3 frontend_dependency_pin_finalize.py
+python3 test_frontend_dependency_pin_output.py
 # Final server-side identity and input boundaries. Patch the two deployment BFFs
 # before syntax/runtime tests so canonical builds and deployed handlers are aligned.
 python3 preview_runtime_boundary_finalize.py
