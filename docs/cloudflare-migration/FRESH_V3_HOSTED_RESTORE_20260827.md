@@ -89,7 +89,7 @@ The probe required:
 
 All assertions passed. The transaction rolled back, and a subsequent read-only check proved all four synthetic objects absent.
 
-## Empty-data post-check
+## Empty-data post-check before full acceptance
 
 After restore and future-object probing, the disposable target still had:
 
@@ -107,14 +107,35 @@ Supabase Security Advisor reported only `RLS enabled / no policy` INFO notices f
 
 Supabase Performance Advisor reported only unused-index INFO notices. The target is a newly restored database with no business traffic, so those notices are expected and do not authorize dropping recovery-restored indexes.
 
-## Remaining closure item
+## Full synthetic cloud acceptance — passed
 
-Issue #93 remains open for exactly one substantive acceptance item:
+The Gate-pinned Supabase-compatible acceptance file:
 
-`supabase/baseline/p0_cloud_recovery_acceptance.sql`
+`supabase/baseline/p0_cloud_recovery_acceptance_sql_editor.sql`
 
-That script has been statically reviewed to use synthetic values only, require an empty CRM target, run inside an explicit transaction, emit `P0_CLOUD_RECOVERY_ACCEPTANCE_OK` only after its assertions, and end with `ROLLBACK`.
+was executed on 2026-08-27 through the connected Supabase SQL executor against only this disposable target. It completed the full synthetic bootstrap/user/login/save/load/safe-summary/unlock/reveal/authorization/audit assertions inside its explicit transaction, reached `ROLLBACK`, and returned:
 
-The connected SQL execution safety layer blocks the credential/reveal payload before it reaches Postgres. Therefore the full synthetic cloud acceptance has **not** yet executed successfully in this recovery run and must not be claimed as passed.
+`P0_CLOUD_RECOVERY_ACCEPTANCE_OK`
 
-Run that script only in the disposable target above, never in Production. After it reports success, independently verify that CRM users/workspaces/sessions/audit rows and Vault synthetic rows returned to zero before closing #93.
+The immediate read-only/count-only post-check:
+
+`supabase/baseline/p0_cloud_recovery_acceptance_postcheck.sql`
+
+returned:
+
+- `crm_users = 0`;
+- `crm_workspaces = 0`;
+- `crm_sessions = 0`;
+- `crm_server_audit_logs = 0`;
+- `vault_secret_rows = 0`;
+- `rollback_clean = true`.
+
+Independent post-acceptance catalog verification then re-confirmed:
+
+- primary CRM fingerprint `200 / 77ba3a7c646cf2ea04f41d20ceb1dd02aa9f041db7cbd2a0ad0386ddedbfba65`;
+- supplemental guard fingerprint `9 / 2a6c96fe5c2290cd30ee5b29800dcb47d9f1686d48b51344486c2c7780030140`;
+- wider-public fingerprint `225 / a0078c5da6c5844a6d02c96e5c486d3fd8b13bb859a640073fb13cbacc6032ab`;
+- migration count `51`;
+- migration head `20260825075808 / post_p5_rate_limit_concurrency`.
+
+This completes the hosted zero-to-current Recovery Bundle v3 acceptance evidence required for #93. Production was not modified by this acceptance. The disposable target may remain available until its lifecycle is explicitly finalized.
