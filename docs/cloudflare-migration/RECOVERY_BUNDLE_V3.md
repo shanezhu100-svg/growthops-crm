@@ -2,25 +2,15 @@
 
 Last reviewed: 2026-08-27
 
-This document records the from-zero hosted Supabase restore evidence that upgraded the GrowthOps CRM recovery bundle from v2 to v3. It is recovery-test authority only; it does not authorize Production mutation or automatic rollback.
+This document records the from-zero hosted Supabase recovery authority for GrowthOps CRM. It is recovery-test authority only; it does not authorize Production mutation or automatic rollback.
 
-## Why v3 exists
+## Why Recovery Bundle v3 exists
 
-Recovery Bundle v2 fixed two omissions in the first real `schema.sql`: database-level event-trigger objects and the safe migration `version/name` ledger. A truly new hosted Supabase recovery project then exposed a third portability boundary.
+The first authorized `schema.sql` proved that a real Production schema-only dump could be generated, but review found that database-level event-trigger objects and the safe migration ledger were outside that first artifact.
 
-A fresh Supabase project starts with platform default privileges that allow `anon`, `authenticated`, and `service_role` broader access to objects subsequently created by `postgres`. During restore, `schema.sql` creates the CRM tables/functions **before** the four database-level event triggers are restored. The DDL guards therefore cannot retroactively clean those already-created objects.
+Recovery Bundle v2 added `event-triggers.sql` and a version/name-only `migration-ledger.sql`. A truly new hosted Supabase target then exposed a third portability boundary: a fresh project starts with platform default ACL state that can grant `anon`, `authenticated`, and `service_role` access to postgres-created objects before the restored event-trigger guards exist.
 
-The first v2 from-zero attempt observed:
-
-- empty start: `public_tables=0`, `public_routines=0`, `public_event_triggers=0`, and no application migration table;
-- after schema/event-trigger restore, RLS was correctly enabled on `9 / 9` CRM tables;
-- but direct CRM table grants were `63 / 63 / 63` for `anon / authenticated / service_role`;
-- CRM function EXECUTE counts were `26 / 26 / 31` instead of the accepted `0 / 0 / 12`;
-- the primary fingerprint expanded to `389` inventory lines instead of `200`.
-
-This was a recovery-target default-ACL inheritance problem, not Production drift.
-
-## v3 component
+The first v2 from-zero attempt therefore observed correct RLS but inherited application-role ACLs. That was recovery-target default-ACL inheritance, not Production drift.
 
 Recovery Bundle v3 adds:
 
@@ -29,18 +19,18 @@ Recovery Bundle v3 adds:
 The adjunct is intentionally narrow. It:
 
 1. changes default privileges only for role `postgres` in schema `public`;
-2. revokes application-role privileges only from already-restored **postgres-owned** public relations, sequences, and functions;
+2. reconciles already-restored postgres-owned public relations, sequences, and functions;
 3. revokes function EXECUTE from `PUBLIC`, `anon`, `authenticated`, and `service_role` before rebuilding the allowlist;
 4. restores `service_role EXECUTE` to exactly 12 accepted CRM RPC signatures;
 5. never alters `supabase_admin` default privileges;
 6. never grants direct relation/function access to `anon` or `authenticated`;
 7. contains no customer-row mutation.
 
-The exact 12-RPC recovery allowlist is pinned in:
+The exact 12-RPC allowlist is pinned in:
 
 `supabase/baseline/recovery_service_role_rpc_allowlist.txt`
 
-The v3 workflow also queries the live authorized Production catalog and fails closed unless that live allowlist still matches the pinned file exactly.
+The v3 workflow queries the authorized Production catalog and fails closed unless the live allowlist still matches that pinned file.
 
 ## Required restore order
 
@@ -51,26 +41,7 @@ On a **new, isolated, disposable Supabase project**, restore in exactly this ord
 3. `post-schema-security.sql`
 4. `migration-ledger.sql`
 
-Do not reorder steps 2 and 3. The post-schema security reconciliation is designed for objects restored before the event-trigger guards existed, while the restored event triggers protect future DDL after the recovery checkpoint.
-
-## Hosted from-zero evidence already obtained
-
-Disposable recovery project used for the current investigation:
-
-`bxobzbgcqkgnukccixng / growthops-recovery-bundle-v2-test / ap-southeast-1`
-
-It was created only after the organization reported a current project cost of `$0/month`; Production was not modified. The older `growthops-p0-recovery-test` project was paused to free the Free Plan active-project slot and was not deleted.
-
-After applying the exact post-schema security reconciliation and exact original function definitions from the bundle, the disposable hosted target matched all accepted Production comparison checkpoints:
-
-- primary CRM fingerprint: `200 / 77ba3a7c646cf2ea04f41d20ceb1dd02aa9f041db7cbd2a0ad0386ddedbfba65`;
-- supplemental guard fingerprint: `9 / 2a6c96fe5c2290cd30ee5b29800dcb47d9f1686d48b51344486c2c7780030140`;
-- wider-public recovery fingerprint: `225 / a0078c5da6c5844a6d02c96e5c486d3fd8b13bb859a640073fb13cbacc6032ab`;
-- safe migration ledger: `51` entries, head `20260825075808 / post_p5_rate_limit_concurrency`.
-
-The future-object default-privilege probe also passed on the disposable target and proved its synthetic table, sequence, and function were all rolled back.
-
-The final `post-schema-security.sql` merged to protected main was re-applied to that disposable target as an idempotence check. After re-application, all three accepted fingerprints remained unchanged and the temporary validation migration entry was removed so the recovery ledger returned to exactly 51 entries with the accepted head.
+Do not reorder steps 2 and 3. `post-schema-security.sql` reconciles objects that were restored before the event-trigger guards existed; the restored event triggers then protect future DDL after the recovery checkpoint.
 
 ## Accepted Recovery Bundle v3 artifact
 
@@ -100,17 +71,59 @@ The workflow logs kept `SUPABASE_DB_URL` masked as `***`; no database password, 
 
 This accepts the **integrity and scope of the v3 artifact**. It does not by itself close #93.
 
+## Fresh hosted v3 restore proof
+
+The second truly fresh hosted recovery target is:
+
+`qczkskuaszlezlcxxpqk / growthops-recovery-bundle-v3-test / ap-southeast-1`
+
+Its pre-restore application start was independently verified as:
+
+- public tables: `0`;
+- public routines: `0`;
+- public event triggers: `0`;
+- application migration table: absent.
+
+After restoring the accepted v3 artifact in the documented order, the target reached the accepted Production comparison checkpoints:
+
+- primary CRM fingerprint: `200 / 77ba3a7c646cf2ea04f41d20ceb1dd02aa9f041db7cbd2a0ad0386ddedbfba65`;
+- supplemental guard fingerprint: `9 / 2a6c96fe5c2290cd30ee5b29800dcb47d9f1686d48b51344486c2c7780030140`;
+- wider-public recovery fingerprint: `225 / a0078c5da6c5844a6d02c96e5c486d3fd8b13bb859a640073fb13cbacc6032ab`;
+- safe migration ledger: exactly `51` entries;
+- migration head: `20260825075808 / post_p5_rate_limit_concurrency`;
+- CRM RLS: `9 / 9`;
+- CRM function EXECUTE `anon / authenticated / service_role`: `0 / 0 / 12`;
+- expected database-level event triggers: `4`.
+
+The four database-level event triggers are `ensure_rls`, `growthops_crm_acl_guard_ddl`, `growthops_crm_rls_guard_ddl`, and `growthops_public_noncrm_function_acl_guard_ddl`.
+
+A transaction-contained future-object probe then proved automatic RLS enablement and fail-closed ACL behavior for a new CRM table, sequence, CRM function, and non-CRM public function. The transaction rolled back and all four synthetic probe objects were subsequently proven absent.
+
+The recovery target remained empty of synthetic business/Vault data after catalog and future-object verification: `crm_users=0`, `crm_workspaces=0`, `crm_sessions=0`, `crm_server_audit_logs=0`, and `vault.secrets=0`.
+
+Supabase Security Advisor returned only expected `RLS enabled / no policy` INFO notices for the RPC-only/default-deny CRM tables. Performance Advisor returned only unused-index INFO notices expected on a newly restored database with no business traffic. Those notices do not authorize schema changes.
+
+Detailed evidence is retained in:
+
+`docs/cloudflare-migration/FRESH_V3_HOSTED_RESTORE_20260827.md`
+
+### Recovery transport correction disclosure
+
+The connected SQL transport cannot send the approximately 100 KB `schema.sql` as one payload, so the restore harness transported the original file in seven statement-boundary batches. The first fingerprint pass exposed one transport transcription defect: an obsolete unused `k text;` declaration had been introduced into `public.crm_role_view_state(text,jsonb)` by the transport batch.
+
+Direct inspection of the accepted ZIP proved the bundled `schema.sql` did **not** contain that declaration and matched live Production. The disposable target was corrected only by re-applying the exact original function definition from the accepted artifact, and the transport-only migration entry was removed. This was an executor transcription correction, not a Bundle v3 schema/security repair or Production mutation. The issue audit entry was corrected in place rather than leaving the wrong attribution in history.
+
 ## What is still required
 
-Issue #93 remains open. PR/Gate acceptance, v3 workflow merge, fresh artifact generation, and independent artifact/checksum inspection are now complete.
+Issue #93 remains open for one substantive acceptance item:
 
-Final closure still requires:
+`supabase/baseline/p0_cloud_recovery_acceptance.sql`
 
-1. a **second truly fresh hosted disposable Supabase project** restored directly from the accepted v3 artifact in the exact documented order, with no ad-hoc ACL or function-definition repair;
-2. exact matches for the primary, guard, and wider-public fingerprints plus the 51-entry migration-head check on that fresh v3 restore;
-3. `supabase/baseline/p0_cloud_recovery_acceptance.sql` executed only on a disposable target and its synthetic transaction proven rolled back.
+The full synthetic cloud acceptance script has been statically reviewed: it uses synthetic values, requires the recovery CRM target to be empty, begins an explicit transaction, emits `P0_CLOUD_RECOVERY_ACCEPTANCE_OK` only after assertions, and ends with `ROLLBACK`.
 
-The full synthetic cloud acceptance script has been statically reviewed: it uses generated synthetic values, requires the recovery CRM target to be empty, begins an explicit transaction, emits `P0_CLOUD_RECOVERY_ACCEPTANCE_OK` only after assertions, and ends with `ROLLBACK`. The connected SQL execution safety layer blocked execution of the credential/reveal payload, so **that script has not yet been executed successfully in this recovery run**. Do not claim otherwise.
+The connected SQL execution safety layer blocks the credential/reveal payload before it reaches Postgres, so **that script has not yet been executed successfully in this recovery run**. Do not claim otherwise.
+
+Run it only on the disposable v3 target, never Production. After it reports success, independently prove that CRM users/workspaces/sessions/audit rows and Vault synthetic rows returned to zero. Only then may #93 be closed and the temporary recovery target lifecycle be finalized.
 
 ## Safety boundaries
 
