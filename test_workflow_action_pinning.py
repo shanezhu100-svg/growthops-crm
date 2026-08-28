@@ -7,6 +7,7 @@ sha_ref = re.compile(r'^[^@\s]+@[0-9a-f]{40}$')
 uses_line = re.compile(r'^\s*-?\s*uses:\s*([^\s#]+)')
 
 checked = 0
+checkout_count = 0
 workflow_count = 0
 for path in sorted((*workflows.glob('*.yml'), *workflows.glob('*.yaml'))):
     workflow_count += 1
@@ -23,6 +24,11 @@ for path in sorted((*workflows.glob('*.yml'), *workflows.glob('*.yaml'))):
     ):
         if forbidden in text:
             raise SystemExit(f'{path.relative_to(root)}: forbidden workflow privilege/trigger: {forbidden}')
+
+    if 'actions/checkout@' in text:
+        checkout_count += text.count('actions/checkout@')
+        if text.count('persist-credentials: false') < text.count('actions/checkout@'):
+            raise SystemExit(f'{path.relative_to(root)}: every checkout must set persist-credentials: false')
 
     if path.name.startswith('recovery-'):
         for required in (
@@ -60,9 +66,11 @@ if workflow_count == 0:
     raise SystemExit('No GitHub workflows were found; workflow security gate may be misconfigured')
 if checked == 0:
     raise SystemExit('No external GitHub Action references were found; pinning gate may be misconfigured')
+if checkout_count == 0:
+    raise SystemExit('No checkout actions found; checkout credential gate may be misconfigured')
 
 print(
-    f'WORKFLOW_ACTION_PINNING_OK: workflows={workflow_count}; external_action_refs={checked}; '
-    'permissions=contents-read; no-pr-target/write-all; recovery=manual-only+one-secret+25m; '
-    'all-actions=40-hex-sha; recovery-cli=2.116.0'
+    f'WORKFLOW_ACTION_PINNING_OK: workflows={workflow_count}; external_action_refs={checked}; checkouts={checkout_count}; '
+    'permissions=contents-read; checkout-credentials=not-persisted; no-pr-target/write-all; '
+    'recovery=manual-only+one-secret+25m; all-actions=40-hex-sha; recovery-cli=2.116.0'
 )
