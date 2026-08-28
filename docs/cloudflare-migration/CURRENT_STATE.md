@@ -57,7 +57,7 @@ Do not restore `anon` RPC execution, broad service-role relation/function access
 
 ## Current Production database checkpoint
 
-A fresh read-only Production inventory was revalidated again on 2026-08-26 after the recovery-authority consolidation merged at `main@f8ee22ab3644a45fa960bf8821d12d630c56f0b2`. The applied migration head remains `20260825075808 / post_p5_rate_limit_concurrency`; the preceding accepted migration `20260825040850 / post_p5_public_default_privilege_guard` remains applied and authoritative for future-object default-deny behavior. Using the same deterministic catalog query retained in `supabase/baseline/p0_schema_security_fingerprint.sql`, the current CRM schema/security checkpoint is:
+A fresh read-only Production inventory was revalidated again during the 2026-08-27 Recovery Bundle v3 acceptance. The applied migration head remains `20260825075808 / post_p5_rate_limit_concurrency`; the preceding accepted migration `20260825040850 / post_p5_public_default_privilege_guard` remains applied and authoritative for future-object default-deny behavior. Using the same deterministic catalog query retained in `supabase/baseline/p0_schema_security_fingerprint.sql`, the current CRM schema/security checkpoint is:
 
 - inventory lines: `200`;
 - SHA-256: `77ba3a7c646cf2ea04f41d20ceb1dd02aa9f041db7cbd2a0ad0386ddedbfba65`;
@@ -86,11 +86,11 @@ Recovery comparison also has a wider read-only `public`-schema fingerprint from 
 - wider-public SHA-256: `a0078c5da6c5844a6d02c96e5c486d3fd8b13bb859a640073fb13cbacc6032ab`;
 - scope includes `public` schema/relations/columns/constraints/indexes/triggers, all public routine definitions and application-role EXECUTE truth, public policies, public-function event triggers, relevant default ACL rows, and installed extension metadata.
 
-The wider-public hash was reproduced twice against Production on its original acceptance and matched again in the 2026-08-26 post-merge revalidation. Because it intentionally includes extension metadata, a reviewed platform extension-version change may legitimately alter it without changing the narrower CRM security boundary. Treat wider-public drift as an investigation trigger, not automatic rollback authorization.
+The wider-public hash was reproduced twice against Production on its original acceptance and matched again after the final Recovery Bundle v3 synthetic acceptance. Because it intentionally includes extension metadata, a reviewed platform extension-version change may legitimately alter it without changing the narrower CRM security boundary. Treat wider-public drift as an investigation trigger, not automatic rollback authorization.
 
 The primary and three-guard fingerprints remain the narrower security comparison authorities; the wider-public fingerprint is supplemental recovery evidence. None replaces a portable schema artifact plus restore verification. The historical P0 fingerprints remain valid evidence for their own phases, including the accepted `195 / edfcd23e...` relation-ACL checkpoint before later Post-P5 function/constraint changes.
 
-An authorized schema-only Production export was successfully generated and checksum-verified on 2026-08-27 from `main@e77e9232c737015132b390c4d1de549c19ce1761`. Completeness review found that the first `schema.sql` omitted four database-level event-trigger objects and the migration ledger, so it is retained as evidence but is not accepted as a self-sufficient zero-to-current bundle. PR #97 hardened the protected manual workflow into recovery bundle v2 at `main@cfadbb42b31f11c6cce2843020d46f00ecac1dc1`; a fresh bundle-v2 export and empty disposable-target restore remain required before #93 can close.
+The first authorized schema-only Production export remains historical evidence: its `schema.sql` omitted four database-level event-trigger objects and the migration ledger. Recovery Bundle v3 is now the accepted portable recovery authority. Workflow run `33079493119` generated the independently checksum-verified v3 artifact, including `schema.sql`, `event-triggers.sql`, `post-schema-security.sql`, and the safe version/name-only `migration-ledger.sql`. It was restored into a truly empty hosted disposable Supabase target and matched the accepted primary `200 / 77ba3a7c...`, guard `9 / 2a6c96fe...`, wider-public `225 / a0078c5d...`, and 51-entry migration-head checkpoints. The Gate-pinned synthetic cloud acceptance returned `P0_CLOUD_RECOVERY_ACCEPTANCE_OK`, its transaction rolled back cleanly with CRM/Vault row counts returning to zero, and Issue #93 is closed / completed. Detailed authority is in `CURRENT_RECOVERY_VERIFICATION.md`, `RECOVERY_BUNDLE_V3.md`, and `FRESH_V3_HOSTED_RESTORE_20260827.md`.
 
 ## Current credential/storage boundary
 
@@ -112,8 +112,9 @@ GitHub Actions provides the canonical PR build/security gate and runs without CR
 
 - `contents: read` token permissions;
 - checkout credentials not persisted;
-- SHA-pinned GitHub Actions;
-- Node 24;
+- all external GitHub Action dependencies must use immutable 40-hex commit SHAs;
+- recovery workflows prohibit nondeterministic `version: latest` and pin the accepted Supabase CLI `2.116.0`;
+- Node 24 for the canonical CRM build runner;
 - no CRM/Supabase secrets in the PR runner;
 - complete canonical CRM build/security regression suite;
 - final Cloudflare artifact/output parity verification.
@@ -122,7 +123,7 @@ GitHub `main` protection was accepted on 2026-08-27. The live branch resource re
 
 For the rate-limit concurrency runtime release, PR head `775bd321b8f09c36609da7e10afa274662582bc4` passed CRM Build Gate run #68, and merged `main@0eefbe383d7ea8ecd7a874e7a8f7c4c9621763e6` passed push-triggered run #69.
 
-Subsequent recovery/documentation authority updates passed through `main@2f651a3baca51e8d1fdb1330d40432cdbbf19433` / run #75. Vercel Git deployment-policy hardening passed slash-branch PR run #76 and merged-main run #77 at `main@91c0edcb24b79d282faa72d7d83435a1e1265d30`. The wider-public recovery fingerprint then passed PR run #82 and merged-main run #83 at `main@9e440a51b0d552562d73ae235ceaab175a26ec45`. PR #90 consolidated the current Production migration ledger and corrected a stale Preview-test checkpoint assumption; its final clean PR Gate #90 passed, and squash-merged `main@f8ee22ab3644a45fa960bf8821d12d630c56f0b2` passed push-triggered Gate #91. The protected-main recovery export merged at `main@e77e9232c737015132b390c4d1de549c19ce1761` and passed merged-main Gate #98. Recovery bundle-v2 hardening then passed final PR Gate #100 and merged-main Gate #101 at `main@cfadbb42b31f11c6cce2843020d46f00ecac1dc1`.
+Subsequent recovery/documentation authority updates passed through `main@2f651a3baca51e8d1fdb1330d40432cdbbf19433` / run #75. Vercel Git deployment-policy hardening passed slash-branch PR run #76 and merged-main run #77 at `main@91c0edcb24b79d282faa72d7d83435a1e1265d30`. The wider-public recovery fingerprint then passed PR run #82 and merged-main run #83 at `main@9e440a51b0d552562d73ae235ceaab175a26ec45`. PR #90 consolidated the current Production migration ledger and corrected a stale Preview-test checkpoint assumption; its final clean PR Gate #90 passed, and squash-merged `main@f8ee22ab3644a45fa960bf8821d12d630c56f0b2` passed push-triggered Gate #91. The protected-main recovery export merged at `main@e77e9232c737015132b390c4d1de549c19ce1761` and passed merged-main Gate #98. Recovery Bundle v3 was ultimately accepted by PR #104 Gate #116 and merged-main Gate #117 at `main@d9756d734ef1e48069e29682e6a385b0a4669abc`. Recovery workflow supply-chain hardening then passed PR #105 Gate #118 and merged-main Gate #119 at `main@371b2fad0599e581092ac60d15cd05eb98af19af`.
 
 A change is not considered merge-safe merely because it is documentation-only or because one hosting platform deploys. The expected workflow remains: isolated branch → narrow diff → canonical gate → inspect final parity marker → merge with expected head SHA → verify resulting Production deployment.
 
@@ -139,7 +140,7 @@ The corrected policy was accepted by PR #86:
 - merged `main`: `91c0edcb24b79d282faa72d7d83435a1e1265d30`;
 - merged-main CRM Build Gate #77: completed / success.
 
-Subsequent slash-containing recovery/documentation PR branches, including PR #89, PR #90, PR #96 and PR #97, continued to rely on the required GitHub Gate rather than a normal Vercel Preview deployment.
+Subsequent slash-containing recovery/documentation PR branches continued to rely on the required GitHub Gate rather than a normal Vercel Preview deployment.
 
 The stable Vercel application alias is:
 
@@ -153,15 +154,15 @@ Current validated runtime/security checkpoint deployment:
 - merged-main CRM Build Gate #98: completed / success;
 - stable alias assigned successfully.
 
-This checkpoint was independently revalidated after restoring the Production-only Supabase server secret. Recent runtime logs on this deployment showed successful `POST /api/crm` 200 responses and the expected unauthenticated/session-required 401 boundary, with no new `server_identity_missing` event. A later `main` deployment whose accepted diff is documentation/test-only may exist without superseding this checkpoint; advance the checkpoint only when runtime/security artifacts change or when a later deployment is explicitly revalidated as the new runtime/security authority. In short, documentation/test-only may exist without superseding this checkpoint.
+This checkpoint was independently revalidated after restoring the Production-only Supabase server secret. Runtime logs on this deployment showed successful `POST /api/crm` 200 responses and the expected unauthenticated/session-required 401 boundary, with no new `server_identity_missing` event. A later `main` deployment whose accepted diff is documentation/test/workflow-only may exist without superseding this functional POST checkpoint; advance the functional checkpoint only when runtime/security artifacts change or when a later deployment is explicitly revalidated for equivalent POST behavior. In short, documentation/test-only may exist without superseding this checkpoint.
 
-The checkpoint Production homepage and API boundary remained healthy. An unauthenticated `GET /api/crm` returns `405 / METHOD_NOT_ALLOWED` with `Allow: POST`, no-store cache policy and the expected security headers rather than executing an RPC.
+The latest automatic Vercel Production deployment after recovery workflow supply-chain hardening is `dpl_2spFSFZjrshjv2z4CnHHqm8euDr1` from `main@371b2fad0599e581092ac60d15cd05eb98af19af`, state `READY`. The stable alias was independently rechecked after that deployment: unauthenticated `GET /api/crm` returned `405 / METHOD_NOT_ALLOWED` with `Allow: POST`, `Cache-Control: no-store`, and the expected security headers. This is current deployment/fail-safe evidence; it does not by itself replace the older POST-capable functional checkpoint above.
 
 For rollback, do not permanently pin an ancient pre-P5 build. Use a READY, gate-accepted `main` Production deployment compatible with the current database privilege/function state. See `ROLLBACK.md`.
 
 Historical fail-closed evidence is retained: on 2026-08-25 Vercel Preview secret scope was **verified open**, and PR #85 Preview deployment `dpl_HfSpEkWs9D34A1a28WLiaCMrCnKY` failed at `sh build.sh` with `PREVIEW_SECRET_BOUNDARY_FAILED` because a server secret was present without an explicit staging Supabase URL. No secret value was printed or recorded. PR #86 then prevented the normal non-main Git Preview execution path.
 
-**Preview Production-secret cleanup accepted on 2026-08-27.** Independent Vercel CLI verification showed `Vercel Preview: no project environment variables`, while Production retained hidden `GROWTHOPS_SUPABASE_SECRET_KEY` scoped to Production only. The Production-only value was restored to a valid Supabase `sb_secret_...` identity and the runtime checkpoint above was successfully revalidated. Issue #92: closed / completed.
+**Preview Production-secret cleanup accepted on 2026-08-27.** Independent Vercel CLI verification showed `Vercel Preview: no project environment variables`, while Production retained hidden `GROWTHOPS_SUPABASE_SECRET_KEY` scoped to Production only. The Production-only value was restored to a valid Supabase server identity and the runtime checkpoint above was successfully revalidated. Issue #92: closed / completed.
 
 ### Cloudflare Pages
 
@@ -197,7 +198,7 @@ The core rule is: **hosting rollback and database privilege rollback are separat
 
 `P0_MIGRATION_LEDGER.md` is now the consolidated current remote migration-history and repository-mapping authority through `20260825075808 / post_p5_rate_limit_concurrency`. Historical 2026-08-13/14 SQL gaps remain explicitly unresolved rather than reconstructed from guesses. `P0_MIGRATION_LEDGER_20260825_APPENDIX.md` is retained as point-in-time acceptance evidence, not as a required second source for determining the current migration head. Later forward migrations must continue to map to genuine repository SQL, and the current Production fingerprints must be refreshed when a reviewed schema/ACL/function/guard/extension change affects their respective scopes.
 
-A real authorized schema-only export now exists and has been independently checksum-verified, so fingerprints are no longer the only portable evidence. The first artifact is retained but is not sufficient by itself because completeness review found four database-level event-trigger objects and the migration ledger absent from `schema.sql`. Recovery bundle v2, merged at `main@cfadbb42b31f11c6cce2843020d46f00ecac1dc1`, supplements the authoritative Supabase CLI dump with an exact event-trigger restore adjunct, safe `version/name` migration ledger reconstruction, checksums and fail-closed completeness assertions. Issue #93 remains open until a fresh bundle-v2 artifact is generated and restored into a truly empty disposable Supabase target, then passes `CURRENT_RECOVERY_VERIFICATION.md` and synthetic recovery acceptance there only.
+Recovery Bundle v3 is the accepted zero-to-current recovery authority. The accepted artifact came from workflow run `33079493119` and is pinned by checksum and file-scope controls in `RECOVERY_BUNDLE_V3.md`. A second truly fresh hosted target began with zero public application tables/routines/event triggers and no application migration table, then restored in the required order `schema.sql` → `event-triggers.sql` → `post-schema-security.sql` → `migration-ledger.sql`. It matched all three accepted fingerprints and the 51-entry migration head, passed the transaction-contained future-object fail-closed probe, passed the Gate-pinned synthetic cloud acceptance, and returned all synthetic CRM/Vault counts to zero after rollback. Issue #93: closed / completed. The disposable recovery project lifecycle is optional operational cleanup and is not a technical recovery blocker.
 
 ## Historical phase documents
 
@@ -221,4 +222,4 @@ Those documents intentionally preserve the state observed at their own phase. Th
 4. Do not reintroduce browser Supabase config, browser token persistence, broad credential reveal, `anon` CRM RPC execution, or permissive future-object defaults in `public`.
 5. Keep `ROLLBACK.md` and this file current whenever the architecture, privilege boundary, CI deployment policy, recovery strategy, or accepted hosting checkpoint materially changes.
 6. Keep platform-secret scope claims evidence-based: Vercel and Cloudflare Preview Production-secret cleanup were independently accepted on 2026-08-27; historical fail-closed evidence remains retained for audit history.
-7. Issue #91: closed / completed. Issue #92: closed / completed. Keep issue #93 open until the fresh bundle-v2 artifact has been independently verified and restored into an empty disposable recovery target with accepted recovery checks.
+7. Issues #91, #92, #93 and #95 are closed / completed. Recovery-target keep/pause/delete is an optional lifecycle choice and must not be inferred from technical acceptance closure.
