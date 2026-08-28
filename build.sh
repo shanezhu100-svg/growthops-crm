@@ -97,6 +97,8 @@ python3 test_tailwind_static_policy.py
 python3 tailwind_static_finalize.py
 python3 test_frontend_vendor_static_policy.py
 python3 frontend_vendor_static_finalize.py
+# Probe exact Font Awesome CSS/webfont bytes before allowing a same-origin rewrite.
+python3 fontawesome_static_finalize.py
 python3 test_frontend_dependency_pin_output.py
 # Final server-side identity and input boundaries. Patch the two deployment BFFs
 # before syntax/runtime tests so canonical builds and deployed handlers are aligned.
