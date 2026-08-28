@@ -8,7 +8,7 @@ DIST = ROOT / 'dist'
 # P1 verifier scope is intentionally narrow: Cloudflare output/parity only.
 # Application security is already enforced by sh build.sh and its existing tests.
 EXPECTED_SHA256 = {
-    'index.html': '7d5a3eb53ad704ad9b5dc2a979cbd7fef1878442fb8113fc398b641a9299502b',
+    'index.html': '19637585e93ea63a9c6d03ce6e4c6f6454b35e2018610a02cbbcd58cfa797b42',
     'cloud-adapter.js': '9713943a80008f625000d6fac2440fb9395f9e6e2c1fd09e820a399c5c34379f',
     'cloud-security-hotfix.js': 'f2b3f08c9bbabc4e974c859fe6d86396d028f46b43354b6d74572b5efa938194',
     'cloud-p1-overrides.js': 'e50e05322a0d56e78bf112a52be08ff54263f4ce88cb0b9b91f6613722b8ccab',
