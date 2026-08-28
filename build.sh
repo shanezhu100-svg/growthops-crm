@@ -101,6 +101,9 @@ python3 fontawesome_static_finalize.py
 python3 test_inter_static_policy.py
 python3 inter_static_finalize.py
 python3 test_frontend_dependency_pin_output.py
+# Prove the final HTML contains no real on*= DOM event attributes before the
+# security header authority blocks script attributes explicitly.
+python3 test_script_attr_csp_readiness.py
 # Final server-side identity and input boundaries. Patch the two deployment BFFs
 # before syntax/runtime tests so canonical builds and deployed handlers are aligned.
 python3 preview_runtime_boundary_finalize.py
