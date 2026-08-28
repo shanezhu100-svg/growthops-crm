@@ -2,30 +2,27 @@
 
 Last reviewed: 2026-08-27
 
-This is the current read-only verification entrypoint for GrowthOps CRM recovery and database-change rollback acceptance. A real Production schema-only dump now exists, but the first dump was not complete enough to prove zero-to-current recovery by itself; recovery bundle v2 and a truly empty disposable-target restore remain required. This runbook does **not** authorize automatic database repair.
+This is the current verification entrypoint for GrowthOps CRM recovery and database-change rollback acceptance. Recovery Bundle v3 has now been generated from protected `main`, independently checksum-inspected, and restored into a second truly fresh hosted Supabase project with the accepted catalog/security fingerprints and migration head. Issue #93 remains open for one final substantive step only: the transaction-contained synthetic cloud recovery acceptance and its rollback-clean post-check. This runbook does **not** authorize automatic Production repair.
 
-Use this runbook with `CURRENT_STATE.md`, `FULL_SCHEMA_EXPORT.md`, and `ROLLBACK.md`. Older P0/P5/Post-P5 documents remain historical implementation evidence unless this runbook explicitly names one of their retained read-only SQL files.
+Use this runbook with `CURRENT_STATE.md`, `FULL_SCHEMA_EXPORT.md`, `RECOVERY_BUNDLE_V3.md`, `FRESH_V3_HOSTED_RESTORE_20260827.md`, and `ROLLBACK.md`. Historical phase documents remain implementation evidence unless this runbook explicitly retains one of their checks.
 
 ## Safety boundary
 
-- Run the checks below read-only against the intended Supabase project unless a section explicitly identifies a disposable recovery target.
-- Confirm the target project before executing any SQL.
-- Never run the synthetic recovery acceptance script against Production.
-- Do not run migration or rollback SQL merely because a fingerprint differs.
+- Run catalog/fingerprint checks read-only against the intended project unless a section explicitly names the disposable recovery target.
+- Confirm the project ref before any mutating recovery acceptance SQL.
+- Never run the synthetic cloud recovery acceptance against Production `avahcwyxparbcjdfglzx`.
+- Do not apply migration/rollback SQL merely because a fingerprint differs.
 - Do not broaden `anon`, `authenticated`, `service_role`, table, sequence, Vault, or RLS privileges to make a restored application work.
 - Do not select or decrypt customer Vault secret values for verification.
-- `supabase/baseline/p0_cloud_recovery_acceptance.sql` is **not** a Production check. It creates synthetic test data inside a transaction and is restricted to an empty disposable isolated recovery project.
-- `supabase/baseline/post_p5_public_default_privilege_guard_probe.sql` is a reviewed Production acceptance probe that creates named synthetic objects only inside one explicit transaction, asserts their future-object ACL behavior, rolls the transaction back, and then proves all probe objects are absent. Do not remove its rollback/no-COMMIT safety checks.
+- A fingerprint mismatch is an investigation trigger, not authorization to repair Production.
 
-## 1. Confirm the migration ledger
+## 1. Migration ledger and future-object boundary
 
-Run the ledger section of:
+Current Production migration authority is the consolidated `P0_MIGRATION_LEDGER.md`; `P0_MIGRATION_LEDGER_20260825_APPENDIX.md` remains point-in-time historical evidence.
 
-`supabase/baseline/p0_recovery_inventory.sql`
+Accepted Production migration count: `51`.
 
-Compare the result with `P0_MIGRATION_LEDGER.md`, `P0_MIGRATION_LEDGER_20260825_APPENDIX.md`, and the current repository migration mapping. Historical 2026-08-13/14 SQL gaps remain unresolved; do not reconstruct them by guessing from the live schema.
-
-Accepted Production head:
+Accepted head:
 
 `20260825075808 / post_p5_rate_limit_concurrency`
 
@@ -33,13 +30,11 @@ Preceding accepted future-object migration:
 
 `20260825040850 / post_p5_public_default_privilege_guard`
 
-This migration is the accepted **future-object default-privilege hardening** boundary for postgres-created objects in `public`; its read-only check and transaction-contained probe remain part of recovery acceptance.
+This is the accepted **future-object default-privilege hardening** boundary for postgres-created objects in `public`. Historical 2026-08-13/14 SQL gaps remain unresolved; do not reconstruct missing historical SQL by guessing from the live schema.
 
-Production currently has 51 application migration ledger entries. A newer legitimate migration requires updating the current checkpoints after its reviewed Production acceptance.
+Recovery Bundle v3 carries a safe `migration-ledger.sql` generated from Production `version/name` fields only. It intentionally excludes historical `statements` / `rollback` arrays.
 
-For a **new disposable recovery target**, recovery bundle v2 includes `migration-ledger.sql`, generated from only the Production `version/name` fields. It intentionally excludes the historical `statements` and `rollback` arrays. Apply it only after `schema.sql` to reconstruct the safe version/name recovery ledger; it is not a forensic copy of every historical migration statement.
-
-## 2. Recompute the primary CRM catalog/security fingerprint
+## 2. Primary CRM catalog/security fingerprint
 
 Run:
 
@@ -50,13 +45,9 @@ Accepted Production checkpoint:
 - `inventory_lines = 200`
 - `crm_schema_security_sha256 = 77ba3a7c646cf2ea04f41d20ceb1dd02aa9f041db7cbd2a0ad0386ddedbfba65`
 
-This fingerprint covers the retained `crm_*` catalog/security contract, including CRM columns, constraints, indexes, table triggers, `crm_*` function definitions and effective application-role EXECUTE truth, direct application-role table grants, RLS flags, and policies.
+This covers the retained `crm_*` catalog/security contract, including function definitions, effective application-role EXECUTE truth, direct application-role table grants, RLS flags, policies, constraints, indexes, and triggers.
 
-The primary fingerprint changed from the preceding `200 / bffaf123425bc7bddf02ecf00132848a5bfc4248e44395a5283c8ca9706b97f1` checkpoint because `post_p5_rate_limit_concurrency` intentionally replaced three `crm_*` function definitions. That older hash remains historical evidence for the pre-concurrency definitions and is no longer the current Production comparison anchor.
-
-If the primary fingerprint differs unexpectedly, stop and identify the exact catalog/ACL/function change before using any rollback artifact.
-
-## 3. Recompute the Post-P5 guard fingerprint
+## 3. Post-P5 guard fingerprint and database-level event triggers
 
 Run:
 
@@ -67,24 +58,22 @@ Accepted Production checkpoint:
 - `guard_inventory_lines = 9`
 - `guard_security_sha256 = 2a6c96fe5c2290cd30ee5b29800dcb47d9f1686d48b51344486c2c7780030140`
 
-This supplemental fingerprint covers the three repository-managed DDL security guards outside the historical `crm_*` function namespace:
+The three repository-managed GrowthOps DDL guards are:
 
 - `growthops_crm_acl_guard_ddl`
 - `growthops_crm_rls_guard_ddl`
 - `growthops_public_noncrm_function_acl_guard_ddl`
 
-It includes their complete function definitions/owners, effective `anon` / `authenticated` / `service_role` EXECUTE truth, and event-trigger event/enabled/tags/function bindings.
+The accepted hosted state contains four enabled database-level event triggers with public handlers:
 
-A 2026-08-27 completeness review of the first real `schema.sql` found all four public event-trigger handler functions but zero `CREATE EVENT TRIGGER` objects. A live read-only Production catalog check confirmed four enabled postgres-owned event triggers with public handlers:
+- `ensure_rls` → `public.rls_auto_enable()`
+- `growthops_crm_acl_guard_ddl` → `public.growthops_crm_acl_guard_ddl()`
+- `growthops_crm_rls_guard_ddl` → `public.growthops_crm_rls_guard_ddl()`
+- `growthops_public_noncrm_function_acl_guard_ddl` → `public.growthops_public_noncrm_function_acl_guard_ddl()`
 
-- `ensure_rls` → `public.rls_auto_enable()`;
-- `growthops_crm_acl_guard_ddl` → `public.growthops_crm_acl_guard_ddl()`;
-- `growthops_crm_rls_guard_ddl` → `public.growthops_crm_rls_guard_ddl()`;
-- `growthops_public_noncrm_function_acl_guard_ddl` → `public.growthops_public_noncrm_function_acl_guard_ddl()`.
+The first real `schema.sql` omitted these database-global trigger objects; Recovery Bundle v3 carries `event-triggers.sql` to restore them after their handler functions exist.
 
-Recovery bundle v2 therefore includes an exact `event-trigger-inventory.txt` and generated `event-triggers.sql` adjunct. On a disposable recovery target, restore `event-triggers.sql` only after `schema.sql` has restored the handler functions, then require this guard fingerprint to match.
-
-## 4. Recompute the wider public-schema recovery fingerprint
+## 4. Wider public-schema recovery fingerprint
 
 Run:
 
@@ -95,128 +84,165 @@ Accepted Production checkpoint:
 - `inventory_lines = 225`
 - `public_recovery_sha256 = a0078c5da6c5844a6d02c96e5c486d3fd8b13bb859a640073fb13cbacc6032ab`
 
-This supplemental read-only fingerprint broadens recovery comparison beyond the historical `crm_*` primary scope and the three GrowthOps guard functions. It hashes deterministic metadata for the `public` schema and relations, columns, constraints, indexes, user triggers, all public routine definitions/ACLs, application-role EXECUTE truth, policies, event triggers whose handler is in `public`, relevant default ACL rows, and installed extension metadata.
+This is a catalog-only supplemental recovery comparison. Extension-version changes can legitimately alter it, so a mismatch requires investigation rather than automatic rollback.
 
-At the accepted checkpoint, a separate count inventory observed 9 public tables, 1 public sequence, 27 indexes, 30 constraints, 5 user triggers, 44 public routines, zero public policies, and four event triggers bound to public handler functions.
+## 5. Current accepted security invariants
 
-The query was executed twice consecutively against Production with the same `225 / a0078c5d...` result and matched again in later read-only verification. Extension-version changes can legitimately alter this wider fingerprint, so a difference is an investigation trigger rather than automatic rollback authorization. See `PUBLIC_SCHEMA_RECOVERY_FINGERPRINT.md`.
-
-This fingerprint is comparison evidence only. It does not replace the portable recovery bundle or empty-target restore proof.
-
-## 5. Re-run the retained data-safety/access inventory
-
-Run the remaining read-only sections of:
-
-`supabase/baseline/p0_recovery_inventory.sql`
-
-Interpret them against **current** `CURRENT_STATE.md`, not an old privilege phase. Current accepted Production invariants include:
+Current Production invariants include:
 
 - CRM RLS enabled on `9 / 9` CRM business tables;
-- browser-facing CRM policies: `0` under the current RPC-only/default-deny design;
-- effective public function EXECUTE for `anon / authenticated / service_role`: `0 / 0 / 12`;
+- browser-facing CRM policies: `0` under the RPC-only/default-deny design;
+- effective CRM function EXECUTE `anon / authenticated / service_role`: `0 / 0 / 12`;
 - direct CRM table grants for those application roles: `0 / 0 / 0`;
 - postgres/public future default `service_role` grants for tables / sequences / functions: `0 / 0 / 0`;
-- existing non-CRM public functions/procedures executable by an application role: `0`;
-- current Vault secret row count: `1` unless a reviewed credential-model change intentionally changes it;
-- ordinary workspace sensitive-key matches: `0`;
-- server audit sensitive-payload-value matches: `0`.
+- existing non-CRM public functions/procedures executable by an application role: `0`.
 
-The Vault count is an integrity signal only. Do not inspect customer secret values to explain a count difference.
+Production Vault count remains an integrity signal only. Do not inspect customer secret values to explain a count difference.
 
-## 6. Re-run migration-specific post-checks when a database rollback/change occurred
+## 6. Migration-specific retained checks
 
-If recovery included a reviewed database migration or rollback, run the exact retained read-only preflight/post-check package for that control in `supabase/baseline/` and verify its corresponding canonical repository gate remains green.
+For the current rate-limit concurrency boundary retain:
 
-For the current rate-limit concurrency boundary, retain:
+- `supabase/baseline/post_p5_rate_limit_concurrency_preflight.sql`
+- `supabase/baseline/post_p5_rate_limit_concurrency_check.sql`
+- `test_post_p5_rate_limit_concurrency.py`
 
-- `supabase/baseline/post_p5_rate_limit_concurrency_preflight.sql` before a reviewed re-application or compatibility investigation;
-- `supabase/baseline/post_p5_rate_limit_concurrency_check.sql` after an accepted apply/rollback verification;
-- `test_post_p5_rate_limit_concurrency.py` through the canonical build gate to verify the migration/rollback/BFF contract remains intact.
+For the retained future-object default-privilege boundary retain:
 
-The current Production state requires transaction-level advisory-lock serialization for the reviewed login trusted-source/user, credential-unlock workspace/user, and credential-reveal workspace/user subjects while preserving the existing thresholds. Unlock invalid/throttled and reveal throttled outcomes that require durable rejection auditing remain the reviewed committable envelopes translated by both BFFs to the established safe HTTP contract.
+- `supabase/baseline/post_p5_public_default_privilege_guard_check.sql`
+- `supabase/baseline/post_p5_public_default_privilege_guard_probe.sql`
+- `test_post_p5_public_default_privilege_guard.py`
 
-For the retained future-object boundary, run:
+The future-object probe remains transaction-contained, must never COMMIT, and must prove its synthetic objects rolled back.
 
-- `supabase/baseline/post_p5_public_default_privilege_guard_check.sql` for the read-only catalog/default-ACL verification;
-- the transaction-contained `supabase/baseline/post_p5_public_default_privilege_guard_probe.sql` only when a real future-object behavior acceptance check is warranted.
-
-Do not substitute a broad privilege restoration for a failed migration-specific post-check.
-
-## 7. Verify the application boundary after recovery
-
-For the selected gate-accepted application commit:
-
-1. run the canonical repository gate: `sh build.sh && python3 cloudflare_p1_verify.py`;
-2. require final `CLOUDFLARE_P1_OUTPUT_PARITY_OK`;
-3. verify the target deployment maps to the intended gate-accepted commit and is healthy;
-4. verify unauthenticated `GET /api/crm` is rejected safely (`METHOD_NOT_ALLOWED`) rather than executing an RPC;
-5. verify a safe public RPC can reach Supabase through the BFF without exposing the server secret;
-6. inspect runtime/deployment errors before declaring recovery complete.
+## 7. Application/runtime boundary evidence
 
 Historical PR #86 Vercel Git deployment-policy acceptance remains valid evidence:
 
-- `main@91c0edcb24b79d282faa72d7d83435a1e1265d30`;
-- CRM Build Gate #77: completed / success;
-- Vercel Production `dpl_HiGGTxc4zYJM9zq1s13CV5Pv2tW6`: `READY`.
+- `main@91c0edcb24b79d282faa72d7d83435a1e1265d30`
+- CRM Build Gate #77: completed / success
+- Vercel Production `dpl_HiGGTxc4zYJM9zq1s13CV5Pv2tW6`: `READY`
 
-The latest independently revalidated Vercel runtime/security checkpoint after restoring the Production-only server identity is `dpl_JWXVvjCdjRF59gMrZycDUJEXYP7G` on `main@e77e9232c737015132b390c4d1de549c19ce1761`; merged-main Gate #98 passed and recent `/api/crm` runtime logs included successful 200 responses with no new `server_identity_missing` event. Later documentation/workflow-only main commits do not automatically supersede that runtime checkpoint.
+The independently revalidated Vercel runtime/security checkpoint after restoring the Production-only server identity is `dpl_JWXVvjCdjRF59gMrZycDUJEXYP7G` on `main@e77e9232c737015132b390c4d1de549c19ce1761`; recent `/api/crm` logs included successful 200 responses with no new `server_identity_missing` event. Later documentation/recovery-control commits do not automatically supersede that runtime checkpoint.
 
-The last independently verified Cloudflare Production runtime-compatible deployment remains `49a23f7f-5fbe-4894-9b8e-ad7b25005d70 / main@0eefbe3`; exact Cloudflare deployment-SHA freshness after later documentation/config-only commits remains a separate hosting evidence question.
+The last independently verified Cloudflare Production runtime-compatible deployment remains `49a23f7f-5fbe-4894-9b8e-ad7b25005d70 / main@0eefbe3`.
 
-## 8. Preview isolation is verified separately from recovery
+After a real application recovery, also require the canonical repository gate, intended deployment-to-commit mapping, safe unauthenticated `GET /api/crm` rejection, a safe public RPC through the BFF, and runtime-error inspection before declaring the application recovered.
 
-Recovery acceptance does not authorize Preview to use Production Supabase. If a future Preview environment has a server secret, it must use an explicit isolated staging `GROWTHOPS_SUPABASE_URL` and matching staging secret or fail closed. Do not weaken the origin guard for recovery convenience.
+## 8. Preview Production-secret isolation
 
-Historical fail-closed evidence is retained: Vercel Preview deployment `dpl_HfSpEkWs9D34A1a28WLiaCMrCnKY` reached `sh build.sh` on 2026-08-25 and failed with `PREVIEW_SECRET_BOUNDARY_FAILED` because a server secret was present without an explicit staging Supabase URL. No secret value was printed or recorded. PR #86 then disabled normal non-main Vercel Git deployments with `"**": false` plus exact `"main": true`.
+Recovery acceptance does not authorize Preview to use Production Supabase.
 
-**Preview Production-secret cleanup accepted on 2026-08-27.** Independent evidence now records:
+Historical fail-closed evidence is retained: Vercel Preview deployment `dpl_HfSpEkWs9D34A1a28WLiaCMrCnKY` reached `sh build.sh` on 2026-08-25 and failed with `PREVIEW_SECRET_BOUNDARY_FAILED`. No secret value was printed. PR #86 then retained the main-only Git deployment policy.
 
-- `Vercel Preview: no project environment variables`; Production retains hidden `GROWTHOPS_SUPABASE_SECRET_KEY` scoped to Production only;
+**Preview Production-secret cleanup accepted on 2026-08-27.** Independent evidence records:
+
+- `Vercel Preview: no project environment variables`; Production retains its hidden server secret scoped to Production only;
 - `Cloudflare Preview: `GROWTHOPS_SUPABASE_SECRET_KEY` removed`; Cloudflare Production retains its encrypted Production binding;
 - Issue #92: closed / completed.
 
-The historical open-state evidence remains audit history; it must not be interpreted as the current platform state.
+Historical open-state evidence remains audit history and must not be interpreted as the current platform state.
 
-## 9. Portable schema recovery bundle status
+## 9. Accepted Recovery Bundle v3 artifact
 
-The first real authorized schema-only Production export was generated by workflow run `32983830368` from protected `main@e77e9232c737015132b390c4d1de549c19ce1761` using Supabase CLI `2.116.0`:
+The first authorized schema-only export (run `32983830368`) remains historical evidence. It proved a real dump could be created but omitted database-level event-trigger objects and the migration ledger.
 
-- artifact: `growthops-schema-only-32983830368`;
-- `schema.sql` bytes: `100993`;
-- `schema.sql` SHA-256: `37a49bb03df429b0e25fe0a52c3be5383bdac93b17d92ba7e257dd574fd748e2`;
-- temporary ZIP SHA-256: `189e165d4c6e86352d239d79a89f51bb845cc06108fbe5bbd46b9e21b3d994c7`;
-- a private operator copy was saved outside the temporary GitHub artifact.
+The current accepted portable recovery artifact is Recovery Bundle v3 from workflow run `33079493119`, generated from protected:
 
-That first artifact is retained but is not accepted as complete zero-to-current proof because the reviewed `schema.sql` omitted database-level event-trigger objects and the migration ledger.
+`main@89e1904a521c41ab1b35eb29ef25c2834bf76538`
 
-PR #97 hardened the manual recovery workflow into bundle v2. Final PR Gate #100 passed, the PR squash-merged to protected `main@cfadbb42b31f11c6cce2843020d46f00ecac1dc1`, and merged-main Gate #101 passed. Bundle v2 keeps the authoritative Supabase CLI `schema.sql` and adds:
+Accepted artifact evidence:
 
-- exact `event-trigger-inventory.txt` and generated `event-triggers.sql`;
-- safe `migration-ledger.txt` / `migration-ledger.sql` containing only version/name, not historical statement/rollback arrays;
-- `recovery-files.sha256` and non-sensitive metadata;
-- fail-closed assertions for exactly four expected enabled postgres-owned event triggers, exactly 51 migrations, and head `20260825075808 / post_p5_rate_limit_concurrency`;
-- explicit metadata that customer rows and migration statement arrays are excluded and empty-target restore remains required.
+- `growthops-schema-recovery-bundle-v3-33079493119`
+- artifact ID `9649406110`
+- ZIP SHA-256 `c18833d5833239e330af686ad407d3dc472c499356651b2ff51bea36eb8876f7`
+- 12 files / 22,424 bytes
+- `schema.sql` 100,993 bytes / SHA-256 `37a49bb03df429b0e25fe0a52c3be5383bdac93b17d92ba7e257dd574fd748e2`
+- exactly four event-trigger restore statements
+- exactly 51 safe migration `version/name` entries
+- `post-schema-security.sql` with exactly 12 CRM `service_role EXECUTE` grants, no `anon`/`authenticated` grants, and no `supabase_admin` default-ACL changes
+- internal `recovery-files.sha256` manifest independently verified
+- metadata excludes customer rows and migration statement arrays.
 
-A fresh bundle-v2 artifact has not yet been accepted until the updated manual workflow is dispatched from protected main and its files/checksums are independently inspected.
+Recovery Bundle v3 restore order is:
 
-## 10. Empty-target restore closure condition
+1. `schema.sql`
+2. `event-triggers.sql`
+3. `post-schema-security.sql`
+4. `migration-ledger.sql`
 
-The existing `growthops-p0-recovery-test` project already contains CRM schema and therefore cannot prove a from-zero restore. Final #93 acceptance requires a **new, isolated, disposable Supabase project**.
+`post-schema-security.sql` is the accepted fresh-project postgres/public ACL reconciliation. It must not be replaced with broad privilege restoration.
 
-Restore order for that target:
+## 10. Fresh hosted v3 restore proof
 
-1. confirm the target is disposable recovery and not Production;
-2. restore `schema.sql`;
-3. restore `event-triggers.sql` after handler functions exist;
-4. apply `migration-ledger.sql` only to the disposable target;
-5. run sections 1–7 above and require the accepted primary / guard / wider-public checkpoints;
-6. run `supabase/baseline/p0_cloud_recovery_acceptance.sql` only on the empty disposable target and require its synthetic transaction to roll back;
-7. capture non-sensitive verification evidence, then pause/delete the disposable target according to the approved lifecycle.
+The second truly fresh disposable hosted recovery target is:
 
-Issue #93 remains open until a fresh bundle-v2 artifact is independently checksum-inspected, restored into that truly empty target, and passes the complete recovery acceptance. A fingerprint mismatch is an investigation trigger, not authorization to repair Production.
+`qczkskuaszlezlcxxpqk / growthops-recovery-bundle-v3-test / ap-southeast-1`
 
-## 11. Record a new accepted checkpoint when state intentionally changes
+Its application start was proven empty before restore:
 
-After a legitimate schema/ACL/function/guard migration is applied and verified, update the relevant current fingerprints, this runbook, `CURRENT_STATE.md`, and migration mapping from fresh read-only Production evidence. Preserve historical checkpoint documents rather than rewriting their old values.
+- public tables `0`
+- public routines `0`
+- public event triggers `0`
+- application migration table absent.
 
-For a function-definition change inside the primary `crm_*` fingerprint scope, explicitly recompute the primary hash even when table/schema shape did not change. For any accepted public-schema/ACL/extension change, also recompute the wider public-schema recovery fingerprint.
+After the accepted v3 restore, the target matched:
+
+- primary `200 / 77ba3a7c646cf2ea04f41d20ceb1dd02aa9f041db7cbd2a0ad0386ddedbfba65`
+- guard `9 / 2a6c96fe5c2290cd30ee5b29800dcb47d9f1686d48b51344486c2c7780030140`
+- wider-public `225 / a0078c5da6c5844a6d02c96e5c486d3fd8b13bb859a640073fb13cbacc6032ab`
+- migration count `51`, head `20260825075808 / post_p5_rate_limit_concurrency`
+- RLS `9 / 9`
+- CRM EXECUTE `0 / 0 / 12`
+- four expected database-level event triggers.
+
+A transaction-contained future-object probe passed for a synthetic CRM table, sequence, CRM function, and non-CRM public function. RLS/default-deny behavior held, the transaction rolled back, and all probe objects were proven absent.
+
+After catalog/future-object verification the disposable target remained clean: `crm_users=0`, `crm_workspaces=0`, `crm_sessions=0`, `crm_server_audit_logs=0`, and `vault.secrets=0`.
+
+Security Advisor reported only expected `RLS enabled / no policy` INFO notices; Performance Advisor reported only unused-index INFO notices expected on a no-traffic recovery database. These notices do not authorize schema changes.
+
+Detailed evidence is in `FRESH_V3_HOSTED_RESTORE_20260827.md`.
+
+### Transport audit disclosure
+
+Because the connected SQL transport could not send the approximately 100 KB `schema.sql` in one payload, it was transported in statement-boundary batches. One batch introduced an obsolete unused `k text;` declaration into `crm_role_view_state`. Direct ZIP inspection proved the accepted artifact did **not** contain that declaration. The disposable target was corrected only by re-applying the exact original bundled function definition, then deleting the transport-only migration record. This was an executor transcription correction, not a Bundle v3 or Production repair.
+
+## 11. Final #93 closure condition — synthetic cloud acceptance
+
+Issue #93 remains open for one substantive acceptance step only.
+
+The canonical psql script is:
+
+`supabase/baseline/p0_cloud_recovery_acceptance.sql`
+
+The connected SQL execution safety layer blocks its credential/reveal payload before it reaches Postgres, so **it has not yet been executed successfully in this recovery run**.
+
+For Supabase SQL Editor, use the Gate-pinned equivalent:
+
+`supabase/baseline/p0_cloud_recovery_acceptance_sql_editor.sql`
+
+It removes only the psql-only `\set ON_ERROR_STOP on` compatibility line, retains the canonical `BEGIN` / assertion body / `ROLLBACK`, contains no `COMMIT`, and adds one explicit success-row SELECT only after rollback.
+
+Run it only on the disposable target `qczkskuaszlezlcxxpqk`, never Production. Require the visible result:
+
+`P0_CLOUD_RECOVERY_ACCEPTANCE_OK`
+
+Then immediately run the read-only/count-only:
+
+`supabase/baseline/p0_cloud_recovery_acceptance_postcheck.sql`
+
+Require:
+
+- `crm_users = 0`
+- `crm_workspaces = 0`
+- `crm_sessions = 0`
+- `crm_server_audit_logs = 0`
+- `vault_secret_rows = 0`
+- `rollback_clean = true`
+
+After those two checks pass, independently re-run the 51-entry migration head plus primary/guard/wider-public fingerprints. Only then update this runbook to accepted/closed, close #93, and finalize the disposable-project lifecycle.
+
+## 12. Record a new accepted checkpoint when state intentionally changes
+
+After a legitimate Production schema/ACL/function/guard migration, update the migration mapping, relevant fingerprints, `CURRENT_STATE.md`, and this runbook from fresh read-only Production evidence. Preserve historical checkpoint documents rather than rewriting their old values.
