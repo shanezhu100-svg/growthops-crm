@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-08-27
 
-This is the current verification entrypoint for GrowthOps CRM recovery and database-change rollback acceptance. Recovery Bundle v3 has now been generated from protected `main`, independently checksum-inspected, and restored into a second truly fresh hosted Supabase project with the accepted catalog/security fingerprints and migration head. Issue #93 remains open for one final substantive step only: the transaction-contained synthetic cloud recovery acceptance and its rollback-clean post-check. This runbook does **not** authorize automatic Production repair.
+This is the current verification entrypoint for GrowthOps CRM recovery and database-change rollback acceptance. Recovery Bundle v3 has been generated from protected `main`, independently checksum-inspected, restored into a second truly fresh hosted Supabase project, and has now passed the full transaction-contained synthetic cloud recovery acceptance, rollback-clean post-check, independent migration-head verification, and all three accepted catalog/security fingerprints. This runbook does **not** authorize automatic Production repair.
 
 Use this runbook with `CURRENT_STATE.md`, `FULL_SCHEMA_EXPORT.md`, `RECOVERY_BUNDLE_V3.md`, `FRESH_V3_HOSTED_RESTORE_20260827.md`, and `ROLLBACK.md`. Historical phase documents remain implementation evidence unless this runbook explicitly retains one of their checks.
 
@@ -208,31 +208,23 @@ Detailed evidence is in `FRESH_V3_HOSTED_RESTORE_20260827.md`.
 
 Because the connected SQL transport could not send the approximately 100 KB `schema.sql` in one payload, it was transported in statement-boundary batches. One batch introduced an obsolete unused `k text;` declaration into `crm_role_view_state`. Direct ZIP inspection proved the accepted artifact did **not** contain that declaration. The disposable target was corrected only by re-applying the exact original bundled function definition, then deleting the transport-only migration record. This was an executor transcription correction, not a Bundle v3 or Production repair.
 
-## 11. Final #93 closure condition — synthetic cloud acceptance
+## 11. Final #93 closure — accepted
 
-Issue #93 remains open for one substantive acceptance step only.
-
-The canonical psql script is:
+The canonical psql acceptance remains:
 
 `supabase/baseline/p0_cloud_recovery_acceptance.sql`
 
-The connected SQL execution safety layer blocks its credential/reveal payload before it reaches Postgres, so **it has not yet been executed successfully in this recovery run**.
-
-For Supabase SQL Editor, use the Gate-pinned equivalent:
+The Gate-pinned Supabase-compatible execution path is:
 
 `supabase/baseline/p0_cloud_recovery_acceptance_sql_editor.sql`
 
-It removes only the psql-only `\set ON_ERROR_STOP on` compatibility line, retains the canonical `BEGIN` / assertion body / `ROLLBACK`, contains no `COMMIT`, and adds one explicit success-row SELECT only after rollback.
-
-Run it only on the disposable target `qczkskuaszlezlcxxpqk`, never Production. Require the visible result:
+On 2026-08-27 the complete Gate-pinned SQL Editor derivative was executed through the connected Supabase SQL executor against only the disposable target `qczkskuaszlezlcxxpqk`. It returned:
 
 `P0_CLOUD_RECOVERY_ACCEPTANCE_OK`
 
-Then immediately run the read-only/count-only:
+The script uses generated synthetic values, starts an explicit transaction, contains no `COMMIT`, and ends with `ROLLBACK` before the explicit success-row SELECT.
 
-`supabase/baseline/p0_cloud_recovery_acceptance_postcheck.sql`
-
-Require:
+The immediate read-only/count-only `supabase/baseline/p0_cloud_recovery_acceptance_postcheck.sql` then returned:
 
 - `crm_users = 0`
 - `crm_workspaces = 0`
@@ -241,7 +233,15 @@ Require:
 - `vault_secret_rows = 0`
 - `rollback_clean = true`
 
-After those two checks pass, independently re-run the 51-entry migration head plus primary/guard/wider-public fingerprints. Only then update this runbook to accepted/closed, close #93, and finalize the disposable-project lifecycle.
+Independent post-acceptance verification then re-confirmed:
+
+- migration count `51`
+- migration head `20260825075808 / post_p5_rate_limit_concurrency`
+- primary fingerprint `200 / 77ba3a7c646cf2ea04f41d20ceb1dd02aa9f041db7cbd2a0ad0386ddedbfba65`
+- guard fingerprint `9 / 2a6c96fe5c2290cd30ee5b29800dcb47d9f1686d48b51344486c2c7780030140`
+- wider-public fingerprint `225 / a0078c5da6c5844a6d02c96e5c486d3fd8b13bb859a640073fb13cbacc6032ab`.
+
+These results satisfy the complete technical acceptance conditions for issue #93. After this authority update is merged through the required build Gate, #93 may be closed. The disposable recovery target lifecycle is a separate operational choice and must not be treated as a reason to weaken or redo the accepted proof.
 
 ## 12. Record a new accepted checkpoint when state intentionally changes
 
