@@ -18,7 +18,7 @@ concurrency:
 jobs:
   build-recovery-bundle-v3:
     name: build-recovery-bundle-v3
-    if: inputs.confirm_project_ref == 'avahcwyxparbcjdfglzx'
+    if: github.ref == 'refs/heads/main' && inputs.confirm_project_ref == 'avahcwyxparbcjdfglzx'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
