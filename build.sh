@@ -96,6 +96,7 @@ python3 production_supabase_origin_pin_finalize.py
 python3 unlock_password_input_bounds_finalize.py
 python3 user_identity_input_bounds_finalize.py
 python3 session_token_input_bounds_finalize.py
+node test_bff_security_semantic_parity.mjs
 node --check api/crm.js
 GROWTHOPS_SUPABASE_SECRET_KEY=sb_secret_test_http_only_ci node test_http_only_session_api.js
 GROWTHOPS_SUPABASE_SECRET_KEY=sb_secret_test_cache_privacy_ci node test_vercel_cache_privacy.js
