@@ -7,7 +7,7 @@ BUILD = (ROOT / 'build.sh').read_text(encoding='utf-8')
 # Keep the production artifact parity pins synchronized while extending the
 # final Cloudflare verifier with the fail-open 404 and static-header boundary.
 EXPECTED_PINS = {
-    'index.html': '19637585e93ea63a9c6d03ce6e4c6f6454b35e2018610a02cbbcd58cfa797b42',
+    'index.html': '5d21e7d4bc801baa1700b4eae954ec9c4f1a1e8216c5712bb540f8312f285226',
     'cloud-adapter.js': '9713943a80008f625000d6fac2440fb9395f9e6e2c1fd09e820a399c5c34379f',
     'cloud-security-hotfix.js': 'f2b3f08c9bbabc4e974c859fe6d86396d028f46b43354b6d74572b5efa938194',
     'cloud-p1-overrides.js': 'e50e05322a0d56e78bf112a52be08ff54263f4ce88cb0b9b91f6613722b8ccab',
