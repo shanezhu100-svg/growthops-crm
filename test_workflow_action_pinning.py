@@ -35,7 +35,7 @@ for path in sorted((*workflows.glob('*.yml'), *workflows.glob('*.yaml'))):
             'workflow_dispatch:',
             'cancel-in-progress: false',
             'timeout-minutes: 25',
-            "if: inputs.confirm_project_ref == 'avahcwyxparbcjdfglzx'",
+            "if: github.ref == 'refs/heads/main' && inputs.confirm_project_ref == 'avahcwyxparbcjdfglzx'",
             'SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}',
         ):
             if required not in text:
@@ -72,5 +72,5 @@ if checkout_count == 0:
 print(
     f'WORKFLOW_ACTION_PINNING_OK: workflows={workflow_count}; external_action_refs={checked}; checkouts={checkout_count}; '
     'permissions=contents-read; checkout-credentials=not-persisted; no-pr-target/write-all; '
-    'recovery=manual-only+one-secret+25m; all-actions=40-hex-sha; recovery-cli=2.116.0'
+    'recovery=manual-only+main-only+one-secret+25m; all-actions=40-hex-sha; recovery-cli=2.116.0'
 )
