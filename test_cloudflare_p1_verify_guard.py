@@ -5,7 +5,7 @@ VERIFY = (ROOT / 'cloudflare_p1_verify.py').read_text(encoding='utf-8')
 BUILD = (ROOT / 'build.sh').read_text(encoding='utf-8')
 
 EXPECTED_PINS = {
-    'index.html': '43e81127f66cc0ccf560d6a63b3209dabab28b46030ff867e163be71e1b16673',
+    'index.html': '8ed60d6e3c5b1588b6fafff68a9dc9157dc68ba9f0bf5e1e4edb4737d2aa9a66',
     'tailwind.css': '082358f4ff9c6d67ccb8e628ed27669967e15cfa7908f2e4c36a1e89c0a3f7b6',
     'vendor/vue-3.5.41.global.js': '14625269265de97b5c344b8fcfb7136c0c9ab09f7dbadc909a4967d14eca05fb',
     'vendor/xlsx-0.18.5.full.min.js': 'c9506197caf809a075b6dee1da0d36fb19da7158ffe8a88e7b0c96c5d8623c99',
