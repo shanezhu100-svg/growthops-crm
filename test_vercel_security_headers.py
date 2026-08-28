@@ -35,6 +35,11 @@ expected_style_src = (
     'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css '
     'https://fonts.googleapis.com/css2'
 )
+expected_font_src = (
+    "font-src 'self' data: "
+    'https://fonts.gstatic.com/s/inter/ '
+    'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/webfonts/'
+)
 for directive in (
     "default-src 'self'",
     "base-uri 'self'",
@@ -45,7 +50,7 @@ for directive in (
     "connect-src 'self'",
     expected_script_src,
     expected_style_src,
-    "font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com",
+    expected_font_src,
     "img-src 'self' data: blob:",
     "media-src 'self' data: blob:",
     "worker-src 'self' blob:",
@@ -57,20 +62,21 @@ for directive in (
 
 # Transitional CSP: current Vue global runtime compiles templates in-browser and the
 # Tailwind Play CDN injects styles, so unsafe-eval/unsafe-inline are temporarily
-# required. Third-party script and stylesheet hosts are nevertheless restricted to
-# the version/path-pinned resources shipped by dist/index.html.
+# required. Third-party scripts, stylesheets, and fonts are still restricted to
+# version/path-pinned resources or stable dependency directories.
 def directive_tokens(name):
     part=csp.split(name+' ',1)[1].split(';',1)[0]
     return [token for token in part.split() if token]
 
 script_tokens=directive_tokens('script-src')
 style_tokens=directive_tokens('style-src')
+font_tokens=directive_tokens('font-src')
 connect_tokens=directive_tokens('connect-src')
 img_tokens=directive_tokens('img-src')
 media_tokens=directive_tokens('media-src')
-if '*' in script_tokens or '*' in style_tokens or '*' in connect_tokens or '*' in img_tokens or '*' in media_tokens:
+if any('*' in tokens for tokens in (script_tokens, style_tokens, font_tokens, connect_tokens, img_tokens, media_tokens)):
     raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED CSP wildcard source')
-if 'https:' in script_tokens or 'http:' in script_tokens or 'https:' in style_tokens or 'http:' in style_tokens:
+if any(source in tokens for tokens in (script_tokens, style_tokens, font_tokens) for source in ('https:', 'http:')):
     raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED broad scheme source')
 for broad in (
     'https://cdn.tailwindcss.com',
@@ -85,6 +91,12 @@ for broad in (
 ):
     if broad in style_tokens:
         raise SystemExit(f'VERCEL_SECURITY_HEADERS_TESTS_FAILED broad style host remains: {broad}')
+for broad in (
+    'https://cdnjs.cloudflare.com',
+    'https://fonts.gstatic.com',
+):
+    if broad in font_tokens:
+        raise SystemExit(f'VERCEL_SECURITY_HEADERS_TESTS_FAILED broad font host remains: {broad}')
 expected_external_scripts = {
     'https://cdn.tailwindcss.com/3.4.17',
     'https://unpkg.com/vue@3.5.41/dist/vue.global.js',
@@ -100,6 +112,13 @@ expected_external_styles = {
 actual_external_styles = {token for token in style_tokens if token.startswith('https://')}
 if actual_external_styles != expected_external_styles:
     raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED exact third-party style path allowlist drift')
+expected_external_fonts = {
+    'https://fonts.gstatic.com/s/inter/',
+    'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/webfonts/',
+}
+actual_external_fonts = {token for token in font_tokens if token.startswith('https://')}
+if actual_external_fonts != expected_external_fonts or "'self'" not in font_tokens or 'data:' not in font_tokens:
+    raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED third-party font path allowlist drift')
 if connect_tokens != ["'self'"]:
     raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED connect-src must remain same-origin only')
 for name,tokens in (('img-src',img_tokens),('media-src',media_tokens)):
@@ -108,4 +127,4 @@ for name,tokens in (('img-src',img_tokens),('media-src',media_tokens)):
     if tokens != ["'self'",'data:','blob:']:
         raise SystemExit(f'VERCEL_SECURITY_HEADERS_TESTS_FAILED {name} must remain self/data/blob only')
 
-print('VERCEL_SECURITY_HEADERS_TESTS_OK: csp=exact-script+style-path-allowlist; connect=self-only; img-media=self-data-blob; runtime-inline-compat=true')
+print('VERCEL_SECURITY_HEADERS_TESTS_OK: csp=exact-script+style+font-path-allowlist; connect=self-only; img-media=self-data-blob; runtime-inline-compat=true')
