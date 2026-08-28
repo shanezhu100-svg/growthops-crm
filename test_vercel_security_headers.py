@@ -24,6 +24,12 @@ for directive in ('camera=()', 'microphone=()', 'geolocation=()', 'payment=()', 
         raise SystemExit(f'VERCEL_SECURITY_HEADERS_TESTS_FAILED permissions {directive}')
 
 csp = headers.get('Content-Security-Policy', '')
+expected_script_src = (
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' "
+    'https://cdn.tailwindcss.com/3.4.17 '
+    'https://unpkg.com/vue@3.5.41/dist/vue.global.js '
+    'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'
+)
 for directive in (
     "default-src 'self'",
     "base-uri 'self'",
@@ -32,7 +38,7 @@ for directive in (
     "frame-src 'none'",
     "form-action 'self'",
     "connect-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://unpkg.com https://cdn.jsdelivr.net",
+    expected_script_src,
     "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com",
     "font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com",
     "img-src 'self' data: blob:",
@@ -46,7 +52,8 @@ for directive in (
 
 # Transitional CSP: current Vue global runtime compiles templates in-browser and the
 # Tailwind Play CDN injects styles, so unsafe-eval/unsafe-inline are temporarily
-# required. Script/XHR/media destinations remain explicit to limit XSS exfiltration.
+# required. Third-party script hosts are nevertheless restricted to the exact
+# version-pinned resources shipped by dist/index.html.
 def directive_tokens(name):
     part=csp.split(name+' ',1)[1].split(';',1)[0]
     return [token for token in part.split() if token]
@@ -59,6 +66,21 @@ if '*' in script_tokens or '*' in connect_tokens or '*' in img_tokens or '*' in 
     raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED CSP wildcard source')
 if 'https:' in script_tokens or 'http:' in script_tokens:
     raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED script-src broad scheme source')
+for broad in (
+    'https://cdn.tailwindcss.com',
+    'https://unpkg.com',
+    'https://cdn.jsdelivr.net',
+):
+    if broad in script_tokens:
+        raise SystemExit(f'VERCEL_SECURITY_HEADERS_TESTS_FAILED broad script host remains: {broad}')
+expected_external_scripts = {
+    'https://cdn.tailwindcss.com/3.4.17',
+    'https://unpkg.com/vue@3.5.41/dist/vue.global.js',
+    'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
+}
+actual_external_scripts = {token for token in script_tokens if token.startswith('https://')}
+if actual_external_scripts != expected_external_scripts:
+    raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED exact third-party script path allowlist drift')
 if connect_tokens != ["'self'"]:
     raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED connect-src must remain same-origin only')
 for name,tokens in (('img-src',img_tokens),('media-src',media_tokens)):
@@ -67,4 +89,4 @@ for name,tokens in (('img-src',img_tokens),('media-src',media_tokens)):
     if tokens != ["'self'",'data:','blob:']:
         raise SystemExit(f'VERCEL_SECURITY_HEADERS_TESTS_FAILED {name} must remain self/data/blob only')
 
-print('VERCEL_SECURITY_HEADERS_TESTS_OK: csp=dependency-allowlist; connect=self-only; img-media=self-data-blob; runtime-inline-compat=true')
+print('VERCEL_SECURITY_HEADERS_TESTS_OK: csp=exact-script-path-allowlist; connect=self-only; img-media=self-data-blob; runtime-inline-compat=true')
