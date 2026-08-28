@@ -24,11 +24,7 @@ for directive in ('camera=()', 'microphone=()', 'geolocation=()', 'payment=()', 
         raise SystemExit(f'VERCEL_SECURITY_HEADERS_TESTS_FAILED permissions {directive}')
 
 csp = headers.get('Content-Security-Policy', '')
-expected_script_src = (
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' "
-    'https://unpkg.com/vue@3.5.41/dist/vue.global.js '
-    'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'
-)
+expected_script_src = "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
 expected_style_src = (
     "style-src 'self' 'unsafe-inline' "
     'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css '
@@ -61,9 +57,8 @@ for directive in (
 
 # Transitional CSP: the current Vue global build still compiles templates in-browser
 # and the application still ships an inline controller, so unsafe-eval/unsafe-inline
-# remain temporarily required. Tailwind is now same-origin static CSS and must not
-# appear in script-src at all. Remaining third-party scripts, stylesheets, and fonts
-# are restricted to version/path-pinned resources or stable dependency directories.
+# remain temporarily required. Vue and XLSX are now verified build-time inputs served
+# from same-origin paths, so script-src must have no external network sources at all.
 def directive_tokens(name):
     part=csp.split(name+' ',1)[1].split(';',1)[0]
     return [token for token in part.split() if token]
@@ -78,34 +73,14 @@ if any('*' in tokens for tokens in (script_tokens, style_tokens, font_tokens, co
     raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED CSP wildcard source')
 if any(source in tokens for tokens in (script_tokens, style_tokens, font_tokens) for source in ('https:', 'http:')):
     raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED broad scheme source')
-for broad in (
-    'https://cdn.tailwindcss.com',
-    'https://unpkg.com',
-    'https://cdn.jsdelivr.net',
-):
-    if broad in script_tokens:
-        raise SystemExit(f'VERCEL_SECURITY_HEADERS_TESTS_FAILED broad script host remains: {broad}')
-for broad in (
-    'https://cdnjs.cloudflare.com',
-    'https://fonts.googleapis.com',
-):
-    if broad in style_tokens:
-        raise SystemExit(f'VERCEL_SECURITY_HEADERS_TESTS_FAILED broad style host remains: {broad}')
-for broad in (
-    'https://cdnjs.cloudflare.com',
-    'https://fonts.gstatic.com',
-):
-    if broad in font_tokens:
-        raise SystemExit(f'VERCEL_SECURITY_HEADERS_TESTS_FAILED broad font host remains: {broad}')
-if any('tailwindcss.com' in token for token in script_tokens):
-    raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED Tailwind runtime source remains in script-src')
-expected_external_scripts = {
-    'https://unpkg.com/vue@3.5.41/dist/vue.global.js',
-    'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
-}
-actual_external_scripts = {token for token in script_tokens if token.startswith('https://')}
-if actual_external_scripts != expected_external_scripts:
-    raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED exact third-party script path allowlist drift')
+if script_tokens != ["'self'", "'unsafe-inline'", "'unsafe-eval'"]:
+    raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED script-src must be same-origin plus transitional inline/eval only')
+if any(token.startswith('http://') or token.startswith('https://') for token in script_tokens):
+    raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED external browser script source remains')
+for forbidden_host in ('unpkg.com', 'cdn.jsdelivr.net', 'cdn.tailwindcss.com'):
+    if forbidden_host in csp.split('script-src ',1)[1].split(';',1)[0]:
+        raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED external script host remains: ' + forbidden_host)
+
 expected_external_styles = {
     'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css',
     'https://fonts.googleapis.com/css2',
@@ -128,4 +103,4 @@ for name,tokens in (('img-src',img_tokens),('media-src',media_tokens)):
     if tokens != ["'self'",'data:','blob:']:
         raise SystemExit(f'VERCEL_SECURITY_HEADERS_TESTS_FAILED {name} must remain self/data/blob only')
 
-print('VERCEL_SECURITY_HEADERS_TESTS_OK: csp=no-tailwind-script+exact-script+style+font-path-allowlist; connect=self-only; img-media=self-data-blob; vue-inline-compat=true')
+print('VERCEL_SECURITY_HEADERS_TESTS_OK: csp=same-origin-browser-js+exact-style+font-path-allowlist; connect=self-only; img-media=self-data-blob; vue-inline-compat=true')
