@@ -7,7 +7,8 @@ BUILD = (ROOT / 'build.sh').read_text(encoding='utf-8')
 # Keep the production artifact parity pins synchronized while extending the
 # final Cloudflare verifier with the fail-open 404 and static-header boundary.
 EXPECTED_PINS = {
-    'index.html': '5d21e7d4bc801baa1700b4eae954ec9c4f1a1e8216c5712bb540f8312f285226',
+    'index.html': '33cceb775c1da3da18a1e01597f1c3c23d89977bf77a0083d7f02d33bd19e72c',
+    'tailwind.css': '082358f4ff9c6d67ccb8e628ed27669967e15cfa7908f2e4c36a1e89c0a3f7b6',
     'cloud-adapter.js': '9713943a80008f625000d6fac2440fb9395f9e6e2c1fd09e820a399c5c34379f',
     'cloud-security-hotfix.js': 'f2b3f08c9bbabc4e974c859fe6d86396d028f46b43354b6d74572b5efa938194',
     'cloud-p1-overrides.js': 'e50e05322a0d56e78bf112a52be08ff54263f4ce88cb0b9b91f6613722b8ccab',
@@ -57,4 +58,4 @@ if BUILD.count(call) != 1:
 if BUILD.index(call) < BUILD.index('python3 test_cloudflare_failopen_404.py'):
     raise SystemExit('CLOUDFLARE_P1_VERIFY_GUARD_TEST_FAILED verifier gate runs before 404 build test')
 
-print('CLOUDFLARE_P1_VERIFY_GUARD_TESTS_OK: production-pins=5-synchronized; final-404-check=required; wildcard-static-headers=6-required; active-material-deny=required')
+print('CLOUDFLARE_P1_VERIFY_GUARD_TESTS_OK: production-pins=6-synchronized; static-tailwind=hash-pinned; final-404-check=required; wildcard-static-headers=6-required; active-material-deny=required')

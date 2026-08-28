@@ -26,7 +26,6 @@ for directive in ('camera=()', 'microphone=()', 'geolocation=()', 'payment=()', 
 csp = headers.get('Content-Security-Policy', '')
 expected_script_src = (
     "script-src 'self' 'unsafe-inline' 'unsafe-eval' "
-    'https://cdn.tailwindcss.com/3.4.17 '
     'https://unpkg.com/vue@3.5.41/dist/vue.global.js '
     'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'
 )
@@ -60,10 +59,11 @@ for directive in (
     if directive not in csp:
         raise SystemExit(f'VERCEL_SECURITY_HEADERS_TESTS_FAILED csp {directive}')
 
-# Transitional CSP: current Vue global runtime compiles templates in-browser and the
-# Tailwind Play CDN injects styles, so unsafe-eval/unsafe-inline are temporarily
-# required. Third-party scripts, stylesheets, and fonts are still restricted to
-# version/path-pinned resources or stable dependency directories.
+# Transitional CSP: the current Vue global build still compiles templates in-browser
+# and the application still ships an inline controller, so unsafe-eval/unsafe-inline
+# remain temporarily required. Tailwind is now same-origin static CSS and must not
+# appear in script-src at all. Remaining third-party scripts, stylesheets, and fonts
+# are restricted to version/path-pinned resources or stable dependency directories.
 def directive_tokens(name):
     part=csp.split(name+' ',1)[1].split(';',1)[0]
     return [token for token in part.split() if token]
@@ -97,8 +97,9 @@ for broad in (
 ):
     if broad in font_tokens:
         raise SystemExit(f'VERCEL_SECURITY_HEADERS_TESTS_FAILED broad font host remains: {broad}')
+if any('tailwindcss.com' in token for token in script_tokens):
+    raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED Tailwind runtime source remains in script-src')
 expected_external_scripts = {
-    'https://cdn.tailwindcss.com/3.4.17',
     'https://unpkg.com/vue@3.5.41/dist/vue.global.js',
     'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
 }
@@ -127,4 +128,4 @@ for name,tokens in (('img-src',img_tokens),('media-src',media_tokens)):
     if tokens != ["'self'",'data:','blob:']:
         raise SystemExit(f'VERCEL_SECURITY_HEADERS_TESTS_FAILED {name} must remain self/data/blob only')
 
-print('VERCEL_SECURITY_HEADERS_TESTS_OK: csp=exact-script+style+font-path-allowlist; connect=self-only; img-media=self-data-blob; runtime-inline-compat=true')
+print('VERCEL_SECURITY_HEADERS_TESTS_OK: csp=no-tailwind-script+exact-script+style+font-path-allowlist; connect=self-only; img-media=self-data-blob; vue-inline-compat=true')
