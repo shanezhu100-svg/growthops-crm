@@ -24,11 +24,13 @@ for (const name of [
   'COOKIE_NAME',
   'COOKIE_MAX_AGE',
   'MAX_BODY_BYTES',
+  'UPSTREAM_TIMEOUT_MS',
   'LOGIN_USERNAME_MAX_BYTES',
   'LOGIN_PASSWORD_MAX_BYTES',
 ]) {
   assert.equal(literal(vercel, name), literal(cloudflare, name), `${name} drifted between BFFs`);
 }
+assert.equal(literal(vercel, 'UPSTREAM_TIMEOUT_MS'), '15 * 1000', 'upstream timeout must stay at reviewed 15 seconds');
 
 for (const name of ['PUBLIC_RPCS', 'LOGIN_RPCS', 'AUTH_RPCS', 'SAFE_UPSTREAM_MESSAGES']) {
   assert.deepEqual(quotedSet(vercel, name), quotedSet(cloudflare, name), `${name} drifted between BFFs`);
@@ -59,6 +61,9 @@ for (const [label, source, markers] of [
     "delete args.p_token",
     'args.p_token = sessionToken',
     "'Cache-Control', 'no-store, max-age=0'",
+    'new AbortController()',
+    'signal: controller.signal',
+    'clearTimeout(timeoutId)',
   ]],
   ['Cloudflare', cloudflare, [
     'isPagesProduction=requestHost===CLOUDFLARE_PRODUCTION_HOST',
@@ -67,9 +72,12 @@ for (const [label, source, markers] of [
     'delete args.p_token',
     'args.p_token=sessionToken',
     "'Cache-Control':'no-store, max-age=0'",
+    'new AbortController()',
+    'signal:controller.signal',
+    'clearTimeout(timeoutId)',
   ]],
 ]) {
   for (const marker of markers) assert.ok(source.includes(marker), `${label} missing shared security marker: ${marker}`);
 }
 
-console.log('BFF_SECURITY_SEMANTIC_PARITY_OK: constants=6; rpc-surfaces=1/1/9; safe-upstream-messages=aligned; production-pin/session/source-bucket/cache-markers=present');
+console.log('BFF_SECURITY_SEMANTIC_PARITY_OK: constants=7; rpc-surfaces=1/1/9; safe-upstream-messages=aligned; production-pin/session/source-bucket/cache/timeout-markers=present');
