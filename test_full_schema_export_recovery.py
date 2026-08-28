@@ -3,6 +3,7 @@ from pathlib import Path
 root = Path(__file__).resolve().parent
 
 for test_name in (
+    'test_workflow_action_pinning.py',
     'test_full_schema_export_recovery_v2.py',
     'test_recovery_bundle_v3.py',
     'test_recovery_sql_editor_acceptance.py',
