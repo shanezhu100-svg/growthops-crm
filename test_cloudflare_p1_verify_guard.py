@@ -5,7 +5,7 @@ VERIFY = (ROOT / 'cloudflare_p1_verify.py').read_text(encoding='utf-8')
 BUILD = (ROOT / 'build.sh').read_text(encoding='utf-8')
 
 EXPECTED_PINS = {
-    'index.html': '8ed60d6e3c5b1588b6fafff68a9dc9157dc68ba9f0bf5e1e4edb4737d2aa9a66',
+    'index.html': '67ba3f280398fcbec0c57bfaddc50661e05f301eb4a2447add38ecdaf6670fa0',
     'tailwind.css': '082358f4ff9c6d67ccb8e628ed27669967e15cfa7908f2e4c36a1e89c0a3f7b6',
     'vendor/vue-3.5.41.global.js': '14625269265de97b5c344b8fcfb7136c0c9ab09f7dbadc909a4967d14eca05fb',
     'vendor/xlsx-0.18.5.full.min.js': 'c9506197caf809a075b6dee1da0d36fb19da7158ffe8a88e7b0c96c5d8623c99',
@@ -18,7 +18,7 @@ EXPECTED_PINS = {
     'vendor/fontawesome/webfonts/fa-solid-900.woff2': 'ae17c16afbea216707b2203ea1cf9bdb45b9bfe47d0f4ae3258ddbc6294dd02f',
     'vendor/fontawesome/webfonts/fa-v4compatibility.ttf': 'ff8f525fb050c5d24519ccc8f5723d85b2e51edd3f9bc6548af55aebadd4f269',
     'vendor/fontawesome/webfonts/fa-v4compatibility.woff2': 'c7a869faca299d15be10a01f19d0765a7c4d46d8922d9b9317235c1e4a6f0982',
-    'vendor/inter/inter.css': '__PENDING_INTER_CSS_SHA256__',
+    'vendor/inter/inter.css': 'a9173515531a1bb9820b2adce8e7df7a3cb3b4d114894f836c74ed0fdcafc144',
     'vendor/inter/inter-latin.woff2': '3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62',
     'vendor/inter/inter-latin-ext.woff2': '34b9c504cab7a73e37b746343a449132e56cf7b5481af2cb81dc74dcff25c956',
     'cloud-adapter.js': '9713943a80008f625000d6fac2440fb9395f9e6e2c1fd09e820a399c5c34379f',
