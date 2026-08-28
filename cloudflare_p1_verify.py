@@ -21,6 +21,9 @@ EXPECTED_SHA256 = {
     'vendor/fontawesome/webfonts/fa-solid-900.woff2': 'ae17c16afbea216707b2203ea1cf9bdb45b9bfe47d0f4ae3258ddbc6294dd02f',
     'vendor/fontawesome/webfonts/fa-v4compatibility.ttf': 'ff8f525fb050c5d24519ccc8f5723d85b2e51edd3f9bc6548af55aebadd4f269',
     'vendor/fontawesome/webfonts/fa-v4compatibility.woff2': 'c7a869faca299d15be10a01f19d0765a7c4d46d8922d9b9317235c1e4a6f0982',
+    'vendor/inter/inter.css': '__PENDING_INTER_CSS_SHA256__',
+    'vendor/inter/inter-latin.woff2': '3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62',
+    'vendor/inter/inter-latin-ext.woff2': '34b9c504cab7a73e37b746343a449132e56cf7b5481af2cb81dc74dcff25c956',
     'cloud-adapter.js': '9713943a80008f625000d6fac2440fb9395f9e6e2c1fd09e820a399c5c34379f',
     'cloud-security-hotfix.js': 'f2b3f08c9bbabc4e974c859fe6d86396d028f46b43354b6d74572b5efa938194',
     'cloud-p1-overrides.js': 'e50e05322a0d56e78bf112a52be08ff54263f4ce88cb0b9b91f6613722b8ccab',
@@ -81,4 +84,4 @@ missing_headers = [name for name in REQUIRED_STATIC_HEADERS if name not in heade
 if missing_headers:
     fail('dist/_headers missing security headers: ' + ', '.join(missing_headers))
 
-print('CLOUDFLARE_P1_OUTPUT_PARITY_OK: ' f'dist=present; key_artifacts={len(EXPECTED_SHA256)}; production_hashes=match; ' 'same-origin-vendor-js=hash-pinned; same-origin-fontawesome=hash-pinned; failopen_404=guarded; static_headers=guarded')
+print('CLOUDFLARE_P1_OUTPUT_PARITY_OK: ' f'dist=present; key_artifacts={len(EXPECTED_SHA256)}; production_hashes=match; ' 'same-origin-vendor-js=hash-pinned; same-origin-fontawesome=hash-pinned; same-origin-inter=hash-pinned; failopen_404=guarded; static_headers=guarded')
