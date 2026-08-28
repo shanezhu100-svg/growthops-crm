@@ -9,6 +9,11 @@ uses_line = re.compile(r'^\s*-?\s*uses:\s*([^\s#]+)')
 checked = 0
 for path in sorted((*workflows.glob('*.yml'), *workflows.glob('*.yaml'))):
     text = path.read_text(encoding='utf-8')
+    if path.name.startswith('recovery-'):
+        if 'version: latest' in text:
+            raise SystemExit(f'{path.relative_to(root)}: recovery tooling must not use version: latest')
+        if 'supabase/setup-cli@' in text and 'version: 2.116.0' not in text:
+            raise SystemExit(f'{path.relative_to(root)}: recovery Supabase CLI must remain pinned to accepted 2.116.0')
     for lineno, line in enumerate(text.splitlines(), 1):
         match = uses_line.match(line)
         if not match:
@@ -25,4 +30,4 @@ for path in sorted((*workflows.glob('*.yml'), *workflows.glob('*.yaml'))):
 if checked == 0:
     raise SystemExit('No external GitHub Action references were found; pinning gate may be misconfigured')
 
-print(f'WORKFLOW_ACTION_PINNING_OK: external_action_refs={checked}; all=40-hex-sha')
+print(f'WORKFLOW_ACTION_PINNING_OK: external_action_refs={checked}; all=40-hex-sha; recovery-cli=2.116.0')
