@@ -8,6 +8,7 @@ index = root / 'dist' / 'index.html'
 tailwind_css = root / 'dist' / 'tailwind.css'
 vendor_dir = root / 'dist' / 'vendor'
 fa_root = vendor_dir / 'fontawesome'
+inter_root = vendor_dir / 'inter'
 
 if not index.is_file():
     raise SystemExit('FRONTEND_DEPENDENCY_PIN_OUTPUT_FAILED: dist/index.html missing')
@@ -18,9 +19,11 @@ tailwind_static_tag = '<link rel="stylesheet" href="/tailwind.css" />'
 external_vue = 'https://unpkg.com/vue@3.5.41/dist/vue.global.js'
 external_xlsx = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'
 external_fa = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css'
+external_inter_css = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap'
 local_vue_tag = '<script src="/vendor/vue-3.5.41.global.js"></script>'
 local_xlsx_tag = '<script src="/vendor/xlsx-0.18.5.full.min.js"></script>'
 local_fa_tag = '<link rel="stylesheet" href="/vendor/fontawesome/css/all.min.css" />'
+local_inter_tag = '<link rel="stylesheet" href="/vendor/inter/inter.css" />'
 expected_vendor = {
     'vue-3.5.41.global.js': ('14625269265de97b5c344b8fcfb7136c0c9ab09f7dbadc909a4967d14eca05fb', 591450),
     'xlsx-0.18.5.full.min.js': ('c9506197caf809a075b6dee1da0d36fb19da7158ffe8a88e7b0c96c5d8623c99', 881727),
@@ -35,6 +38,10 @@ expected_fa = {
     'webfonts/fa-solid-900.woff2': ('ae17c16afbea216707b2203ea1cf9bdb45b9bfe47d0f4ae3258ddbc6294dd02f', 156400),
     'webfonts/fa-v4compatibility.ttf': ('ff8f525fb050c5d24519ccc8f5723d85b2e51edd3f9bc6548af55aebadd4f269', 10832),
     'webfonts/fa-v4compatibility.woff2': ('c7a869faca299d15be10a01f19d0765a7c4d46d8922d9b9317235c1e4a6f0982', 4792),
+}
+expected_inter_fonts = {
+    'inter-latin.woff2': ('3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62', 48256),
+    'inter-latin-ext.woff2': ('34b9c504cab7a73e37b746343a449132e56cf7b5481af2cb81dc74dcff25c956', 85068),
 }
 
 if tailwind_play in html:
@@ -51,10 +58,10 @@ for marker in ('.hidden{display:none}', '.flex{display:flex}', '.grid{display:gr
     if marker not in css:
         raise SystemExit('FRONTEND_DEPENDENCY_PIN_OUTPUT_FAILED: static Tailwind utility missing: ' + marker)
 
-for external in (external_vue, external_xlsx, external_fa):
+for external in (external_vue, external_xlsx, external_fa, external_inter_css, 'fonts.gstatic.com'):
     if external in html:
         raise SystemExit('FRONTEND_DEPENDENCY_PIN_OUTPUT_FAILED: external browser dependency remains: ' + external)
-for tag in (local_vue_tag, local_xlsx_tag, local_fa_tag):
+for tag in (local_vue_tag, local_xlsx_tag, local_fa_tag, local_inter_tag):
     if html.count(tag) != 1:
         raise SystemExit('FRONTEND_DEPENDENCY_PIN_OUTPUT_FAILED: same-origin dependency tag must appear exactly once: ' + tag)
 
@@ -80,6 +87,31 @@ fa_css = (fa_root / 'css' / 'all.min.css').read_text(encoding='utf-8')
 fa_refs = sorted(set(re.findall(r'url\((?:["\']?)(\.\./webfonts/[^)"\']+)(?:["\']?)\)', fa_css)))
 if len(fa_refs) != 8:
     raise SystemExit('FRONTEND_DEPENDENCY_PIN_OUTPUT_FAILED: Font Awesome CSS webfont inventory must remain 8')
+
+inter_css_path = inter_root / 'inter.css'
+if not inter_css_path.is_file():
+    raise SystemExit('FRONTEND_DEPENDENCY_PIN_OUTPUT_FAILED: missing same-origin Inter CSS')
+inter_css_bytes = inter_css_path.read_bytes()
+inter_css = inter_css_bytes.decode('utf-8')
+if inter_css.count('@font-face') != 10:
+    raise SystemExit('FRONTEND_DEPENDENCY_PIN_OUTPUT_FAILED: Inter CSS must contain 10 font-face blocks')
+for weight in (400, 500, 600, 700, 800):
+    if inter_css.count(f'font-weight: {weight};') != 2:
+        raise SystemExit(f'FRONTEND_DEPENDENCY_PIN_OUTPUT_FAILED: Inter weight {weight} must have latin+latin-ext faces')
+for marker in ("font-family: 'Inter';", 'font-display: swap;', '/vendor/inter/inter-latin.woff2', '/vendor/inter/inter-latin-ext.woff2', 'unicode-range:'):
+    if marker not in inter_css:
+        raise SystemExit('FRONTEND_DEPENDENCY_PIN_OUTPUT_FAILED: Inter CSS marker missing: ' + marker)
+for forbidden in ('fonts.googleapis.com', 'fonts.gstatic.com', 'http://', 'https://'):
+    if forbidden in inter_css:
+        raise SystemExit('FRONTEND_DEPENDENCY_PIN_OUTPUT_FAILED: Inter CSS external URL remains: ' + forbidden)
+for name, (expected_sha, expected_size) in expected_inter_fonts.items():
+    path = inter_root / name
+    if not path.is_file():
+        raise SystemExit('FRONTEND_DEPENDENCY_PIN_OUTPUT_FAILED: missing Inter font: ' + name)
+    data = path.read_bytes()
+    actual_sha = hashlib.sha256(data).hexdigest()
+    if actual_sha != expected_sha or len(data) != expected_size:
+        raise SystemExit(f'FRONTEND_DEPENDENCY_PIN_OUTPUT_FAILED: Inter drift {name}; expected={expected_sha}/{expected_size}; actual={actual_sha}/{len(data)}')
 
 # Static-Tailwind readiness: complete utility tokens must remain discoverable.
 bound_class_pattern = re.compile(r'(?:^|\s)(?::class|v-bind:class)\s*=\s*(["\'])(.*?)\1', re.DOTALL)
@@ -109,10 +141,12 @@ for pattern in fragment_concat_patterns:
         raise SystemExit('FRONTEND_DEPENDENCY_PIN_OUTPUT_FAILED: runtime Tailwind utility-fragment construction found in final payload')
 
 css_sha = hashlib.sha256(css_bytes).hexdigest()
+inter_css_sha = hashlib.sha256(inter_css_bytes).hexdigest()
 print(
     'FRONTEND_DEPENDENCY_PIN_OUTPUT_OK: vue=same-origin-3.5.41+sha256; tailwind=static-3.4.17; '
-    'xlsx=same-origin-0.18.5+sha256; font-awesome=same-origin-6.5.2+sha256; browser-external-js=absent; '
-    'browser-cdnjs-fontawesome=absent; '
+    'xlsx=same-origin-0.18.5+sha256; font-awesome=same-origin-6.5.2+sha256; inter=same-origin-5weights+2-variable-fonts; '
+    'browser-external-script-style-font=absent; '
     f'tailwind-css-bytes={len(css_bytes)}; tailwind-css-sha256={css_sha}; '
+    f'inter-css-bytes={len(inter_css_bytes)}; inter-css-sha256={inter_css_sha}; '
     f'static-tailwind-readiness=true; bound-class-expressions={len(bound_class_expressions)}'
 )

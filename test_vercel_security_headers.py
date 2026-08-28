@@ -25,8 +25,8 @@ for directive in ('camera=()', 'microphone=()', 'geolocation=()', 'payment=()', 
 
 csp = headers.get('Content-Security-Policy', '')
 expected_script_src = "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
-expected_style_src = "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com/css2"
-expected_font_src = "font-src 'self' data: https://fonts.gstatic.com/s/inter/"
+expected_style_src = "style-src 'self' 'unsafe-inline'"
+expected_font_src = "font-src 'self' data:"
 for directive in (
     "default-src 'self'", "base-uri 'self'", "object-src 'none'", "frame-ancestors 'none'",
     "frame-src 'none'", "form-action 'self'", "connect-src 'self'", expected_script_src,
@@ -36,9 +36,9 @@ for directive in (
     if directive not in csp:
         raise SystemExit(f'VERCEL_SECURITY_HEADERS_TESTS_FAILED csp {directive}')
 
-# Vue still compiles templates in-browser and the app still has an inline controller,
-# so unsafe-eval/unsafe-inline remain transitional. All executable JS and Font Awesome
-# CSS/fonts are now same-origin; only Google Inter remains an external style/font source.
+# Vue still compiles templates in-browser and the app still has inline script/style
+# material, so unsafe-eval/unsafe-inline remain transitional. All browser-executed
+# scripts, stylesheets, and fonts are now same-origin build artifacts.
 def directive_tokens(name):
     part=csp.split(name+' ',1)[1].split(';',1)[0]
     return [token for token in part.split() if token]
@@ -55,21 +55,22 @@ if any(source in tokens for tokens in (script_tokens, style_tokens, font_tokens)
     raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED broad scheme source')
 if script_tokens != ["'self'", "'unsafe-inline'", "'unsafe-eval'"]:
     raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED script-src must be same-origin plus transitional inline/eval only')
-if {token for token in style_tokens if token.startswith('https://')} != {'https://fonts.googleapis.com/css2'}:
-    raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED external style allowlist must be Google Fonts only')
-if {token for token in font_tokens if token.startswith('https://')} != {'https://fonts.gstatic.com/s/inter/'}:
-    raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED external font allowlist must be Google Inter only')
-if "'self'" not in style_tokens or "'unsafe-inline'" not in style_tokens:
-    raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED same-origin/inline style compatibility drift')
-if "'self'" not in font_tokens or 'data:' not in font_tokens:
-    raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED same-origin/data font compatibility drift')
-for forbidden in ('cdnjs.cloudflare.com', 'unpkg.com', 'cdn.jsdelivr.net', 'cdn.tailwindcss.com'):
+if style_tokens != ["'self'", "'unsafe-inline'"]:
+    raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED style-src must be same-origin plus transitional inline only')
+if font_tokens != ["'self'", 'data:']:
+    raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED font-src must be same-origin/data only')
+for forbidden in (
+    'cdnjs.cloudflare.com', 'unpkg.com', 'cdn.jsdelivr.net', 'cdn.tailwindcss.com',
+    'fonts.googleapis.com', 'fonts.gstatic.com',
+):
     if forbidden in csp:
-        raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED retired CDN remains in CSP: ' + forbidden)
+        raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED retired external dependency remains in CSP: ' + forbidden)
+if any(token.startswith(('https://', 'http://')) for tokens in (script_tokens, style_tokens, font_tokens) for token in tokens):
+    raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED external script/style/font source remains')
 if connect_tokens != ["'self'"]:
     raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED connect-src must remain same-origin only')
 for name,tokens in (('img-src',img_tokens),('media-src',media_tokens)):
     if tokens != ["'self'",'data:','blob:']:
         raise SystemExit(f'VERCEL_SECURITY_HEADERS_TESTS_FAILED {name} must remain self/data/blob only')
 
-print('VERCEL_SECURITY_HEADERS_TESTS_OK: csp=same-origin-js+fontawesome; external-style-font=google-inter-only; connect=self-only; img-media=self-data-blob; vue-inline-compat=true')
+print('VERCEL_SECURITY_HEADERS_TESTS_OK: csp=same-origin-script+style+font; connect=self-only; img-media=self-data-blob; vue-inline-compat=true')
