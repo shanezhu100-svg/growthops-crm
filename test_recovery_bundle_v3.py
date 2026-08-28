@@ -87,8 +87,6 @@ positions = [ordered.find(x) for x in ('schema.sql', 'event-triggers.sql', 'post
 require(all(p >= 0 for p in positions) and positions == sorted(positions),
         'Recovery v3 restore order must be schema -> event triggers -> post-schema security -> migration ledger')
 
-# Pin the accepted v3 artifact so current recovery authority cannot silently drift
-# to an unreviewed bundle/run.
 for fragment in (
     '33079493119',
     '89e1904a521c41ab1b35eb29ef25c2834bf76538',
@@ -110,10 +108,8 @@ require('exactly 12 explicit CRM `service_role EXECUTE` grants' in v3_doc,
 require('every file listed in `recovery-files.sha256` independently verified `OK`' in v3_doc,
         'Recovery v3 authority must record checksum-manifest verification')
 require('integrity and scope of the v3 artifact' in v3_doc,
-        'Recovery v3 authority must distinguish artifact acceptance from #93 closure')
+        'Recovery v3 authority must distinguish artifact acceptance from hosted acceptance')
 
-# Pin the second truly fresh hosted restore evidence separately from the artifact
-# acceptance so an executor issue cannot be mistaken for a bundle mutation.
 for fragment in (
     'qczkskuaszlezlcxxpqk',
     'growthops-recovery-bundle-v3-test',
@@ -152,13 +148,25 @@ require('transport transcription defect' in fresh_restore and
 require('FRESH_V3_HOSTED_RESTORE_20260827.md' in v3_doc,
         'Recovery v3 authority must link the fresh hosted restore evidence')
 
-plain_v3 = v3_doc.replace('**', '')
-plain_fresh = fresh_restore.replace('**', '')
-require('has not yet been executed successfully' in plain_v3,
-        'Recovery v3 authority must not claim blocked full synthetic acceptance passed')
-require('has not yet executed successfully' in plain_fresh,
-        'Fresh restore evidence must not claim blocked full synthetic acceptance passed')
-require('one substantive acceptance item' in plain_v3,
-        'Recovery v3 authority must narrow #93 to the remaining synthetic acceptance')
+for source, label in ((v3_doc, 'Recovery v3 authority'), (fresh_restore, 'Fresh hosted restore evidence')):
+    for fragment in (
+        'P0_CLOUD_RECOVERY_ACCEPTANCE_OK',
+        'p0_cloud_recovery_acceptance_sql_editor.sql',
+        'p0_cloud_recovery_acceptance_postcheck.sql',
+        'rollback_clean = true',
+        '20260825075808 / post_p5_rate_limit_concurrency',
+        '77ba3a7c646cf2ea04f41d20ceb1dd02aa9f041db7cbd2a0ad0386ddedbfba65',
+        '2a6c96fe5c2290cd30ee5b29800dcb47d9f1686d48b51344486c2c7780030140',
+        'a0078c5da6c5844a6d02c96e5c486d3fd8b13bb859a640073fb13cbacc6032ab',
+    ):
+        require(fragment in source, f'{label} missing final synthetic acceptance evidence: {fragment}')
 
-print('RECOVERY_BUNDLE_V3_OK: artifact=33079493119/c18833d5; fresh-hosted=qczkskuaszlezlcxxpqk; fingerprints=200/9/225 accepted; synthetic-acceptance=open')
+for stale in (
+    'has not yet been executed successfully',
+    'has not yet executed successfully',
+    'one substantive acceptance item',
+):
+    require(stale not in v3_doc.replace('**', '') and stale not in fresh_restore.replace('**', ''),
+            f'Recovery authority still claims final acceptance is open: {stale}')
+
+print('RECOVERY_BUNDLE_V3_OK: artifact=33079493119/c18833d5; fresh-hosted=qczkskuaszlezlcxxpqk; fingerprints=200/9/225 accepted; synthetic-acceptance=passed')
