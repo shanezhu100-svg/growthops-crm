@@ -55,16 +55,35 @@ missing = sorted(required - seen)
 if missing:
     raise SystemExit(f'CLOUDFLARE_SECURITY_HEADERS_FAILED missing {",".join(missing)}')
 
-# `_headers` only applies to static Pages assets. Keep the Pages Function response
-# policy exactly aligned with the same Vercel source-of-truth as well. The JS
-# object intentionally uses JSON-compatible double-quoted key/value lines so this
-# build gate can compare every value without maintaining a second expected policy.
+# `_headers` only applies to static Pages assets. Generate the Pages Function
+# SECURITY_HEADERS block from the same Vercel source-of-truth instead of keeping
+# a second hand-maintained policy. Fail closed if the expected source structure
+# drifts so a malformed rewrite can never silently ship.
 function_source = CLOUDFLARE_FUNCTION.read_text(encoding='utf-8')
 if '...SECURITY_HEADERS' not in function_source:
     raise SystemExit('CLOUDFLARE_SECURITY_HEADERS_FAILED Function does not apply SECURITY_HEADERS')
+start_marker = 'const SECURITY_HEADERS = Object.freeze({\n'
+end_marker = '});\n\nconst PUBLIC_RPCS'
+if function_source.count(start_marker) != 1 or function_source.count(end_marker) != 1:
+    raise SystemExit('CLOUDFLARE_SECURITY_HEADERS_FAILED unexpected Function SECURITY_HEADERS structure')
+start = function_source.index(start_marker)
+end = function_source.index(end_marker, start)
+rendered_lines = [f'  {json.dumps(key)}: {json.dumps(value)},' for key, value in normalized]
+rendered_block = start_marker + '\n'.join(rendered_lines) + '\n'
+function_source = function_source[:start] + rendered_block + function_source[end:]
+CLOUDFLARE_FUNCTION.write_text(function_source, encoding='utf-8')
+
+# Re-read the file and require every generated key/value exactly once in the
+# SECURITY_HEADERS block. This keeps generation and parity verification coupled.
+function_source = CLOUDFLARE_FUNCTION.read_text(encoding='utf-8')
+block_start = function_source.index(start_marker)
+block_end = function_source.index(end_marker, block_start)
+security_block = function_source[block_start:block_end]
 for key, value in normalized:
     expected = f'  {json.dumps(key)}: {json.dumps(value)},'
-    if expected not in function_source:
+    if security_block.count(expected) != 1:
         raise SystemExit(f'CLOUDFLARE_SECURITY_HEADERS_FAILED Function parity mismatch {key}')
+if security_block.count('\n  "') != len(normalized):
+    raise SystemExit('CLOUDFLARE_SECURITY_HEADERS_FAILED unexpected Function security-header member count')
 
-print(f'CLOUDFLARE_SECURITY_HEADERS_OK: source=vercel.json; static-rule=/*; headers={len(items)}; output=dist/_headers; function=/api/crm; parity=exact')
+print(f'CLOUDFLARE_SECURITY_HEADERS_OK: source=vercel.json; static-rule=/*; headers={len(items)}; output=dist/_headers; function=/api/crm-generated; parity=exact')
