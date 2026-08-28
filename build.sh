@@ -98,6 +98,7 @@ python3 test_frontend_vendor_static_policy.py
 python3 frontend_vendor_static_finalize.py
 python3 test_fontawesome_static_policy.py
 python3 fontawesome_static_finalize.py
+python3 test_inter_static_policy.py
 python3 inter_static_finalize.py
 python3 test_frontend_dependency_pin_output.py
 # Final server-side identity and input boundaries. Patch the two deployment BFFs
