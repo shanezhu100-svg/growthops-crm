@@ -5,6 +5,7 @@ set -eu
 python3 preview_secret_guard.py
 # Validate CI/quota policy before any expensive build/finalizer work.
 python3 test_ci_quota_guard.py
+python3 test_vercel_ignore_build.py
 # Keep the full-schema recovery procedure pinned to current Production truth.
 python3 test_full_schema_export_recovery.py
 # Keep the consolidated remote migration ledger pinned to current Production truth.
