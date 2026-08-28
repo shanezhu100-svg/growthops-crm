@@ -90,13 +90,14 @@ python3 test_admin_password_byte_cap_output.py
 # rather than the historical browser-local prototype.
 python3 production_auth_copy_finalize.py
 python3 test_production_auth_copy_output.py
-# Pin browser dependencies, compile Tailwind to same-origin CSS, then fetch exact
-# Vue/XLSX bytes behind a static policy gate and serve them from same-origin vendor paths.
+# Convert browser dependencies to verified same-origin build artifacts.
 python3 frontend_dependency_pin_finalize.py
 python3 test_tailwind_static_policy.py
 python3 tailwind_static_finalize.py
 python3 test_frontend_vendor_static_policy.py
 python3 frontend_vendor_static_finalize.py
+python3 test_fontawesome_static_policy.py
+python3 fontawesome_static_finalize.py
 python3 test_frontend_dependency_pin_output.py
 # Final server-side identity and input boundaries. Patch the two deployment BFFs
 # before syntax/runtime tests so canonical builds and deployed handlers are aligned.
