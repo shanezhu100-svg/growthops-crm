@@ -69,7 +69,7 @@ Accepted artifact evidence:
 
 The workflow logs kept `SUPABASE_DB_URL` masked as `***`; no database password, complete PostgreSQL URL, or Supabase server secret was observed in the run logs.
 
-This accepts the **integrity and scope of the v3 artifact**. It does not by itself close #93.
+This accepts the **integrity and scope of the v3 artifact**. Full recovery acceptance additionally required the hosted restore and synthetic rollback checks below.
 
 ## Fresh hosted v3 restore proof
 
@@ -113,21 +113,46 @@ The connected SQL transport cannot send the approximately 100 KB `schema.sql` as
 
 Direct inspection of the accepted ZIP proved the bundled `schema.sql` did **not** contain that declaration and matched live Production. The disposable target was corrected only by re-applying the exact original function definition from the accepted artifact, and the transport-only migration entry was removed. This was an executor transcription correction, not a Bundle v3 schema/security repair or Production mutation. The issue audit entry was corrected in place rather than leaving the wrong attribution in history.
 
-## What is still required
+## Final synthetic cloud acceptance — passed
 
-Issue #93 remains open for one substantive acceptance item:
+The canonical psql acceptance is:
 
 `supabase/baseline/p0_cloud_recovery_acceptance.sql`
 
-The full synthetic cloud acceptance script has been statically reviewed: it uses synthetic values, requires the recovery CRM target to be empty, begins an explicit transaction, emits `P0_CLOUD_RECOVERY_ACCEPTANCE_OK` only after assertions, and ends with `ROLLBACK`.
+The Gate-pinned Supabase-compatible derivative is:
 
-The connected SQL execution safety layer blocks the credential/reveal payload before it reaches Postgres, so **that script has not yet been executed successfully in this recovery run**. Do not claim otherwise.
+`supabase/baseline/p0_cloud_recovery_acceptance_sql_editor.sql`
 
-Run it only on the disposable v3 target, never Production. After it reports success, independently prove that CRM users/workspaces/sessions/audit rows and Vault synthetic rows returned to zero. Only then may #93 be closed and the temporary recovery target lifecycle be finalized.
+On 2026-08-27 the complete Gate-pinned derivative was executed through the connected Supabase SQL executor against only the disposable v3 target `qczkskuaszlezlcxxpqk`. The transaction completed its assertions, rolled back, and returned:
+
+`P0_CLOUD_RECOVERY_ACCEPTANCE_OK`
+
+The immediate read-only/count-only:
+
+`supabase/baseline/p0_cloud_recovery_acceptance_postcheck.sql`
+
+returned:
+
+- `crm_users = 0`;
+- `crm_workspaces = 0`;
+- `crm_sessions = 0`;
+- `crm_server_audit_logs = 0`;
+- `vault_secret_rows = 0`;
+- `rollback_clean = true`.
+
+Independent post-acceptance catalog verification then re-confirmed:
+
+- primary `200 / 77ba3a7c646cf2ea04f41d20ceb1dd02aa9f041db7cbd2a0ad0386ddedbfba65`;
+- guard `9 / 2a6c96fe5c2290cd30ee5b29800dcb47d9f1686d48b51344486c2c7780030140`;
+- wider-public `225 / a0078c5da6c5844a6d02c96e5c486d3fd8b13bb859a640073fb13cbacc6032ab`;
+- migration ledger exactly `51` entries;
+- migration head `20260825075808 / post_p5_rate_limit_concurrency`.
+
+This completes the technical zero-to-current recovery acceptance for issue #93. The disposable-project lifecycle remains an operational cleanup choice; it does not invalidate the accepted proof.
 
 ## Safety boundaries
 
-- Never run `p0_cloud_recovery_acceptance.sql` against Production.
+- Never run `p0_cloud_recovery_acceptance.sql` or its SQL Editor derivative against Production.
 - Never export customer rows or Vault plaintext into the recovery bundle.
 - Never print or commit a database password, full credential-bearing PostgreSQL URL, Supabase server secret, or customer secret material.
 - A service-role/API secret is not a PostgreSQL database password.
