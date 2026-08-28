@@ -9,14 +9,14 @@ DIST = ROOT / 'dist'
 INDEX = DIST / 'index.html'
 VENDOR_DIR = DIST / 'vendor'
 
-# Start new dependencies in explicit probe mode. CI downloads the exact versioned
-# resource, reports its digest, and refuses to rewrite the page until the digest is
-# reviewed and pinned here in a follow-up commit.
+# Browser vendors are fetched only from exact versioned resources, verified against
+# CI-probed SHA-256 authority, then copied into same-origin deploy output. A CDN
+# byte change therefore fails the build before any page rewrite or deployment.
 VENDORS = (
     {
         'name': 'vue',
         'url': 'https://unpkg.com/vue@3.5.41/dist/vue.global.js',
-        'sha256': '__PROBE__',
+        'sha256': '14625269265de97b5c344b8fcfb7136c0c9ab09f7dbadc909a4967d14eca05fb',
         'output': 'vue-3.5.41.global.js',
         'min_bytes': 500_000,
         'markers': ('vue v3.5.41', 'var Vue ='),
@@ -24,7 +24,7 @@ VENDORS = (
     {
         'name': 'xlsx',
         'url': 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
-        'sha256': '__PROBE__',
+        'sha256': 'c9506197caf809a075b6dee1da0d36fb19da7158ffe8a88e7b0c96c5d8623c99',
         'output': 'xlsx-0.18.5.full.min.js',
         'min_bytes': 800_000,
         'markers': ('XLSX',),
@@ -45,7 +45,6 @@ if not INDEX.is_file():
 html = INDEX.read_text(encoding='utf-8')
 VENDOR_DIR.mkdir(parents=True, exist_ok=True)
 
-probe_results = []
 downloaded = []
 for vendor in VENDORS:
     url = vendor['url']
@@ -75,10 +74,6 @@ for vendor in VENDORS:
     for marker in vendor['markers']:
         if marker not in text:
             fail(f"{vendor['name']} asset missing marker: {marker}")
-
-    if vendor['sha256'] == '__PROBE__':
-        probe_results.append(f"{vendor['name']}={actual}/{len(data)}B")
-        continue
     if actual != vendor['sha256']:
         fail(f"{vendor['name']} SHA-256 mismatch: expected={vendor['sha256']}; actual={actual}")
 
@@ -89,9 +84,6 @@ for vendor in VENDORS:
     local_tag = f'<script src="/vendor/{vendor["output"]}"></script>'
     html = html.replace(source_tag, local_tag, 1)
     downloaded.append((vendor, actual, len(data), local_tag))
-
-if probe_results:
-    fail('PIN_REQUIRED: ' + '; '.join(probe_results))
 
 INDEX.write_text(html, encoding='utf-8')
 for vendor, actual, size, local_tag in downloaded:
