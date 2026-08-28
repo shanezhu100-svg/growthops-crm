@@ -5,6 +5,7 @@ root = Path(__file__).resolve().parent
 vercel = json.loads((root / 'vercel.json').read_text(encoding='utf-8'))
 workflow = (root / '.github/workflows/crm-build.yml').read_text(encoding='utf-8')
 build = (root / 'build.sh').read_text(encoding='utf-8')
+ignore_script = (root / 'vercel-ignore-build.sh').read_text(encoding='utf-8')
 
 
 def require(ok, message):
@@ -19,6 +20,22 @@ require(
 require(
     '*' not in rules,
     'Vercel bare-star deny is insufficient for slash-containing branch names; use globstar',
+)
+require(
+    vercel.get('ignoreCommand') == 'sh vercel-ignore-build.sh',
+    'Vercel ignored-build policy must use the reviewed conservative classifier',
+)
+for marker in (
+    'VERCEL_GIT_PREVIOUS_SHA',
+    'git merge-base --is-ancestor',
+    '.github/*|test_*.py|test_*.js|test_*.mjs|*.md',
+    'runtime-relevant change',
+    'previous deployment SHA unavailable; continue build',
+):
+    require(marker in ignore_script, f'Vercel ignored-build classifier missing fail-safe marker: {marker}')
+require(
+    'api/*' not in ignore_script and 'functions/*' not in ignore_script and 'supabase/*' not in ignore_script,
+    'runtime/API/Supabase paths must never be allowlisted as non-runtime Vercel changes',
 )
 
 require('name: CRM Build Gate' in workflow, 'missing CRM Build Gate workflow')
@@ -35,5 +52,6 @@ require('package-manager-cache: false' in workflow, 'unneeded package-manager ca
 require('run: sh build.sh' in workflow, 'PR CI must execute canonical build.sh')
 require('cancel-in-progress: true' in workflow, 'stale PR CI must be cancelled')
 require(build.count('python3 test_ci_quota_guard.py') == 1, 'canonical build must run quota/CI guard exactly once')
+require(build.count('python3 test_vercel_ignore_build.py') == 1, 'canonical build must run Vercel ignored-build regression exactly once')
 
-print('CI_QUOTA_GUARD_OK: vercel-git=main-only; non-main=globstar-deployment-disabled; slash-branches=covered; pr-ci=github-actions; secrets=none; permissions=contents-read; actions=sha-pinned; node=24.x; canonical-build=sh-build.sh')
+print('CI_QUOTA_GUARD_OK: vercel-git=main-only; non-main=globstar-deployment-disabled; nonruntime-main=ignored-conservatively; slash-branches=covered; pr-ci=github-actions; secrets=none; permissions=contents-read; actions=sha-pinned; node=24.x; canonical-build=sh-build.sh')
