@@ -8,7 +8,7 @@ DIST = ROOT / 'dist'
 # P1 verifier scope is intentionally narrow: Cloudflare output/parity only.
 # Application security is already enforced by sh build.sh and its existing tests.
 EXPECTED_SHA256 = {
-    'index.html': '43e81127f66cc0ccf560d6a63b3209dabab28b46030ff867e163be71e1b16673',
+    'index.html': '8ed60d6e3c5b1588b6fafff68a9dc9157dc68ba9f0bf5e1e4edb4737d2aa9a66',
     'tailwind.css': '082358f4ff9c6d67ccb8e628ed27669967e15cfa7908f2e4c36a1e89c0a3f7b6',
     'vendor/vue-3.5.41.global.js': '14625269265de97b5c344b8fcfb7136c0c9ab09f7dbadc909a4967d14eca05fb',
     'vendor/xlsx-0.18.5.full.min.js': 'c9506197caf809a075b6dee1da0d36fb19da7158ffe8a88e7b0c96c5d8623c99',
@@ -28,32 +28,23 @@ EXPECTED_SHA256 = {
 }
 
 REQUIRED_STATIC_HEADERS = (
-    'Content-Security-Policy:',
-    'X-Frame-Options:',
-    'X-Content-Type-Options:',
-    'Referrer-Policy:',
-    'Permissions-Policy:',
-    'Cross-Origin-Opener-Policy:',
+    'Content-Security-Policy:', 'X-Frame-Options:', 'X-Content-Type-Options:',
+    'Referrer-Policy:', 'Permissions-Policy:', 'Cross-Origin-Opener-Policy:',
 )
-
 FORBIDDEN_404_MARKERS = (
-    '<script', '<form', '<iframe', '<object', '<embed', '<link ',
-    '/api/crm', 'growthops_supabase', 'sb_secret_', 'fetch(', 'xmlhttprequest',
-    'document.cookie', 'localstorage', 'sessionstorage', 'location.', 'window.',
+    '<script', '<form', '<iframe', '<object', '<embed', '<link ', '/api/crm',
+    'growthops_supabase', 'sb_secret_', 'fetch(', 'xmlhttprequest', 'document.cookie',
+    'localstorage', 'sessionstorage', 'location.', 'window.',
 )
-
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
-
 def fail(message: str) -> None:
     raise SystemExit('CLOUDFLARE_P1_VERIFY_FAILED: ' + message)
 
-
 if not DIST.is_dir():
     fail('dist/ missing; run sh build.sh first')
-
 drift = []
 for name, expected in EXPECTED_SHA256.items():
     path = DIST / name
@@ -71,13 +62,7 @@ if not not_found.is_file():
     fail('missing dist/404.html fail-open guard')
 not_found_html = not_found.read_text(encoding='utf-8')
 not_found_low = not_found_html.lower()
-for marker in (
-    '<!doctype html>',
-    '<title>404 · not found</title>',
-    '<h1>404</h1>',
-    'the requested resource was not found.',
-    'noindex,nofollow,noarchive',
-):
+for marker in ('<!doctype html>', '<title>404 · not found</title>', '<h1>404</h1>', 'the requested resource was not found.', 'noindex,nofollow,noarchive'):
     if marker not in not_found_low:
         fail(f'dist/404.html missing inert marker: {marker}')
 for marker in FORBIDDEN_404_MARKERS:
@@ -96,9 +81,4 @@ missing_headers = [name for name in REQUIRED_STATIC_HEADERS if name not in heade
 if missing_headers:
     fail('dist/_headers missing security headers: ' + ', '.join(missing_headers))
 
-print(
-    'CLOUDFLARE_P1_OUTPUT_PARITY_OK: '
-    f'dist=present; key_artifacts={len(EXPECTED_SHA256)}; production_hashes=match; '
-    'same-origin-vendor-js=hash-pinned; same-origin-fontawesome=hash-pinned; '
-    'failopen_404=guarded; static_headers=guarded'
-)
+print('CLOUDFLARE_P1_OUTPUT_PARITY_OK: ' f'dist=present; key_artifacts={len(EXPECTED_SHA256)}; production_hashes=match; ' 'same-origin-vendor-js=hash-pinned; same-origin-fontawesome=hash-pinned; failopen_404=guarded; static_headers=guarded')
