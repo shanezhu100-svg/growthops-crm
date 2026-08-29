@@ -125,9 +125,12 @@ python3 test_style_attr_cssom_output.py
 # options with frozen render functions, and ship Vue runtime-only with eval-free CSP.
 python3 vue_runtime_only_finalize.py
 python3 test_vue_runtime_only_output.py
-# The VM smoke above proves registry/runtime structure. This real Chromium smoke is
-# the service-liveness gate: the shipped app must actually mount, consume the raw
-# template, and remove v-cloak so a compiler/render regression cannot ship a blank UI.
+# Preserve the metadata Vue.compile() normally attaches to runtime-compiled render
+# functions. The extracted deterministic registry keeps source code but otherwise
+# loses _rc, which prevents runtime-only Vue from installing its withProxy handler.
+python3 vue_runtime_compiled_marker_finalize.py
+# The structural/VM gates above are not sufficient for service liveness. A real
+# Chromium run must mount #app, consume the raw template, and remove v-cloak.
 python3 test_browser_mount_smoke.py
 # Business-semantic regression gates execute the final shipped application logic,
 # not a copied test implementation.
