@@ -24,7 +24,7 @@ for directive in ('camera=()', 'microphone=()', 'geolocation=()', 'payment=()', 
         raise SystemExit(f'VERCEL_SECURITY_HEADERS_TESTS_FAILED permissions {directive}')
 
 csp = headers.get('Content-Security-Policy', '')
-expected_script_src = "script-src 'self' 'unsafe-eval'"
+expected_script_src = "script-src 'self'"
 expected_script_attr = "script-src-attr 'none'"
 expected_style_src = "style-src 'self'"
 expected_style_elem = "style-src-elem 'self'"
@@ -40,10 +40,6 @@ for directive in (
     if directive not in csp:
         raise SystemExit(f'VERCEL_SECURITY_HEADERS_TESTS_FAILED csp {directive}')
 
-# Application scripts and all application-owned styles are now same-origin static
-# files. HTML event handlers and style attributes are both explicitly denied.
-# Vue's compiler-inclusive global build still needs unsafe-eval as the sole
-# remaining unsafe CSP capability.
 def directive_tokens(name):
     part=csp.split(name+' ',1)[1].split(';',1)[0]
     return [token for token in part.split() if token]
@@ -62,10 +58,10 @@ if any('*' in tokens for tokens in all_source_sets):
     raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED CSP wildcard source')
 if any(source in tokens for tokens in (script_tokens, style_tokens, style_elem_tokens, font_tokens) for source in ('https:', 'http:')):
     raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED broad scheme source')
-if script_tokens != ["'self'", "'unsafe-eval'"]:
-    raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED script-src must be same-origin plus transitional Vue eval only')
-if "'unsafe-inline'" in script_tokens:
-    raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED script-src unsafe-inline must remain removed')
+if script_tokens != ["'self'"]:
+    raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED script-src must be same-origin only')
+if "'unsafe-inline'" in csp or "'unsafe-eval'" in csp:
+    raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED all unsafe script/style CSP capabilities must be absent')
 if script_attr_tokens != ["'none'"]:
     raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED script-src-attr must deny all HTML event handler attributes')
 if style_tokens != ["'self'"]:
@@ -74,8 +70,6 @@ if style_elem_tokens != ["'self'"]:
     raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED style-src-elem must be same-origin only')
 if style_attr_tokens != ["'none'"]:
     raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED style-src-attr must deny all inline/dynamic style attributes')
-if "'unsafe-inline'" in csp:
-    raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED unsafe-inline must be absent from the entire CSP')
 if font_tokens != ["'self'", 'data:']:
     raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED font-src must be same-origin/data only')
 for forbidden in (
@@ -92,4 +86,4 @@ for name,tokens in (('img-src',img_tokens),('media-src',media_tokens)):
     if tokens != ["'self'",'data:','blob:']:
         raise SystemExit(f'VERCEL_SECURITY_HEADERS_TESTS_FAILED {name} must remain self/data/blob only')
 
-print('VERCEL_SECURITY_HEADERS_TESTS_OK: csp=same-origin-script+style; script-attr=none; style-attr=none; unsafe-inline=absent; connect=self-only; img-media=self-data-blob; vue-eval-only-unsafe=true')
+print('VERCEL_SECURITY_HEADERS_TESTS_OK: csp=same-origin-script+style; script-attr=none; style-attr=none; unsafe-inline=absent; unsafe-eval=absent; connect=self-only; img-media=self-data-blob')
