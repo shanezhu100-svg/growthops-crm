@@ -93,4 +93,4 @@ jsonEq(subject.financeChannelDeals('p1','x').map(d=>d.id),['ok','wrong-client','
 jsonEq(subject.financeChannelDeals('p1','x','c1').map(d=>d.id),['ok','no-overlap'],'optional channel client filter isolates client');
 
 console.log('BUSINESS_FINANCE_UNIQUE_OK: combined-aggregation+currency-isolation+provider-filter+client-wrappers+deal-selection=executed');
-await import('./test_business_finance_settlement_probe.mjs');
+await import('./test_business_finance_settlement.mjs');
