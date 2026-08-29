@@ -21,6 +21,12 @@ bound_context = re.sub(
 print('STYLE_ATTR_CSSOM_PROBE_BOUND_STYLE: ' + re.sub(r'\s+', ' ', bound_match.group(2)).strip()[:500])
 print('STYLE_ATTR_CSSOM_PROBE_BOUND_CONTEXT: ' + bound_context[:1200])
 
+vshows = list(re.finditer(r'\bv-show\s*=\s*(["\'])(.*?)\1', html, flags=re.I | re.S))
+print(f'STYLE_ATTR_CSSOM_PROBE_VSHOW_COUNT: {len(vshows)}')
+for idx, match in enumerate(vshows, start=1):
+    context = re.sub(r'\s+', ' ', html[max(0, match.start() - 180):min(len(html), match.end() + 260)]).strip()
+    print(f'STYLE_ATTR_CSSOM_PROBE_VSHOW_{idx}: expr={match.group(2)}; context={context[:700]}')
+
 app_files = sorted(APP.glob('app-inline-*.js'))
 if not app_files:
     raise SystemExit('STYLE_ATTR_CSSOM_PROBE_FAILED: externalized app JS missing')
