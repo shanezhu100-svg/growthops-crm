@@ -116,6 +116,9 @@ python3 test_style_csp_readiness.py
 python3 test_inline_style_static_policy.py
 python3 inline_style_static_finalize.py
 python3 test_inline_style_static_output.py
+# Fail closed after emitting the exact remaining dynamic style sinks. This probe is
+# temporary and must be removed or converted to a permanent regression before merge.
+python3 test_style_attr_cssom_probe.py
 # Final server-side identity and input boundaries. Patch the two deployment BFFs
 # before syntax/runtime tests so canonical builds and deployed handlers are aligned.
 python3 preview_runtime_boundary_finalize.py
