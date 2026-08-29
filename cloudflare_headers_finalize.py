@@ -72,6 +72,7 @@ required = {
     'x-permitted-cross-domain-policies',
     'cross-origin-opener-policy',
     'permissions-policy',
+    'x-robots-tag',
     'content-security-policy',
 }
 missing = sorted(required - seen)

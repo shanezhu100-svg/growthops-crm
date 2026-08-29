@@ -41,6 +41,7 @@ EXPECTED_SHA256 = {
 REQUIRED_STATIC_HEADERS = (
     'Content-Security-Policy:', 'X-Frame-Options:', 'X-Content-Type-Options:',
     'Referrer-Policy:', 'Permissions-Policy:', 'Cross-Origin-Opener-Policy:',
+    'X-Robots-Tag: noindex, nofollow, noarchive',
 )
 FORBIDDEN_404_MARKERS = (
     '<script', '<form', '<iframe', '<object', '<embed', '<link ', '/api/crm',
@@ -98,5 +99,5 @@ print(
     'same-origin-app-js=hash-pinned; same-origin-app-css=hash-pinned; '
     'same-origin-vendor-js=hash-pinned; vue-runtime-only+renders=hash-pinned; '
     'same-origin-fontawesome=hash-pinned; same-origin-inter=hash-pinned; '
-    'failopen_404=guarded; static_headers=guarded'
+    'robots=noindex+nofollow+noarchive; failopen_404=guarded; static_headers=guarded'
 )
