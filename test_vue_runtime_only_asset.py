@@ -37,10 +37,8 @@ except UnicodeDecodeError:
 for marker in ('vue v3.5.41', 'var Vue ='):
     if marker not in text:
         fail('runtime-only asset missing marker: ' + marker)
-# Runtime-only still contains the runtime-core registerRuntimeCompiler hook so an
-# external compiler could be injected. That hook is not the compiler. Reject the
-# actual compiler implementation/factory markers here, then prove dynamically
-# below that the shipped Vue global does not expose Vue.compile.
+# Runtime-only still exposes a public compile warning stub for API compatibility,
+# but must not contain the actual compiler implementation or dynamic code factory.
 for forbidden in (
     'function compileToFunction(',
     'const compile = compileToFunction',
@@ -54,7 +52,9 @@ for marker in ('createApp', 'defineComponent', 'ref', 'computed', 'watch'):
 
 actual = hashlib.sha256(data).hexdigest()
 
-# Prove the asset can initialize without a DOM and that no compiler is exposed.
+# Prove the global initializes, core runtime APIs work, and Vue.compile is only
+# the documented runtime-only warning stub: it must not return a render function
+# and must emit the runtime-compilation-not-supported warning.
 probe = ROOT / '.tmp-vue-runtime-probe.js'
 probe.write_bytes(data)
 try:
@@ -63,11 +63,23 @@ try:
 const fs = require('fs');
 const vm = require('vm');
 const source = fs.readFileSync(process.argv[1], 'utf8');
-const sandbox = { console: { log(){}, info(){}, warn(){}, error(){} }, setTimeout, clearTimeout, setInterval, clearInterval };
+const warnings = [];
+const sandbox = {
+  console: {
+    log(){}, info(){}, error(){},
+    warn(...args){ warnings.push(args.map(String).join(' ')); }
+  },
+  setTimeout, clearTimeout, setInterval, clearInterval
+};
 vm.createContext(sandbox);
 vm.runInContext(source, sandbox, { timeout: 10000 });
 if (!sandbox.Vue || typeof sandbox.Vue.createApp !== 'function') throw new Error('Vue runtime global missing createApp');
-if (typeof sandbox.Vue.compile === 'function') throw new Error('runtime-only asset unexpectedly exposes compiler');
+if (typeof sandbox.Vue.compile !== 'function') throw new Error('Vue runtime global missing compile compatibility stub');
+const compiled = sandbox.Vue.compile('<div>probe</div>');
+if (typeof compiled === 'function') throw new Error('runtime-only compile stub unexpectedly produced render function');
+if (!warnings.some(v => v.includes('Runtime compilation is not supported in this build of Vue'))) {
+  throw new Error('runtime-only compile stub did not emit expected unsupported warning');
+}
 process.stdout.write('ok');
 '''
     proc = subprocess.run(['node', '-e', js, str(probe)], capture_output=True, text=True, timeout=20, check=False)
@@ -77,11 +89,11 @@ finally:
     probe.unlink(missing_ok=True)
 
 if EXPECTED_SHA256 == '__PROBE__':
-    fail(f'PIN_REQUIRED: sha256={actual}; bytes={len(data)}; compiler=absent; vm-smoke=pass')
+    fail(f'PIN_REQUIRED: sha256={actual}; bytes={len(data)}; compiler=absent; compile-stub=warning-only; vm-smoke=pass')
 if actual != EXPECTED_SHA256 or len(data) != EXPECTED_BYTES:
     fail(f'asset drift: expected={EXPECTED_SHA256}/{EXPECTED_BYTES}B; actual={actual}/{len(data)}B')
 
 print(
     'VUE_RUNTIME_ONLY_ASSET_OK: version=3.5.41; global=runtime-only; compiler=absent; '
-    f'sha256={actual}; bytes={len(data)}; redirect=denied; vm-smoke=pass'
+    f'sha256={actual}; bytes={len(data)}; redirect=denied; compile-stub=warning-only; vm-smoke=pass'
 )
