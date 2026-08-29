@@ -1,3 +1,4 @@
+from html.entities import html5 as HTML5_ENTITIES
 from html.parser import HTMLParser
 from pathlib import Path
 import json
@@ -132,10 +133,93 @@ const input = JSON.parse(fs.readFileSync(0, 'utf8'));
 const vueSource = fs.readFileSync(input.vuePath, 'utf8');
 const sha = (s) => crypto.createHash('sha256').update(s, 'utf8').digest('hex');
 
+function decodeEntities(raw) {
+  let out = '';
+  for (let i = 0; i < raw.length;) {
+    if (raw[i] !== '&') {
+      out += raw[i++];
+      continue;
+    }
+    const start = i;
+    i += 1;
+    if (raw[i] === '#') {
+      let j = i + 1;
+      let radix = 10;
+      if (raw[j] === 'x' || raw[j] === 'X') {
+        radix = 16;
+        j += 1;
+      }
+      const digitsStart = j;
+      while (j < raw.length && (radix === 16 ? /[0-9A-Fa-f]/.test(raw[j]) : /[0-9]/.test(raw[j]))) j += 1;
+      if (j === digitsStart) {
+        out += '&';
+        continue;
+      }
+      const value = Number.parseInt(raw.slice(digitsStart, j), radix);
+      if (raw[j] === ';') j += 1;
+      const valid = value > 0 && value <= 0x10ffff && !(value >= 0xd800 && value <= 0xdfff);
+      out += String.fromCodePoint(valid ? value : 0xfffd);
+      i = j;
+      continue;
+    }
+    let j = i;
+    while (j < raw.length && /[0-9A-Za-z]/.test(raw[j])) j += 1;
+    if (raw[j] === ';') j += 1;
+    let matched = null;
+    for (let end = j; end > i; end -= 1) {
+      const key = raw.slice(i, end);
+      if (Object.prototype.hasOwnProperty.call(input.entities, key)) {
+        matched = { end, value: input.entities[key] };
+        break;
+      }
+    }
+    if (!matched) {
+      out += raw.slice(start, Math.max(i, j));
+      i = Math.max(i, j);
+      continue;
+    }
+    out += matched.value;
+    i = matched.end;
+  }
+  return out;
+}
+
+function makeDecoderElement() {
+  let textContent = '';
+  let attrValue = null;
+  return {
+    get textContent() { return textContent; },
+    get children() {
+      if (attrValue === null) return [];
+      return [{ getAttribute(name) { return name === 'foo' ? attrValue : null; } }];
+    },
+    set innerHTML(value) {
+      const text = String(value);
+      const match = text.match(/^<div foo="([\s\S]*)">$/);
+      if (match) {
+        attrValue = decodeEntities(match[1]);
+        textContent = '';
+      } else {
+        attrValue = null;
+        textContent = decodeEntities(text);
+      }
+    },
+  };
+}
+
 function compilePass() {
+  const documentShim = {
+    createElement(tag) {
+      if (String(tag).toLowerCase() !== 'div') {
+        throw new Error('unexpected document.createElement in compiler probe: ' + tag);
+      }
+      return makeDecoderElement();
+    },
+  };
   const sandbox = {
     console: { log(){}, info(){}, warn(){}, error(){} },
     setTimeout, clearTimeout, setInterval, clearInterval,
+    document: documentShim,
   };
   vm.createContext(sandbox);
   vm.runInContext(vueSource, sandbox, { filename: 'vue-3.5.41.global.js', timeout: 10000 });
@@ -179,7 +263,14 @@ const second = compilePass();
 process.stdout.write(JSON.stringify({ first, second }));
 '''
 
-payload = json.dumps({'vuePath': str(VUE_ASSET), 'units': units}, ensure_ascii=False)
+payload = json.dumps(
+    {
+        'vuePath': str(VUE_ASSET),
+        'units': units,
+        'entities': dict(HTML5_ENTITIES),
+    },
+    ensure_ascii=False,
+)
 try:
     proc = subprocess.run(
         ['node', '-e', node_probe],
