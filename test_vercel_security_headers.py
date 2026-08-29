@@ -28,7 +28,7 @@ expected_script_src = "script-src 'self' 'unsafe-eval'"
 expected_script_attr = "script-src-attr 'none'"
 expected_style_src = "style-src 'self'"
 expected_style_elem = "style-src-elem 'self'"
-expected_style_attr = "style-src-attr 'unsafe-inline'"
+expected_style_attr = "style-src-attr 'none'"
 expected_font_src = "font-src 'self' data:"
 for directive in (
     "default-src 'self'", "base-uri 'self'", "object-src 'none'", "frame-ancestors 'none'",
@@ -40,10 +40,10 @@ for directive in (
     if directive not in csp:
         raise SystemExit(f'VERCEL_SECURITY_HEADERS_TESTS_FAILED csp {directive}')
 
-# Application scripts and style elements are same-origin static files now. Vue's
-# compiler-inclusive global build still needs unsafe-eval. A reviewed Vue :style
-# binding and CSSOM style writes remain a separate migration boundary, so only
-# style attributes retain temporary unsafe-inline. HTML on*= handlers stay denied.
+# Application scripts and all application-owned styles are now same-origin static
+# files. HTML event handlers and style attributes are both explicitly denied.
+# Vue's compiler-inclusive global build still needs unsafe-eval as the sole
+# remaining unsafe CSP capability.
 def directive_tokens(name):
     part=csp.split(name+' ',1)[1].split(';',1)[0]
     return [token for token in part.split() if token]
@@ -72,8 +72,10 @@ if style_tokens != ["'self'"]:
     raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED style-src fallback must be same-origin only')
 if style_elem_tokens != ["'self'"]:
     raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED style-src-elem must be same-origin only')
-if style_attr_tokens != ["'unsafe-inline'"]:
-    raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED style-src-attr must retain only reviewed transitional inline style capability')
+if style_attr_tokens != ["'none'"]:
+    raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED style-src-attr must deny all inline/dynamic style attributes')
+if "'unsafe-inline'" in csp:
+    raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED unsafe-inline must be absent from the entire CSP')
 if font_tokens != ["'self'", 'data:']:
     raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED font-src must be same-origin/data only')
 for forbidden in (
@@ -90,4 +92,4 @@ for name,tokens in (('img-src',img_tokens),('media-src',media_tokens)):
     if tokens != ["'self'",'data:','blob:']:
         raise SystemExit(f'VERCEL_SECURITY_HEADERS_TESTS_FAILED {name} must remain self/data/blob only')
 
-print('VERCEL_SECURITY_HEADERS_TESTS_OK: csp=same-origin-script+style-elements; script-attr=none; style-attr=transitional-inline-only; connect=self-only; img-media=self-data-blob; vue-eval-compat=true')
+print('VERCEL_SECURITY_HEADERS_TESTS_OK: csp=same-origin-script+style; script-attr=none; style-attr=none; unsafe-inline=absent; connect=self-only; img-media=self-data-blob; vue-eval-only-unsafe=true')
