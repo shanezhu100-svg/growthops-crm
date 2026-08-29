@@ -12,7 +12,12 @@ required_finalizer_markers = (
     "tailwindcss-linux-arm64",
     "69b1378b8133192d7d2feb12a116fa12d035594f58db3eff215879e4ad8cf39b",
     "https://github.com/tailwindlabs/tailwindcss/releases/download/v{VERSION}/{asset_name}",
+    "DOWNLOAD_ATTEMPTS = 3",
+    "for attempt in range(1, DOWNLOAD_ATTEMPTS + 1):",
     "urllib.request.urlopen(request, timeout=90)",
+    "if attempt < DOWNLOAD_ATTEMPTS:",
+    "time.sleep(attempt)",
+    "after {DOWNLOAD_ATTEMPTS} attempts",
     "if actual_sha != expected_sha:",
     "if sha256(tool) != expected_sha:",
     "--content",
@@ -30,6 +35,16 @@ for forbidden in ('releases/latest/', 'tailwindcss@latest', 'npx tailwindcss', '
     if forbidden in FINALIZER:
         raise SystemExit('TAILWIND_STATIC_POLICY_FAILED: floating/unlocked Tailwind install path: ' + forbidden)
 
+# Reliability may retry only the same immutable release URL. It must not introduce
+# fallback mirrors or weaken digest verification after a transient download error.
+if FINALIZER.count("urllib.request.Request(url") != 1:
+    raise SystemExit('TAILWIND_STATIC_POLICY_FAILED: pinned Tailwind request authority must remain singular')
+if 'DOWNLOAD_ATTEMPTS = 3' not in FINALIZER:
+    raise SystemExit('TAILWIND_STATIC_POLICY_FAILED: bounded retry count drift')
+for forbidden_host in ('unpkg.com/tailwind', 'cdn.jsdelivr.net/npm/tailwind', 'npmjs.org', 'registry.npmjs.org'):
+    if forbidden_host in FINALIZER:
+        raise SystemExit('TAILWIND_STATIC_POLICY_FAILED: alternate Tailwind download source introduced: ' + forbidden_host)
+
 expected_input = '@tailwind base;\n@tailwind components;\n@tailwind utilities;\n'
 if INPUT != expected_input:
     raise SystemExit('TAILWIND_STATIC_POLICY_FAILED: tailwind.input.css drift')
@@ -44,4 +59,4 @@ for call in (policy_call, finalizer_call, output_gate_call, pin_call):
 if not (BUILD.index(pin_call) < BUILD.index(policy_call) < BUILD.index(finalizer_call) < BUILD.index(output_gate_call)):
     raise SystemExit('TAILWIND_STATIC_POLICY_FAILED: static Tailwind build order drift')
 
-print('TAILWIND_STATIC_POLICY_OK: version=3.4.17; linux=x64+arm64-sha256-pinned; npm-tree=absent; build-order=pin>policy>compile>output-gate')
+print('TAILWIND_STATIC_POLICY_OK: version=3.4.17; linux=x64+arm64-sha256-pinned; download=single-source+3-attempt-bounded-retry; npm-tree=absent; build-order=pin>policy>compile>output-gate')

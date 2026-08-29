@@ -5,6 +5,7 @@ import platform
 import stat
 import subprocess
 import tempfile
+import time
 import urllib.request
 
 ROOT = Path(__file__).resolve().parent
@@ -17,6 +18,7 @@ VERSION = '3.4.17'
 PLAY_URL = f'https://cdn.tailwindcss.com/{VERSION}'
 PLAY_TAG = f'<script src="{PLAY_URL}"></script>'
 STATIC_TAG = '<link rel="stylesheet" href="/tailwind.css" />'
+DOWNLOAD_ATTEMPTS = 3
 
 # Tailwind CSS v3.4.17 standalone release checksums. Keep both common Linux
 # architectures fail-closed so CI/hosting cannot silently execute a different
@@ -65,26 +67,42 @@ asset_name, expected_sha = RELEASES[machine]
 url = f'https://github.com/tailwindlabs/tailwindcss/releases/download/v{VERSION}/{asset_name}'
 
 # Keep the verified tool outside dist/ so it is never shipped to browsers. Reuse
-# only when the cached bytes still match the pinned digest.
+# only when the cached bytes still match the pinned digest. A transient network
+# failure may be retried against this same immutable release URL, but digest drift
+# is never retried or accepted.
 tool = Path(tempfile.gettempdir()) / f'growthops-tailwindcss-v{VERSION}-{asset_name}'
 if not tool.is_file() or sha256(tool) != expected_sha:
     tmp = tool.with_suffix('.download')
-    try:
-        request = urllib.request.Request(url, headers={'User-Agent': 'growthops-crm-build/1'})
-        with urllib.request.urlopen(request, timeout=90) as response, tmp.open('wb') as out:
-            while True:
-                chunk = response.read(1024 * 1024)
-                if not chunk:
-                    break
-                out.write(chunk)
-    except Exception as exc:
+    last_error = None
+    for attempt in range(1, DOWNLOAD_ATTEMPTS + 1):
         tmp.unlink(missing_ok=True)
-        fail(f'could not download pinned Tailwind CLI: {type(exc).__name__}')
-    actual_sha = sha256(tmp)
-    if actual_sha != expected_sha:
-        tmp.unlink(missing_ok=True)
-        fail(f'Tailwind CLI SHA-256 mismatch: expected={expected_sha}; actual={actual_sha}')
-    os.replace(tmp, tool)
+        try:
+            request = urllib.request.Request(url, headers={'User-Agent': 'growthops-crm-build/1'})
+            with urllib.request.urlopen(request, timeout=90) as response, tmp.open('wb') as out:
+                while True:
+                    chunk = response.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    out.write(chunk)
+        except Exception as exc:
+            tmp.unlink(missing_ok=True)
+            last_error = exc
+            if attempt < DOWNLOAD_ATTEMPTS:
+                time.sleep(attempt)
+                continue
+            fail(
+                f'could not download pinned Tailwind CLI after {DOWNLOAD_ATTEMPTS} attempts: '
+                f'{type(exc).__name__}'
+            )
+        actual_sha = sha256(tmp)
+        if actual_sha != expected_sha:
+            tmp.unlink(missing_ok=True)
+            fail(f'Tailwind CLI SHA-256 mismatch: expected={expected_sha}; actual={actual_sha}')
+        os.replace(tmp, tool)
+        last_error = None
+        break
+    if last_error is not None:
+        fail('pinned Tailwind CLI download retry loop exited unexpectedly')
 
 if sha256(tool) != expected_sha:
     fail('cached Tailwind CLI digest mismatch')
@@ -140,5 +158,6 @@ if html_after.count(STATIC_TAG) != 1:
 print(
     'TAILWIND_STATIC_FINALIZE_OK: '
     f'version={VERSION}; asset={asset_name}; sha256={expected_sha}; '
-    f'css_bytes={len(css.encode("utf-8"))}; play_runtime=absent; stylesheet=/tailwind.css'
+    f'css_bytes={len(css.encode("utf-8"))}; play_runtime=absent; stylesheet=/tailwind.css; '
+    f'download-attempts<={DOWNLOAD_ATTEMPTS}'
 )
