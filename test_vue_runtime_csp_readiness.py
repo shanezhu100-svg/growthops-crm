@@ -161,7 +161,8 @@ print(
     'vue-build=compiler-inclusive-global; unsafe-eval=current-vue-compiler-boundary; debt-budget=frozen'
 )
 
-# Freeze compiler feasibility first, then prove the exact factories can be
-# mechanically represented as a static registry with zero runtime dynamic code.
+# Freeze compiler feasibility and the static render registry before probing the
+# exact runtime-only Vue asset that will replace the compiler-inclusive build.
 import test_vue_precompile_feasibility  # noqa: F401,E402
 import test_vue_precompiled_render_artifact  # noqa: F401,E402
+import test_vue_runtime_only_asset  # noqa: F401,E402
