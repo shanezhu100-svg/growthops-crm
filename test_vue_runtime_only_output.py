@@ -1,3 +1,4 @@
+from html.parser import HTMLParser
 from pathlib import Path
 import hashlib
 import json
@@ -26,12 +27,27 @@ for marker in ('function compileToFunction(','const compile = compileToFunction'
  if marker in runtime: fail('compiler marker in runtime asset: '+marker)
 for marker in ('new Function(','eval(','setTimeout("',"setTimeout('"):
  if marker in registry: fail('dynamic-code marker in registry: '+marker)
+
 html=INDEX.read_text(encoding='utf-8')
-runtime_tag='<script src="/vendor/vue-3.5.41.runtime.global.js"></script>'; registry_tag='<script src="/vendor/vue-3.5.41.renders.js"></script>'; app_tag='<script src="/app/app-inline-01.js"></script>'
-for tag in (runtime_tag,registry_tag,app_tag):
- if html.count(tag)!=1: fail('script tag multiplicity drift: '+tag)
-if not (html.index(runtime_tag)<html.index(registry_tag)<html.index(app_tag)): fail('runtime/registry/app execution order drift')
-if 'vue-3.5.41.global.js' in html: fail('compiler-inclusive script reference remains')
+class ScriptInventory(HTMLParser):
+ def __init__(self):
+  super().__init__(convert_charrefs=False); self.srcs=[]; self.inline=0
+ def handle_starttag(self,tag,attrs):
+  if tag.lower()!='script': return
+  src=dict(attrs).get('src')
+  if src: self.srcs.append(src)
+  else: self.inline+=1
+parser=ScriptInventory(); parser.feed(html); parser.close()
+if parser.inline!=0: fail(f'inline script blocks returned: {parser.inline}')
+runtime_src='/vendor/vue-3.5.41.runtime.global.js'; registry_src='/vendor/vue-3.5.41.renders.js'
+app_srcs=[f'/app/app-inline-{idx:02d}.js' for idx in range(1,4)]
+for src in [runtime_src,registry_src,*app_srcs]:
+ if parser.srcs.count(src)!=1: fail(f'script src multiplicity drift: {src}={parser.srcs.count(src)}')
+if not (parser.srcs.index(runtime_src)<parser.srcs.index(registry_src)<parser.srcs.index('/app/app-inline-03.js')):
+ fail('runtime/registry/Vue-bootstrap execution order drift')
+if '/vendor/vue-3.5.41.global.js' in parser.srcs or 'vue-3.5.41.global.js' in html:
+ fail('compiler-inclusive script reference remains')
+
 app='\n'.join(p.read_text(encoding='utf-8') for p in APP_FILES)
 if re.search(r'(?<![\w$])template\s*:',app): fail('Vue template option remains in shipped app JS')
 if app.count('GrowthOpsVueRenders.root')!=1: fail('root render reference drift')
@@ -53,4 +69,4 @@ const fs=require('fs'),vm=require('vm');const input=JSON.parse(fs.readFileSync(0
 '''
 smoke=subprocess.run(['node','-e',smoke_js],input=json.dumps({'runtime':runtime,'registry':registry}),text=True,capture_output=True,timeout=30,check=False)
 if smoke.returncode!=0 or smoke.stdout!='ok': fail('runtime-only VM smoke failed: '+re.sub(r'\s+',' ',smoke.stderr.strip())[:400])
-print(f'VUE_RUNTIME_ONLY_OUTPUT_OK: runtime={RUNTIME_SHA}/{RUNTIME_BYTES}B; registry={REGISTRY_SHA}/{REGISTRY_BYTES}B; renders=5; template-options=0; compiler=absent; CSP=self-only+eval-free; vm-smoke=pass')
+print(f'VUE_RUNTIME_ONLY_OUTPUT_OK: runtime={RUNTIME_SHA}/{RUNTIME_BYTES}B; registry={REGISTRY_SHA}/{REGISTRY_BYTES}B; renders=5; template-options=0; compiler=absent; CSP=self-only+eval-free; inline-scripts=0; vm-smoke=pass')
