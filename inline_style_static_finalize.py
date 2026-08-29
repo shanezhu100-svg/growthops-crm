@@ -13,7 +13,11 @@ STYLE_RE = re.compile(r'<style(?P<attrs>[^>]*)>(?P<body>.*?)</style>', re.IGNORE
 ID_RE = re.compile(r'\bid\s*=\s*(["\'])(.*?)\1', re.IGNORECASE | re.DOTALL)
 ATTR_NAME_RE = re.compile(r'([:@A-Za-z_][:\-\.\w]*)\s*(?:=|$)')
 EXPECTED_STYLE_COUNT = 4
-REVIEWED_SINGLETON_IDS = set()
+REVIEWED_SINGLETON_IDS = {
+    'growthops-session-restore-style',
+    'growthops-credential-v6-placeholder-style',
+    'growthops-module-home-navigation-style',
+}
 
 
 def fail(message: str) -> None:
@@ -30,6 +34,19 @@ html = INDEX.read_text(encoding='utf-8')
 matches = list(STYLE_RE.finditer(html))
 if len(matches) != EXPECTED_STYLE_COUNT:
     fail(f'expected exactly {EXPECTED_STYLE_COUNT} style blocks, found {len(matches)}')
+
+# First-party runtime JS has already been externalized at this stage. A reviewed
+# style marker may be preserved on the replacement <link>, but no first-party JS
+# may depend on the original <style> element by id.
+first_party_js = []
+for path in sorted(DIST.rglob('*.js')):
+    try:
+        rel = path.relative_to(DIST)
+    except ValueError:
+        continue
+    if rel.parts and rel.parts[0] == 'vendor':
+        continue
+    first_party_js.append((rel.as_posix(), path.read_text(encoding='utf-8')))
 
 inventory = []
 unreviewed = []
@@ -59,7 +76,10 @@ for idx, match in enumerate(matches, start=1):
     style_id = id_match.group(2) if id_match else None
     if style_id:
         if html.count(style_id) != 1:
-            fail(f'reviewed style id must be singleton; {style_id!r} occurrences={html.count(style_id)}')
+            fail(f'reviewed style id must be singleton in HTML; {style_id!r} occurrences={html.count(style_id)}')
+        js_refs = [name for name, text in first_party_js if style_id in text]
+        if js_refs:
+            fail(f'reviewed style id is referenced by first-party JS: {style_id!r} -> {",".join(js_refs)}')
     low_css = css.lower()
     if '@import' in low_css:
         fail(f'style block {idx} contains @import; externalization would change fetch semantics')
@@ -99,5 +119,6 @@ INDEX.write_text(rewritten, encoding='utf-8')
 print(
     'INLINE_STYLE_STATIC_FINALIZE_OK: '
     + '; '.join(f'{output.name}={sha256(data)}/{len(data)}B' for _, output, data, _, _, _ in prepared)
-    + '; style-blocks=0; order=preserved; url-import=absent'
+    + '; reviewed-ids=' + ','.join(sorted(REVIEWED_SINGLETON_IDS))
+    + '; first-party-js-id-refs=0; style-blocks=0; order=preserved; url-import=absent'
 )
