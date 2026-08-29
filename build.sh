@@ -113,6 +113,7 @@ python3 test_vue_runtime_csp_readiness.py
 # Inventory the remaining style-attribute/CSSOM boundary while enforcing the split
 # style policy, then externalize and hash-pin all static style elements.
 python3 test_style_csp_readiness.py
+python3 test_inline_style_static_policy.py
 python3 inline_style_static_finalize.py
 python3 test_inline_style_static_output.py
 # Final server-side identity and input boundaries. Patch the two deployment BFFs
