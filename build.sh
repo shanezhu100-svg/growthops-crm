@@ -110,15 +110,15 @@ python3 test_inline_script_static_policy.py
 python3 inline_script_static_finalize.py
 python3 test_inline_script_static_output.py
 python3 test_vue_runtime_csp_readiness.py
-# Inventory the remaining style-attribute/CSSOM boundary while enforcing the split
-# style policy, then externalize and hash-pin all static style elements.
+# Externalize static styles, then remove the remaining bound-style/CSSOM sinks so
+# style-src-attr can be denied completely.
 python3 test_style_csp_readiness.py
 python3 test_inline_style_static_policy.py
 python3 inline_style_static_finalize.py
 python3 test_inline_style_static_output.py
-# Fail closed after emitting the exact remaining dynamic style sinks. This probe is
-# temporary and must be removed or converted to a permanent regression before merge.
-python3 test_style_attr_cssom_probe.py
+python3 test_style_attr_cssom_policy.py
+python3 style_attr_cssom_finalize.py
+python3 test_style_attr_cssom_output.py
 # Final server-side identity and input boundaries. Patch the two deployment BFFs
 # before syntax/runtime tests so canonical builds and deployed handlers are aligned.
 python3 preview_runtime_boundary_finalize.py
