@@ -92,3 +92,4 @@ subject.financeRows=['a','b'];subject.profitPageSize=0;
 eq(subject.financeProfitTotalPages(),1,'nonpositive page size uses runtime fallback page size');
 
 console.log('BUSINESS_FINANCE_VISIBLE_PROFIT_OK: receivable-filters+sort+client-name+income-breakdown+profit-pagination=executed');
+await import('./test_business_finance_method_inventory_probe.mjs');
