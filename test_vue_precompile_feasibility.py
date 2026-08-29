@@ -15,9 +15,13 @@ def fail(message: str) -> None:
 
 
 def extract_app_inner_html(source: str) -> str:
-    # Use HTMLParser only to identify the exact source positions of the #app
-    # opening/closing tags. The returned template is still sliced from the
-    # original bytes, so Vue sees the same markup the browser mount path sees.
+    # HTMLParser identifies real tag source positions without being confused by
+    # strings in the externalized application JavaScript. The current Vue DOM
+    # template contains HTML that browsers/Vue tolerate but that does not always
+    # form a strict same-tag nesting stack for HTMLParser. Therefore, after finding
+    # the unique #app opening element, use the last real closing tag for that root
+    # tag before the first externalized app script. The app scripts are already
+    # gated to appear exactly once and outside the DOM template.
     line_starts = [0]
     for match in re.finditer(r'\n', source):
         line_starts.append(match.end())
@@ -25,11 +29,9 @@ def extract_app_inner_html(source: str) -> str:
     class AppExtractor(HTMLParser):
         def __init__(self):
             super().__init__(convert_charrefs=False)
-            self.active = False
             self.root_tag = None
-            self.depth = 0
             self.inner_start = None
-            self.inner_end = None
+            self.root_end_positions = []
             self.roots = 0
 
         def absolute_pos(self) -> int:
@@ -38,17 +40,13 @@ def extract_app_inner_html(source: str) -> str:
 
         def handle_starttag(self, tag, attrs):
             attrs_dict = dict(attrs)
-            if not self.active and attrs_dict.get('id') == 'app':
-                self.roots += 1
-                if self.roots != 1:
-                    fail('multiple #app roots found')
-                self.active = True
-                self.root_tag = tag.lower()
-                self.depth = 1
-                self.inner_start = self.absolute_pos() + len(self.get_starttag_text())
+            if attrs_dict.get('id') != 'app':
                 return
-            if self.active and tag.lower() == self.root_tag:
-                self.depth += 1
+            self.roots += 1
+            if self.roots != 1:
+                fail('multiple #app roots found')
+            self.root_tag = tag.lower()
+            self.inner_start = self.absolute_pos() + len(self.get_starttag_text())
 
         def handle_startendtag(self, tag, attrs):
             attrs_dict = dict(attrs)
@@ -56,21 +54,39 @@ def extract_app_inner_html(source: str) -> str:
                 fail('#app root cannot be self-closing')
 
         def handle_endtag(self, tag):
-            if not self.active or tag.lower() != self.root_tag:
-                return
-            self.depth -= 1
-            if self.depth == 0:
-                self.inner_end = self.absolute_pos()
-                self.active = False
+            if self.root_tag and tag.lower() == self.root_tag:
+                pos = self.absolute_pos()
+                if self.inner_start is not None and pos > self.inner_start:
+                    self.root_end_positions.append(pos)
 
     parser = AppExtractor()
     parser.feed(source)
     parser.close()
-    if parser.roots != 1 or parser.inner_start is None:
+    if parser.roots != 1 or parser.inner_start is None or not parser.root_tag:
         fail('root #app opening element not found exactly once')
-    if parser.inner_end is None or parser.inner_end <= parser.inner_start:
-        fail('root #app closing element not found')
-    return source[parser.inner_start:parser.inner_end]
+
+    script_positions = []
+    for idx in range(1, 4):
+        marker = f'<script src="/app/app-inline-{idx:02d}.js"'
+        pos = source.find(marker, parser.inner_start)
+        if pos < 0:
+            fail(f'app-inline-{idx:02d}.js script boundary not found after #app root')
+        script_positions.append(pos)
+    boundary = min(script_positions)
+    if boundary <= parser.inner_start:
+        fail('externalized app script boundary precedes #app template')
+
+    candidate_ends = [pos for pos in parser.root_end_positions if pos < boundary]
+    if not candidate_ends:
+        fail('root #app closing element not found before externalized app scripts')
+    inner_end = max(candidate_ends)
+    if inner_end <= parser.inner_start:
+        fail('root #app closing element precedes root content')
+
+    template = source[parser.inner_start:inner_end]
+    if 'id="app"' in template or "id='app'" in template:
+        fail('nested duplicate #app marker found inside extracted template')
+    return template
 
 
 def extract_template_literals(source: str) -> list[str]:
