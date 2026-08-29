@@ -72,6 +72,7 @@ cssom_patterns = {
     'set-property': re.compile(r'\.style\.setProperty\s*\('),
 }
 cssom_counts = {name: len(pattern.findall(app_text)) for name, pattern in cssom_patterns.items()}
+vshow_count = len(re.findall(r'\bv-show\s*=', html, flags=re.I))
 
 cfg = json.loads(VERCEL.read_text(encoding='utf-8'))
 csp = ''
@@ -88,27 +89,26 @@ def tokens(name):
     return csp.split(marker, 1)[1].split(';', 1)[0].split()
 
 if tokens('style-src') != ["'self'"]:
-    raise SystemExit('STYLE_CSP_READINESS_FAILED: style-src fallback must be self-only during migration')
+    raise SystemExit('STYLE_CSP_READINESS_FAILED: style-src fallback must be self-only')
 if tokens('style-src-elem') != ["'self'"]:
-    raise SystemExit('STYLE_CSP_READINESS_FAILED: style-src-elem must be self-only during migration')
-if tokens('style-src-attr') != ["'unsafe-inline'"]:
-    raise SystemExit('STYLE_CSP_READINESS_FAILED: style-src-attr must retain only transitional unsafe-inline')
+    raise SystemExit('STYLE_CSP_READINESS_FAILED: style-src-elem must be self-only')
+if tokens('style-src-attr') != ["'none'"]:
+    raise SystemExit('STYLE_CSP_READINESS_FAILED: target style-src-attr must be none before final sink removal')
 if parser.literal_style_attrs != 0:
     raise SystemExit('STYLE_CSP_READINESS_FAILED: literal style attribute appeared unexpectedly')
 if parser.bound_style_attrs != 1:
-    raise SystemExit(f'STYLE_CSP_READINESS_FAILED: expected one reviewed Vue bound style, found {parser.bound_style_attrs}')
+    raise SystemExit(f'STYLE_CSP_READINESS_FAILED: expected one migration-source Vue bound style, found {parser.bound_style_attrs}')
 if cssom_counts != {'dot-style': 8, 'set-attribute-style': 0, 'css-text': 0, 'set-property': 0}:
-    raise SystemExit('STYLE_CSP_READINESS_FAILED: reviewed CSSOM style-write inventory drifted: ' + repr(cssom_counts))
+    raise SystemExit('STYLE_CSP_READINESS_FAILED: migration-source CSSOM inventory drifted: ' + repr(cssom_counts))
+if vshow_count != 0:
+    raise SystemExit(f'STYLE_CSP_READINESS_FAILED: v-show would reintroduce runtime style.display writes: {vshow_count}')
 
-attrs_summary = ','.join(
-    'none' if not attrs else '+'.join(attrs)
-    for attrs in parser.style_block_attrs
-)
+attrs_summary = ','.join('none' if not attrs else '+'.join(attrs) for attrs in parser.style_block_attrs)
 cssom_summary = ','.join(f'{name}={count}' for name, count in cssom_counts.items())
 print(
     'STYLE_CSP_READINESS_OK: '
     f'pre-externalization-style-blocks={len(parser.style_blocks)}; style-bytes={style_bytes}; '
     f'style-block-attrs={attrs_summary}; literal-style-attrs={parser.literal_style_attrs}; '
-    f'vue-bound-style={parser.bound_style_attrs}; app-cssom={cssom_summary}; '
-    'style-src=self; style-src-elem=self; style-src-attr=transitional-unsafe-inline'
+    f'migration-vue-bound-style={parser.bound_style_attrs}; migration-app-cssom={cssom_summary}; '
+    f'v-show={vshow_count}; target-style-src-attr=none'
 )

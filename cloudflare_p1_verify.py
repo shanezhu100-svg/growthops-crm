@@ -8,11 +8,11 @@ DIST = ROOT / 'dist'
 # P1 verifier scope is intentionally narrow: Cloudflare output/parity only.
 # Application security is already enforced by sh build.sh and its existing tests.
 EXPECTED_SHA256 = {
-    'index.html': '4317315df80f33cf12b62536c6162d18258b83add560fe9c0f2e61c03f977a45',
+    'index.html': '05676f3af5dcbdf2404469b5483d139fc1556fa266904d5336a44919fe465ad2',
     'tailwind.css': '082358f4ff9c6d67ccb8e628ed27669967e15cfa7908f2e4c36a1e89c0a3f7b6',
     'app/app-inline-01.js': '52ade14219e58afb7b9f4535440479add87f8a59a0404e7fe504cfde5f06c53e',
-    'app/app-inline-02.js': '0b4def59e5d52e21fbd562204d300b45943d0fd5e7c242146538dcb11055f1f7',
-    'app/app-inline-03.js': 'e770c457a262de74b4bf690b91ee454d650ea8cb96bf470b8003878133f8e012',
+    'app/app-inline-02.js': 'dfb07b154ec1ab7c540dbf044164a0ea7445dee996f859504d22f673d247f26b',
+    'app/app-inline-03.js': '1635b6e36ab62b9800a0e7f4339f65d2df44b1bf8de087ffc8cdf92ce0fa221e',
     'app/app-style-01.css': '33a4a117d6b9e820b389e09d87a4ccb94242fb043e80ea087f72c17f46861a70',
     'app/app-style-02.css': '01ed16d03067a8879b877440574fbc6d98af53e0909685e1a23271169c149997',
     'app/app-style-03.css': '64bd5db676657f40c7962080ce62f3b74125865c3f084a67ce21d0fc77ed00b6',
