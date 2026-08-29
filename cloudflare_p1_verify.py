@@ -8,16 +8,17 @@ DIST = ROOT / 'dist'
 # P1 verifier scope is intentionally narrow: Cloudflare output/parity only.
 # Application security is already enforced by sh build.sh and its existing tests.
 EXPECTED_SHA256 = {
-    'index.html': '05676f3af5dcbdf2404469b5483d139fc1556fa266904d5336a44919fe465ad2',
+    'index.html': '7b03d6a0ad1fb484c82c76426ac087a016a1f8bf3298189c7e12c55e245e4e8d',
     'tailwind.css': '082358f4ff9c6d67ccb8e628ed27669967e15cfa7908f2e4c36a1e89c0a3f7b6',
     'app/app-inline-01.js': '52ade14219e58afb7b9f4535440479add87f8a59a0404e7fe504cfde5f06c53e',
     'app/app-inline-02.js': 'dfb07b154ec1ab7c540dbf044164a0ea7445dee996f859504d22f673d247f26b',
-    'app/app-inline-03.js': '1635b6e36ab62b9800a0e7f4339f65d2df44b1bf8de087ffc8cdf92ce0fa221e',
+    'app/app-inline-03.js': '580b106018b0cfe7e1fd26605e6ae992f62052883392902a65ed49ff35ed257b',
     'app/app-style-01.css': '33a4a117d6b9e820b389e09d87a4ccb94242fb043e80ea087f72c17f46861a70',
     'app/app-style-02.css': '01ed16d03067a8879b877440574fbc6d98af53e0909685e1a23271169c149997',
     'app/app-style-03.css': '64bd5db676657f40c7962080ce62f3b74125865c3f084a67ce21d0fc77ed00b6',
     'app/app-style-04.css': '59de39d8388f561c5229cfa39f7d4c5299b34997c21e3c142d9ced067850a11e',
-    'vendor/vue-3.5.41.global.js': '14625269265de97b5c344b8fcfb7136c0c9ab09f7dbadc909a4967d14eca05fb',
+    'vendor/vue-3.5.41.runtime.global.js': '45c904194aaf24112c8f4fc4386b87e107a32eede80c410ce93be459ebdee088',
+    'vendor/vue-3.5.41.renders.js': 'd91a71ac97b904f27b0a4bf8527473e525ed311635eb1bdcd04ebf95c882658e',
     'vendor/xlsx-0.18.5.full.min.js': 'c9506197caf809a075b6dee1da0d36fb19da7158ffe8a88e7b0c96c5d8623c99',
     'vendor/fontawesome/css/all.min.css': '5ceaaba22d75b58e04150311f596306562a3e595e27ed4b1dfa451b82dda9e50',
     'vendor/fontawesome/webfonts/fa-brands-400.ttf': 'e28096fa75a96ac77020155ea3a6dd7312983e84115366d4cf49a0c312ec6d51',
@@ -95,6 +96,7 @@ print(
     'CLOUDFLARE_P1_OUTPUT_PARITY_OK: '
     f'dist=present; key_artifacts={len(EXPECTED_SHA256)}; production_hashes=match; '
     'same-origin-app-js=hash-pinned; same-origin-app-css=hash-pinned; '
-    'same-origin-vendor-js=hash-pinned; same-origin-fontawesome=hash-pinned; '
-    'same-origin-inter=hash-pinned; failopen_404=guarded; static_headers=guarded'
+    'same-origin-vendor-js=hash-pinned; vue-runtime-only+renders=hash-pinned; '
+    'same-origin-fontawesome=hash-pinned; same-origin-inter=hash-pinned; '
+    'failopen_404=guarded; static_headers=guarded'
 )

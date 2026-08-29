@@ -104,8 +104,9 @@ python3 test_frontend_dependency_pin_output.py
 # Prove the final HTML contains no real on*= DOM event attributes before the
 # security header authority blocks script attributes explicitly.
 python3 test_script_attr_csp_readiness.py
-# Move application-owned inline JS into same-origin static files so script-src no
-# longer needs unsafe-inline. Keep Vue compiler unsafe-eval as a separate boundary.
+# Move application-owned inline JS into same-origin static files. The compiler-
+# inclusive Vue build remains a trusted build-time input only until final renders
+# are generated after all style/CSSOM transformations.
 python3 test_inline_script_static_policy.py
 python3 inline_script_static_finalize.py
 python3 test_inline_script_static_output.py
@@ -119,6 +120,10 @@ python3 test_inline_style_static_output.py
 python3 test_style_attr_cssom_policy.py
 python3 style_attr_cssom_finalize.py
 python3 test_style_attr_cssom_output.py
+# Only now compile the exact post-style templates, replace all browser template
+# options with frozen render functions, and ship Vue runtime-only with eval-free CSP.
+python3 vue_runtime_only_finalize.py
+python3 test_vue_runtime_only_output.py
 # Final server-side identity and input boundaries. Patch the two deployment BFFs
 # before syntax/runtime tests so canonical builds and deployed handlers are aligned.
 python3 preview_runtime_boundary_finalize.py
