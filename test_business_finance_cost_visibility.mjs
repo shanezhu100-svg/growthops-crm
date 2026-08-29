@@ -104,3 +104,4 @@ subject.financeUnallocatedCompanyCostGroups={USD:0,CNY:-0.006};
 eq(subject.financeUnallocatedCompanyCostNonZero(),true,'unallocated display detects material absolute amount');
 
 console.log('BUSINESS_FINANCE_COST_VISIBILITY_OK: visible-filter+allocation+unallocated+scope-label+client-fallback+display=executed');
+await import('./test_business_finance_profit_confirmation_probe.mjs');
