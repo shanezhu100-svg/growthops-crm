@@ -12,6 +12,7 @@ APP_DIR = DIST / 'app'
 SCRIPT_RE = re.compile(r'<script(?P<attrs>[^>]*)>(?P<body>.*?)</script>', re.IGNORECASE | re.DOTALL)
 SRC_RE = re.compile(r'\bsrc\s*=', re.IGNORECASE)
 TYPE_RE = re.compile(r'\btype\s*=\s*(["\'])(.*?)\1', re.IGNORECASE | re.DOTALL)
+ID_RE = re.compile(r'\bid\s*=\s*(["\'])(.*?)\1', re.IGNORECASE | re.DOTALL)
 ATTR_NAME_RE = re.compile(r'([:@A-Za-z_][:\-\.\w]*)\s*(?:=|$)')
 EXPECTED_INLINE_COUNT = 3
 
@@ -48,7 +49,9 @@ for idx, match in enumerate(matches, start=1):
     attr_names = [name.lower() for name in ATTR_NAME_RE.findall(attrs.strip())]
     disallowed = [name for name in attr_names if name != 'type']
     if disallowed:
-        fail(f'inline script {idx} has unsupported attribute(s): {",".join(disallowed)}')
+        id_match = ID_RE.search(attrs)
+        id_note = f'; id={id_match.group(2)!r}' if id_match else ''
+        fail(f'inline script {idx} has unsupported attribute(s): {",".join(disallowed)}{id_note}')
     type_match = TYPE_RE.search(attrs)
     script_type = (type_match.group(2).strip().lower() if type_match else '')
     if script_type not in ('', 'text/javascript', 'application/javascript', 'module'):
