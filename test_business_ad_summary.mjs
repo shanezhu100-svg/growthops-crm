@@ -106,3 +106,4 @@ assertEq(fallback.frequencyText, '—', 'zero reach does not divide');
 assertEq(fallback.ctrText, '—', 'zero impressions does not divide');
 
 console.log('BUSINESS_AD_SUMMARY_OK: same-currency-math+date-filter+mixed-currency-deny+video-weighting+zero-impression-fallback=executed');
+await import('./test_business_finance_periods.mjs');
