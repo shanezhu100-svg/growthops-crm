@@ -128,3 +128,4 @@ eq(call('sopAllConfiguredAccountCount',aggregateSubject),4,'SOP aggregate config
 eq(call('sopAllTodayTaskCount',aggregateSubject),7,'SOP aggregate today-task count');
 
 console.log('BUSINESS_CLIENT_MODULE_HOME_OK: navigation=sentinel+fallback+deny; sop=fb+tk+configured+today-task+priority-sort+aggregate-counts');
+await import('./test_business_assets_credential_context.mjs');
