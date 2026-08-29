@@ -41,9 +41,6 @@ for item in items:
         raise SystemExit(f'CLOUDFLARE_SECURITY_HEADERS_FAILED Cloudflare line limit exceeded by {key}')
     lines.append(line)
 
-# Static-only cache rules are intentionally exact and are never copied into the
-# /api/crm Function response headers. Only assets whose public URL contains the
-# pinned dependency version may receive a one-year immutable browser cache.
 static_rules = [rule for rule in all_rules if rule.get('source') != '/(.*)']
 actual_sources = {str(rule.get('source') or '') for rule in static_rules}
 if actual_sources != set(EXPECTED_STATIC_RULES):
@@ -57,8 +54,6 @@ for source in sorted(EXPECTED_STATIC_RULES):
         raise SystemExit(f'CLOUDFLARE_SECURITY_HEADERS_FAILED unsafe static cache policy {source}')
     lines.extend(['', source, f'  Cache-Control: {EXPECTED_STATIC_RULES[source]}'])
 
-# Keep the Cloudflare static surface locked to the same policy already validated
-# for Vercel. Pages parses this file from the build output and does not serve it.
 OUTPUT.parent.mkdir(parents=True, exist_ok=True)
 text = '\n'.join(lines) + '\n'
 OUTPUT.write_text(text, encoding='utf-8')
@@ -71,6 +66,7 @@ required = {
     'x-frame-options',
     'x-permitted-cross-domain-policies',
     'cross-origin-opener-policy',
+    'cross-origin-resource-policy',
     'permissions-policy',
     'x-robots-tag',
     'content-security-policy',
@@ -81,9 +77,6 @@ if missing:
 if 'cache-control' in seen:
     raise SystemExit('CLOUDFLARE_SECURITY_HEADERS_FAILED catch-all must not cache HTML/API immutably')
 
-# `_headers` only applies to static Pages assets. Generate the Pages Function
-# SECURITY_HEADERS block from the catch-all Vercel security source-of-truth only;
-# route-specific static cache headers must never bleed into API responses.
 function_source = CLOUDFLARE_FUNCTION.read_text(encoding='utf-8')
 if '...SECURITY_HEADERS' not in function_source:
     raise SystemExit('CLOUDFLARE_SECURITY_HEADERS_FAILED Function does not apply SECURITY_HEADERS')
@@ -98,8 +91,6 @@ rendered_block = start_marker + '\n'.join(rendered_lines) + '\n'
 function_source = function_source[:start] + rendered_block + function_source[end:]
 CLOUDFLARE_FUNCTION.write_text(function_source, encoding='utf-8')
 
-# Re-read the file and require every generated key/value exactly once in the
-# SECURITY_HEADERS block. This keeps generation and parity verification coupled.
 function_source = CLOUDFLARE_FUNCTION.read_text(encoding='utf-8')
 block_start = function_source.index(start_marker)
 block_end = function_source.index(end_marker, block_start)
