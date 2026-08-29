@@ -5,15 +5,28 @@ import hashlib
 import json
 import re
 import subprocess
+import urllib.request
 
 ROOT=Path(__file__).resolve().parent
 INDEX=ROOT/'dist'/'index.html'
 APP_FILES=[ROOT/'dist'/'app'/f'app-inline-{idx:02d}.js' for idx in range(1,4)]
 VUE=ROOT/'dist'/'vendor'/'vue-3.5.41.global.js'
+RUNTIME_URL='https://unpkg.com/vue@3.5.41/dist/vue.runtime.global.js'
+RUNTIME_SHA='45c904194aaf24112c8f4fc4386b87e107a32eede80c410ce93be459ebdee088'
+RUNTIME_BYTES=414799
+EXPECTED_FACTORIES={
+    'root':('561307991738a8f53bb7d3e167217fd110cce47deb8eebad9e803a307df25a66',1095244),
+    'component01':('12ce20f7003c90017ebf8cd31e97bc632eb90518176775dbfe663c9b9166fae6',1550),
+    'component02':('7a99ecc1e3f6f9d2d14501681e630c40fa59f94144a50d72f392aa757732dcd7',756),
+    'component03':('658b8af682a2023c6e01515def82b39f1fcaf5fe7a7315c582e298ff0c3a85be',646),
+    'component04':('0ca46a8239700de84f36e527fc8bef3d737fdb09fb78fa64c5242a9ba4d8bb87',4776),
+}
+EXPECTED_REGISTRY_SHA='d91a71ac97b904f27b0a4bf8527473e525ed311635eb1bdcd04ebf95c882658e'
+EXPECTED_REGISTRY_BYTES=1185796
 
 
 def fail(message:str)->None:
-    raise SystemExit('VUE_RUNTIME_FINAL_PRECOMPILE_PROBE_FAILED: '+message)
+    raise SystemExit('VUE_RUNTIME_FINAL_PRECOMPILE_FAILED: '+message)
 
 
 def extract_root(source:str)->str:
@@ -75,6 +88,11 @@ if proc.returncode!=0: fail('compile failed: '+re.sub(r'\s+',' ',proc.stderr.str
 try: compiled=json.loads(proc.stdout)
 except Exception: fail('invalid compiler JSON')
 if [x['name'] for x in compiled] != [u['name'] for u in units]: fail('unit order drift')
+for item in compiled:
+    expected=EXPECTED_FACTORIES[item['name']]
+    actual=(item['hash'],item['bytes'])
+    if actual!=expected: fail(f"{item['name']} factory drift: expected={expected[0]}/{expected[1]}B; actual={actual[0]}/{actual[1]}B")
+
 lines=['/* GrowthOps CRM: deterministic Vue 3.5.41 final-stage render registry. */','(function () {','  const renders = Object.freeze({']
 for idx,item in enumerate(compiled):
     comma=',' if idx+1<len(compiled) else ''
@@ -85,5 +103,35 @@ lines.extend(['  });',"  Object.defineProperty(globalThis, 'GrowthOpsVueRenders'
 asset='\n'.join(lines); asset_bytes=asset.encode('utf-8'); asset_sha=hashlib.sha256(asset_bytes).hexdigest()
 for forbidden in ('new Function(','eval(','setTimeout("',"setTimeout('"):
     if forbidden in asset: fail('generated registry dynamic-code marker: '+forbidden)
+if (asset_sha,len(asset_bytes))!=(EXPECTED_REGISTRY_SHA,EXPECTED_REGISTRY_BYTES):
+    fail(f'registry drift: expected={EXPECTED_REGISTRY_SHA}/{EXPECTED_REGISTRY_BYTES}B; actual={asset_sha}/{len(asset_bytes)}B')
+
+# Re-fetch the exact runtime-only build and prove this final registry initializes
+# when dynamic Function is disabled. This verifies the registry does not depend on
+# the browser compiler that produced it during the trusted build step.
+req=urllib.request.Request(RUNTIME_URL,headers={'User-Agent':'growthops-crm-build/1'})
+try:
+    with urllib.request.urlopen(req,timeout=90) as response:
+        if response.geturl()!=RUNTIME_URL: fail('runtime-only unexpected redirect: '+response.geturl())
+        runtime=response.read()
+except SystemExit: raise
+except Exception as exc: fail('runtime-only download failed: '+type(exc).__name__)
+runtime_sha=hashlib.sha256(runtime).hexdigest()
+if (runtime_sha,len(runtime))!=(RUNTIME_SHA,RUNTIME_BYTES):
+    fail(f'runtime-only drift: expected={RUNTIME_SHA}/{RUNTIME_BYTES}B; actual={runtime_sha}/{len(runtime)}B')
+smoke_js=r'''
+const fs=require('fs'),vm=require('vm');const input=JSON.parse(fs.readFileSync(0,'utf8'));
+const warnings=[];const sandbox={console:{log(){},info(){},error(){},warn(...a){warnings.push(a.map(String).join(' '));}},setTimeout,clearTimeout,setInterval,clearInterval};
+vm.createContext(sandbox);vm.runInContext(input.runtime,sandbox,{timeout:10000});
+sandbox.Function=function(){throw new Error('dynamic Function forbidden during registry init');};
+vm.runInContext(input.registry,sandbox,{timeout:10000});
+const r=sandbox.GrowthOpsVueRenders,n=['root','component01','component02','component03','component04'];
+if(!r||!Object.isFrozen(r)||n.some(k=>typeof r[k]!=='function'))throw new Error('final registry missing/frozen drift');
+if(typeof sandbox.Vue.createApp!=='function')throw new Error('runtime createApp missing');
+process.stdout.write('ok');
+'''
+smoke=subprocess.run(['node','-e',smoke_js],input=json.dumps({'runtime':runtime.decode('utf-8'),'registry':asset}),text=True,capture_output=True,timeout=30,check=False)
+if smoke.returncode!=0 or smoke.stdout!='ok': fail('runtime-only registry VM smoke failed: '+re.sub(r'\s+',' ',smoke.stderr.strip())[:400])
+
 summary='; '.join(f"{x['name']}={x['hash']}/{x['bytes']}B" for x in compiled)
-fail(f'PIN_REQUIRED: {summary}; registry={asset_sha}/{len(asset_bytes)}B; units=5; dynamic-code=0')
+print(f'VUE_RUNTIME_FINAL_PRECOMPILE_OK: {summary}; registry={asset_sha}/{len(asset_bytes)}B; runtime-only={runtime_sha}/{len(runtime)}B; units=5; dynamic-code=0; vm-smoke=pass')
