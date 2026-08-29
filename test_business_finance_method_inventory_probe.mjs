@@ -27,3 +27,4 @@ const uncovered=all.filter(name=>!mentioned.has(name));
 console.log(`BUSINESS_FINANCE_METHOD_INVENTORY_OK: runtime=${all.length}; mentioned-in-tests=${all.length-uncovered.length}; uncovered=${uncovered.length}`);
 console.log('BUSINESS_FINANCE_METHODS_ALL: '+all.join(','));
 console.log('BUSINESS_FINANCE_METHODS_UNCOVERED: '+(uncovered.length?uncovered.join(','):'NONE'));
+await import('./test_business_finance_cost_visibility_probe.mjs');
