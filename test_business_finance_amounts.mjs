@@ -103,4 +103,4 @@ assertGroups(subject.financeReceivableGroupsForClientMonth(client1,'2026-09'),{U
 assertGroups(subject.financeReceivableGroupsForClientMonth({id:'client-2'},'2026-08'),{USD:300},'receivable client isolation');
 
 console.log('BUSINESS_FINANCE_AMOUNTS_OK: owned-spend+rebate-arithmetic+currency-isolation+attribution-modes+receivable-grouping=executed');
-await import('./test_business_finance_unique_probe.mjs');
+await import('./test_business_finance_unique_aggregation.mjs');
