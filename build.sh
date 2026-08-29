@@ -125,6 +125,9 @@ python3 test_style_attr_cssom_output.py
 # options with frozen render functions, and ship Vue runtime-only with eval-free CSP.
 python3 vue_runtime_only_finalize.py
 python3 test_vue_runtime_only_output.py
+# Business-semantic regression gates execute the final shipped application logic,
+# not a copied test implementation.
+node test_business_ad_metrics.mjs
 # Final server-side identity and input boundaries. Patch the two deployment BFFs
 # before syntax/runtime tests so canonical builds and deployed handlers are aligned.
 python3 preview_runtime_boundary_finalize.py
