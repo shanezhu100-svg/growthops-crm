@@ -56,4 +56,15 @@ require('cancel-in-progress: true' in workflow, 'stale PR CI must be cancelled')
 require(build.count('python3 test_ci_quota_guard.py') == 1, 'canonical build must run quota/CI guard exactly once')
 require(build.count('python3 test_vercel_ignore_build.py') == 1, 'canonical build must run Vercel ignored-build regression exactly once')
 
-print('CI_QUOTA_GUARD_OK: vercel-git=main-only; non-main=globstar-deployment-disabled; nonruntime-main=ignored-conservatively; slash-branches=covered; pr-ci=github-actions; runner=ubuntu-24.04; secrets=none; permissions=contents-read; actions=sha-pinned; node=24.x; canonical-build=sh-build.sh')
+# The browser-liveness gate needs Chromium, which GitHub's pinned Ubuntu runner
+# provides but Vercel/Cloudflare build images are not required to provide. Keep
+# the deployable build portable while making the required GitHub check prove the
+# exact final dist mounts successfully before the final pinned-output verifier.
+browser_call = 'python3 test_browser_mount_smoke.py'
+cloudflare_verify = 'python3 cloudflare_p1_verify.py'
+require(workflow.count(browser_call) == 1, 'GitHub required build must run browser mount smoke exactly once')
+require(build.count(browser_call) == 0, 'portable build.sh must not require Chromium')
+require(workflow.count(cloudflare_verify) == 1, 'GitHub required build must run Cloudflare final verifier exactly once')
+require(workflow.index('sh build.sh') < workflow.index(browser_call) < workflow.index(cloudflare_verify), 'CI order must be build -> browser mount -> final verifier')
+
+print('CI_QUOTA_GUARD_OK: vercel-git=main-only; non-main=globstar-deployment-disabled; nonruntime-main=ignored-conservatively; slash-branches=covered; pr-ci=github-actions; runner=ubuntu-24.04; secrets=none; permissions=contents-read; actions=sha-pinned; node=24.x; canonical-build=sh-build.sh; browser-mount=github-only')
