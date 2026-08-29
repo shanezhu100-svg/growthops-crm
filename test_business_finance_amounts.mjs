@@ -50,7 +50,6 @@ try{subject=vm.runInNewContext(factorySource,{Number,String,Array,Set,Object,Mat
 catch(error){throw new Error(`BUSINESS_FINANCE_AMOUNTS_FAILED: unable to execute final finance implementations: ${error.message}`);}
 
 const fail=(label,expected,actual)=>{throw new Error(`BUSINESS_FINANCE_AMOUNTS_FAILED: ${label}; expected=${expected}; actual=${actual}`);};
-const assertEq=(actual,expected,label)=>{if(actual!==expected)fail(label,expected,actual);};
 const assertNear=(actual,expected,label)=>{if(Math.abs(Number(actual)-Number(expected))>1e-9)fail(label,expected,actual);};
 const assertGroups=(actual,expected,label)=>{
   const actualKeys=Object.keys(actual).sort();
@@ -59,16 +58,12 @@ const assertGroups=(actual,expected,label)=>{
   for(const key of expectedKeys)assertNear(actual[key],expected[key],`${label} ${key}`);
 };
 
-// Channel spend/rebate: only records owned by the deal and inside the selected
-// period count. Currency remains separated, including account-currency fallback.
 const acctA={ownerDealId:'deal-a',adSpendCurrency:'USD',adDataRecords:[
   {date:'2026-08-01',currency:'USD',spend:100},
   {date:'2026-08-02',currency:'CNY',spend:700},
   {date:'2026-09-01',currency:'USD',spend:50},
 ]};
-const acctB={ownerDealId:'deal-b',adSpendCurrency:'EUR',adDataRecords:[
-  {date:'2026-08-03',spend:'80'},
-]};
+const acctB={ownerDealId:'deal-b',adSpendCurrency:'EUR',adDataRecords:[{date:'2026-08-03',spend:'80'}]};
 const dealA={id:'deal-a',rebateRate:5,accounts:[acctA,acctB]};
 const dealB={id:'deal-b',rebateRate:8,accounts:[acctB]};
 assertGroups(subject.openingDealSpendGroupsForPeriod(dealA,'2026-08'),{USD:100,CNY:700},'owned period spend');
@@ -76,18 +71,11 @@ assertGroups(subject.openingDealSpendGroupsForPeriod(dealA,'2026-09'),{USD:50},'
 const periodFinancials=subject.openingDealsFinancialsForPeriod([dealA,dealB],'2026-08');
 assertGroups(periodFinancials.spendGroups,{USD:100,CNY:700,EUR:80},'period financial spend');
 assertGroups(periodFinancials.rebateGroups,{USD:5,CNY:35,EUR:6.4},'period rebate amount');
-
-// Finance-period financials use the finance date predicate but preserve the same
-// ownership, currency and rebate arithmetic.
 const financeFinancials=subject.financeDealsFinancials([dealA,dealB]);
 assertGroups(financeFinancials.spendGroups,{USD:100,CNY:700,EUR:80},'finance-period spend');
 assertGroups(financeFinancials.rebateGroups,{USD:5,CNY:35,EUR:6.4},'finance-period rebate');
 
-// Client advertising spend must keep channel-attributed, channel-unassigned and
-// no-rebate spend mutually distinguishable while respecting month/client filters.
-const attributed={rebateMode:'CHANNEL',ownerDealId:'deal-a',adSpendCurrency:'USD',adDataRecords:[
-  {date:'2026-08-04',spend:100},{date:'2026-09-04',spend:20},
-]};
+const attributed={rebateMode:'CHANNEL',ownerDealId:'deal-a',adSpendCurrency:'USD',adDataRecords:[{date:'2026-08-04',spend:100},{date:'2026-09-04',spend:20}]};
 const unassigned={rebateMode:'CHANNEL',adSpendCurrency:'USD',adDataRecords:[{date:'2026-08-05',spend:50}]};
 const noRebate={rebateMode:'NONE',adSpendCurrency:'CNY',adDataRecords:[{date:'2026-08-06',spend:300}]};
 subject.clients=[
@@ -100,9 +88,6 @@ assertGroups(subject.financeAdSpendGroups('client-1',['2026-08'],'UNASSIGNED'),{
 assertGroups(subject.financeAdSpendGroups('client-1',['2026-08'],'NO_REBATE'),{CNY:300},'no-rebate spend');
 assertGroups(subject.financeAdSpendGroups('client-2',['2026-08'],'ALL'),{USD:999},'client filter isolation');
 
-// Receivables group by client + settlement month + currency. The service-fee
-// view includes legacy rows whose incomeType is absent (default SERVICE_FEE) and
-// excludes explicit non-service income.
 subject.financeReceivables=[
   {clientId:'client-1',settlementMonth:'2026-08',currency:'USD',amount:100},
   {clientId:'client-1',settlementMonth:'2026-08',currency:'USD',amount:'50',incomeType:'OTHER'},
@@ -118,3 +103,4 @@ assertGroups(subject.financeReceivableGroupsForClientMonth(client1,'2026-09'),{U
 assertGroups(subject.financeReceivableGroupsForClientMonth({id:'client-2'},'2026-08'),{USD:300},'receivable client isolation');
 
 console.log('BUSINESS_FINANCE_AMOUNTS_OK: owned-spend+rebate-arithmetic+currency-isolation+attribution-modes+receivable-grouping=executed');
+await import('./test_business_finance_unique_aggregation.mjs');
