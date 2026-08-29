@@ -5,8 +5,6 @@ import re
 ROOT = Path(__file__).resolve().parent
 DIST = ROOT / 'dist'
 
-# P1 verifier scope is intentionally narrow: Cloudflare output/parity only.
-# Application security is already enforced by sh build.sh and its existing tests.
 EXPECTED_SHA256 = {
     'index.html': '7b03d6a0ad1fb484c82c76426ac087a016a1f8bf3298189c7e12c55e245e4e8d',
     'tailwind.css': '082358f4ff9c6d67ccb8e628ed27669967e15cfa7908f2e4c36a1e89c0a3f7b6',
@@ -41,6 +39,7 @@ EXPECTED_SHA256 = {
 REQUIRED_STATIC_HEADERS = (
     'Content-Security-Policy:', 'X-Frame-Options:', 'X-Content-Type-Options:',
     'Referrer-Policy:', 'Permissions-Policy:', 'Cross-Origin-Opener-Policy:',
+    'Cross-Origin-Resource-Policy: same-origin',
     'X-Robots-Tag: noindex, nofollow, noarchive',
 )
 FORBIDDEN_404_MARKERS = (
@@ -99,5 +98,5 @@ print(
     'same-origin-app-js=hash-pinned; same-origin-app-css=hash-pinned; '
     'same-origin-vendor-js=hash-pinned; vue-runtime-only+renders=hash-pinned; '
     'same-origin-fontawesome=hash-pinned; same-origin-inter=hash-pinned; '
-    'robots=noindex+nofollow+noarchive; failopen_404=guarded; static_headers=guarded'
+    'corp=same-origin; robots=noindex+nofollow+noarchive; failopen_404=guarded; static_headers=guarded'
 )

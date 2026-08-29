@@ -43,6 +43,7 @@ required_verify_markers = (
     "DIST / '404.html'", "DIST / '_headers'", "headers.startswith('/*\\n')",
     'Content-Security-Policy:', 'X-Frame-Options:', 'X-Content-Type-Options:',
     'Referrer-Policy:', 'Permissions-Policy:', 'Cross-Origin-Opener-Policy:',
+    'Cross-Origin-Resource-Policy: same-origin',
     'X-Robots-Tag: noindex, nofollow, noarchive',
     'noindex,nofollow,noarchive', "'<script'", "'<form'", "'<iframe'", "'fetch('",
     "'xmlhttprequest'", '/api/crm', 'sb_secret_', 'growthops_supabase', 'document.cookie',
@@ -50,7 +51,7 @@ required_verify_markers = (
     'same-origin-app-js=hash-pinned', 'same-origin-app-css=hash-pinned',
     'same-origin-vendor-js=hash-pinned', 'vue-runtime-only+renders=hash-pinned',
     'same-origin-fontawesome=hash-pinned', 'same-origin-inter=hash-pinned',
-    'robots=noindex+nofollow+noarchive', 'failopen_404=guarded', 'static_headers=guarded',
+    'corp=same-origin', 'robots=noindex+nofollow+noarchive', 'failopen_404=guarded', 'static_headers=guarded',
 )
 missing = [marker for marker in required_verify_markers if marker not in VERIFY]
 if missing:
@@ -62,4 +63,4 @@ if BUILD.count(call) != 1:
 if BUILD.index(call) < BUILD.index('python3 test_cloudflare_failopen_404.py'):
     raise SystemExit('CLOUDFLARE_P1_VERIFY_GUARD_TEST_FAILED verifier gate runs before 404 build test')
 
-print('CLOUDFLARE_P1_VERIFY_GUARD_TESTS_OK: production-pins=28-synchronized; static-tailwind+app-js+app-css+vendor-js+vue-runtime+fontawesome+inter=hash-pinned; final-404-check=required; wildcard-static-headers=7-required; robots=noindex+nofollow+noarchive; active-material-deny=required')
+print('CLOUDFLARE_P1_VERIFY_GUARD_TESTS_OK: production-pins=28-synchronized; static-tailwind+app-js+app-css+vendor-js+vue-runtime+fontawesome+inter=hash-pinned; final-404-check=required; wildcard-static-headers=8-required; corp=same-origin; robots=noindex+nofollow+noarchive; active-material-deny=required')

@@ -13,6 +13,7 @@ required = {
     'X-Frame-Options': 'DENY',
     'X-Permitted-Cross-Domain-Policies': 'none',
     'Cross-Origin-Opener-Policy': 'same-origin',
+    'Cross-Origin-Resource-Policy': 'same-origin',
     'X-Robots-Tag': 'noindex, nofollow, noarchive',
 }
 for key, value in required.items():
@@ -88,4 +89,4 @@ for name,tokens in (('img-src',img_tokens),('media-src',media_tokens)):
     if tokens != ["'self'",'data:','blob:']:
         raise SystemExit(f'VERCEL_SECURITY_HEADERS_TESTS_FAILED {name} must remain self/data/blob only')
 
-print("VERCEL_SECURITY_HEADERS_TESTS_OK: csp=same-origin-script+style; script-attr=none; style-attr=none; unsafe-inline=absent; unsafe-eval=absent; worker=none; manifest=none; connect=self-only; img-media=self-data-blob; robots=noindex+nofollow+noarchive")
+print("VERCEL_SECURITY_HEADERS_TESTS_OK: csp=same-origin-script+style; script-attr=none; style-attr=none; unsafe-inline=absent; unsafe-eval=absent; worker=none; manifest=none; connect=self-only; img-media=self-data-blob; coop+corp=same-origin; robots=noindex+nofollow+noarchive")
