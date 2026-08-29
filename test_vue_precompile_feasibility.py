@@ -16,12 +16,11 @@ def fail(message: str) -> None:
 
 def extract_app_inner_html(source: str) -> str:
     # HTMLParser identifies real tag source positions without being confused by
-    # strings in the externalized application JavaScript. The current Vue DOM
-    # template contains HTML that browsers/Vue tolerate but that does not always
-    # form a strict same-tag nesting stack for HTMLParser. Therefore, after finding
-    # the unique #app opening element, use the last real closing tag for that root
-    # tag before the first externalized app script. The app scripts are already
-    # gated to appear exactly once and outside the DOM template.
+    # strings in externalized JavaScript. The Vue DOM template contains markup
+    # browsers tolerate but that does not always form a strict same-tag stack for
+    # HTMLParser, so use the last real closing tag for the unique #app root before
+    # the real </body> boundary. This stays independent of where external scripts
+    # are placed (head or body) while still slicing the original source bytes.
     line_starts = [0]
     for match in re.finditer(r'\n', source):
         line_starts.append(match.end())
@@ -32,6 +31,7 @@ def extract_app_inner_html(source: str) -> str:
             self.root_tag = None
             self.inner_start = None
             self.root_end_positions = []
+            self.body_end = None
             self.roots = 0
 
         def absolute_pos(self) -> int:
@@ -54,8 +54,11 @@ def extract_app_inner_html(source: str) -> str:
                 fail('#app root cannot be self-closing')
 
         def handle_endtag(self, tag):
-            if self.root_tag and tag.lower() == self.root_tag:
-                pos = self.absolute_pos()
+            low = tag.lower()
+            pos = self.absolute_pos()
+            if low == 'body':
+                self.body_end = pos
+            if self.root_tag and low == self.root_tag:
                 if self.inner_start is not None and pos > self.inner_start:
                     self.root_end_positions.append(pos)
 
@@ -64,21 +67,12 @@ def extract_app_inner_html(source: str) -> str:
     parser.close()
     if parser.roots != 1 or parser.inner_start is None or not parser.root_tag:
         fail('root #app opening element not found exactly once')
+    if parser.body_end is None or parser.body_end <= parser.inner_start:
+        fail('body closing boundary not found after #app root')
 
-    script_positions = []
-    for idx in range(1, 4):
-        marker = f'<script src="/app/app-inline-{idx:02d}.js"'
-        pos = source.find(marker, parser.inner_start)
-        if pos < 0:
-            fail(f'app-inline-{idx:02d}.js script boundary not found after #app root')
-        script_positions.append(pos)
-    boundary = min(script_positions)
-    if boundary <= parser.inner_start:
-        fail('externalized app script boundary precedes #app template')
-
-    candidate_ends = [pos for pos in parser.root_end_positions if pos < boundary]
+    candidate_ends = [pos for pos in parser.root_end_positions if pos < parser.body_end]
     if not candidate_ends:
-        fail('root #app closing element not found before externalized app scripts')
+        fail('root #app closing element not found before body boundary')
     inner_end = max(candidate_ends)
     if inner_end <= parser.inner_start:
         fail('root #app closing element precedes root content')
