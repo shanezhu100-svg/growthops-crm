@@ -106,6 +106,7 @@ python3 test_frontend_dependency_pin_output.py
 python3 test_script_attr_csp_readiness.py
 # Move application-owned inline JS into same-origin static files so script-src no
 # longer needs unsafe-inline. Keep Vue compiler unsafe-eval as a separate boundary.
+python3 test_inline_script_static_policy.py
 python3 inline_script_static_finalize.py
 python3 test_inline_script_static_output.py
 python3 test_vue_runtime_csp_readiness.py
