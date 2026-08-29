@@ -123,7 +123,6 @@ text=runtime.decode('utf-8')
 for forbidden in ('function compileToFunction(','const compile = compileToFunction','new Function(code)'):
  if forbidden in text: fail('runtime-only compiler marker present: '+forbidden)
 
-# Prepare all rewrites in memory before touching deploy artifacts.
 new_blocks=list(blocks)
 repls=[]
 for idx,(start,end,tpl) in enumerate(entries[2],1): repls.append((start,end,f'render: GrowthOpsVueRenders.component{idx:02d}'))
@@ -142,10 +141,9 @@ if html.count(compiler_tag)!=1: fail(f'compiler script tag count={html.count(com
 new_html=html.replace(compiler_tag,runtime_tag+'\n'+registry_tag,1)
 if compiler_tag in new_html or new_html.count(runtime_tag)!=1 or new_html.count(registry_tag)!=1: fail('Vue script rewrite drifted')
 if new_html.index(runtime_tag)>new_html.index(registry_tag): fail('runtime must load before registry')
-app_tag='<script src="/app/app-inline-01.js"></script>'
-if app_tag not in new_html or new_html.index(registry_tag)>new_html.index(app_tag): fail('registry must load before app scripts')
+app_tag='<script src="/app/app-inline-03.js"></script>'
+if app_tag not in new_html or new_html.index(registry_tag)>new_html.index(app_tag): fail('registry must load before Vue-dependent app bootstrap')
 
-# Commit the verified output atomically per file, then remove the compiler asset.
 def write_atomic(path:Path,data:bytes):
  tmp=path.with_suffix(path.suffix+'.tmp'); tmp.write_bytes(data); os.replace(tmp,path)
 write_atomic(RUNTIME,runtime)
