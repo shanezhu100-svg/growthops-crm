@@ -1,3 +1,4 @@
 // Historical source-inspection probe entrypoint retained to preserve the finance
 // regression import chain. Executable assertions live in the permanent module.
 await import('./test_business_finance_profit_confirmation.mjs');
+await import('./test_business_finance_reconciliation_cost_probe.mjs');
