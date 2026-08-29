@@ -5,15 +5,33 @@ import vm from 'node:vm';
 const securityPath=path.join(process.cwd(),'dist','cloud-security-hotfix.js');
 if(!fs.existsSync(securityPath))throw new Error('BUSINESS_ASSETS_CREDENTIAL_CONTEXT_FAILED: dist/cloud-security-hotfix.js missing; run canonical build first');
 const source=fs.readFileSync(securityPath,'utf8');
-const startMarker='  const resolveVisibleClientId=()=>{';
-const endMarker='  function setRevealButtonState';
-const start=source.indexOf(startMarker);
-const end=source.indexOf(endMarker,start);
-if(start<0||end<0)throw new Error('BUSINESS_ASSETS_CREDENTIAL_CONTEXT_FAILED: final credential resolver boundaries not found');
-const resolverBlock=source.slice(start,end).trim();
-if(!resolverBlock.includes('const explicitAssetsClientId=vm.selectedAssetsClientId;'))throw new Error('BUSINESS_ASSETS_CREDENTIAL_CONTEXT_FAILED: aggregate asset sentinel hardening missing from final resolver');
 
-const factorySource=`(function(vm,document,window,cleanText,isAccountAssetPage){\n${resolverBlock}\nreturn {resolveVisibleClientId,resolveCredentialClientId};\n})`;
+function extractArrowConst(name){
+  const marker=`const ${name}=()=>{`;
+  const start=source.indexOf(marker);
+  if(start<0)throw new Error(`BUSINESS_ASSETS_CREDENTIAL_CONTEXT_FAILED: final ${name} implementation not found`);
+  const open=source.indexOf('{',start+marker.length-1);
+  let depth=0;
+  for(let i=open;i<source.length;i+=1){
+    const ch=source[i];
+    if(ch==='{')depth+=1;
+    else if(ch==='}'){
+      depth-=1;
+      if(depth===0){
+        const semi=source.indexOf(';',i);
+        if(semi<0||semi-i>3)throw new Error(`BUSINESS_ASSETS_CREDENTIAL_CONTEXT_FAILED: ${name} terminator drifted`);
+        return source.slice(start,semi+1).trim();
+      }
+    }
+  }
+  throw new Error(`BUSINESS_ASSETS_CREDENTIAL_CONTEXT_FAILED: ${name} brace boundary drifted`);
+}
+
+const visibleSource=extractArrowConst('resolveVisibleClientId');
+const credentialSource=extractArrowConst('resolveCredentialClientId');
+if(!credentialSource.includes('const explicitAssetsClientId=vm.selectedAssetsClientId;'))throw new Error('BUSINESS_ASSETS_CREDENTIAL_CONTEXT_FAILED: aggregate asset sentinel hardening missing from final resolver');
+
+const factorySource=`(function(vm,document,window,cleanText,isAccountAssetPage){\n${visibleSource}\n${credentialSource}\nreturn {resolveVisibleClientId,resolveCredentialClientId};\n})`;
 let factory;
 try{
   factory=vm.runInNewContext(factorySource,Object.create(null),{timeout:1000});
