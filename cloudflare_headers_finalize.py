@@ -6,12 +6,19 @@ VERCEL_CONFIG = ROOT / 'vercel.json'
 OUTPUT = ROOT / 'dist' / '_headers'
 CLOUDFLARE_FUNCTION = ROOT / 'functions' / 'api' / 'crm.js'
 
-cfg = json.loads(VERCEL_CONFIG.read_text(encoding='utf-8'))
-rules = [rule for rule in cfg.get('headers', []) if rule.get('source') == '/(.*)']
-if len(rules) != 1:
-    raise SystemExit(f'CLOUDFLARE_SECURITY_HEADERS_FAILED expected one Vercel catch-all rule, found {len(rules)}')
+IMMUTABLE_CACHE = 'public, max-age=31536000, immutable'
+EXPECTED_STATIC_RULES = {
+    '/vendor/vue-3.5.41.runtime.global.js': IMMUTABLE_CACHE,
+    '/vendor/xlsx-0.18.5.full.min.js': IMMUTABLE_CACHE,
+}
 
-items = rules[0].get('headers', [])
+cfg = json.loads(VERCEL_CONFIG.read_text(encoding='utf-8'))
+all_rules = cfg.get('headers', [])
+catch_all = [rule for rule in all_rules if rule.get('source') == '/(.*)']
+if len(catch_all) != 1:
+    raise SystemExit(f'CLOUDFLARE_SECURITY_HEADERS_FAILED expected one Vercel catch-all rule, found {len(catch_all)}')
+
+items = catch_all[0].get('headers', [])
 if not isinstance(items, list) or not items:
     raise SystemExit('CLOUDFLARE_SECURITY_HEADERS_FAILED empty Vercel catch-all headers')
 
@@ -34,6 +41,22 @@ for item in items:
         raise SystemExit(f'CLOUDFLARE_SECURITY_HEADERS_FAILED Cloudflare line limit exceeded by {key}')
     lines.append(line)
 
+# Static-only cache rules are intentionally exact and are never copied into the
+# /api/crm Function response headers. Only assets whose public URL contains the
+# pinned dependency version may receive a one-year immutable browser cache.
+static_rules = [rule for rule in all_rules if rule.get('source') != '/(.*)']
+actual_sources = {str(rule.get('source') or '') for rule in static_rules}
+if actual_sources != set(EXPECTED_STATIC_RULES):
+    raise SystemExit('CLOUDFLARE_SECURITY_HEADERS_FAILED unexpected static header rule inventory')
+for source in sorted(EXPECTED_STATIC_RULES):
+    matching = [rule for rule in static_rules if rule.get('source') == source]
+    if len(matching) != 1:
+        raise SystemExit(f'CLOUDFLARE_SECURITY_HEADERS_FAILED static rule count {source}')
+    static_items = matching[0].get('headers', [])
+    if static_items != [{'key': 'Cache-Control', 'value': EXPECTED_STATIC_RULES[source]}]:
+        raise SystemExit(f'CLOUDFLARE_SECURITY_HEADERS_FAILED unsafe static cache policy {source}')
+    lines.extend(['', source, f'  Cache-Control: {EXPECTED_STATIC_RULES[source]}'])
+
 # Keep the Cloudflare static surface locked to the same policy already validated
 # for Vercel. Pages parses this file from the build output and does not serve it.
 OUTPUT.parent.mkdir(parents=True, exist_ok=True)
@@ -54,11 +77,12 @@ required = {
 missing = sorted(required - seen)
 if missing:
     raise SystemExit(f'CLOUDFLARE_SECURITY_HEADERS_FAILED missing {",".join(missing)}')
+if 'cache-control' in seen:
+    raise SystemExit('CLOUDFLARE_SECURITY_HEADERS_FAILED catch-all must not cache HTML/API immutably')
 
 # `_headers` only applies to static Pages assets. Generate the Pages Function
-# SECURITY_HEADERS block from the same Vercel source-of-truth instead of keeping
-# a second hand-maintained policy. Fail closed if the expected source structure
-# drifts so a malformed rewrite can never silently ship.
+# SECURITY_HEADERS block from the catch-all Vercel security source-of-truth only;
+# route-specific static cache headers must never bleed into API responses.
 function_source = CLOUDFLARE_FUNCTION.read_text(encoding='utf-8')
 if '...SECURITY_HEADERS' not in function_source:
     raise SystemExit('CLOUDFLARE_SECURITY_HEADERS_FAILED Function does not apply SECURITY_HEADERS')
@@ -85,5 +109,11 @@ for key, value in normalized:
         raise SystemExit(f'CLOUDFLARE_SECURITY_HEADERS_FAILED Function parity mismatch {key}')
 if security_block.count('\n  "') != len(normalized):
     raise SystemExit('CLOUDFLARE_SECURITY_HEADERS_FAILED unexpected Function security-header member count')
+if 'Cache-Control' in security_block or 'immutable' in security_block:
+    raise SystemExit('CLOUDFLARE_SECURITY_HEADERS_FAILED immutable cache leaked into Function security headers')
 
-print(f'CLOUDFLARE_SECURITY_HEADERS_OK: source=vercel.json; static-rule=/*; headers={len(items)}; output=dist/_headers; function=/api/crm-generated; parity=exact')
+print(
+    f'CLOUDFLARE_SECURITY_HEADERS_OK: source=vercel.json; static-rule=/*; headers={len(items)}; '
+    f'immutable-static-rules={len(EXPECTED_STATIC_RULES)}; output=dist/_headers; '
+    'function=/api/crm-generated; parity=exact; api-cache=unchanged'
+)

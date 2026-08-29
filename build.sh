@@ -51,6 +51,7 @@ python3 test_preview_secret_guard.py
 python3 test_post_p5_v5_direct_scalar.py
 python3 test_vercel_security_headers.py
 python3 cloudflare_headers_finalize.py
+python3 test_static_asset_cache_policy.py
 python3 cloudflare_failopen_404_finalize.py
 python3 test_cloudflare_failopen_404.py
 python3 test_cloudflare_p1_verify_guard.py
