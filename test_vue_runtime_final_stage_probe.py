@@ -98,24 +98,13 @@ create_matches = []
 mount_matches = []
 file_template_counts = []
 for path, block in zip(APP_FILES, blocks):
-    create_count = len(re.findall(r'\bVue\.createApp\s*\(\s*\{', block))
+    create = re.findall(r'\bVue\.createApp\s*\(\s*([A-Za-z_$][\w$]*|\{)', block)
+    if create:
+        create_matches.extend((path.name, arg) for arg in create)
     mount = re.findall(r'\b([A-Za-z_$][\w$]*)\.mount\s*\(\s*[\"\']#app[\"\']\s*\)', block)
-    if create_count:
-        create_matches.append((path.name, create_count))
     if mount:
         mount_matches.extend((path.name, name) for name in mount)
     file_template_counts.append((path.name, len(extract_component_templates(block))))
-
-if sum(count for _, count in create_matches) != 1:
-    fail('createApp object-literal multiplicity drifted: ' + repr(create_matches))
-if len(mount_matches) != 1:
-    fail('mount #app multiplicity drifted: ' + repr(mount_matches))
-if len(re.findall(r'(?<![\w$])render\s*:', app_js)) != 0:
-    fail('render option already exists in application JS; migration anchor changed')
-if re.search(r'\sstyle\s*=\s*[\"\']', html, flags=re.I):
-    fail('final-stage HTML still contains style attribute')
-if re.search(r'\.style(?:\.|\[)|\.setAttribute\s*\(\s*[\"\']style[\"\']', app_js):
-    fail('final-stage app JS still contains dynamic style sink')
 
 units = [('root', root)] + [(f'component{idx:02d}', tpl) for idx, tpl in enumerate(components, 1)]
 unit_summary = '; '.join(
@@ -123,11 +112,33 @@ unit_summary = '; '.join(
     for name, template in units
 )
 layout = ','.join(f'{name}:{count}' for name, count in file_template_counts)
-create_file = create_matches[0][0]
-mount_file, mount_receiver = mount_matches[0]
+
+problems = []
+if len(create_matches) != 1:
+    problems.append('createApp=' + repr(create_matches))
+if len(mount_matches) != 1:
+    problems.append('mount=' + repr(mount_matches))
+render_count = len(re.findall(r'(?<![\w$])render\s*:', app_js))
+if render_count != 0:
+    problems.append(f'render-options={render_count}')
+if re.search(r'\sstyle\s*=\s*[\"\']', html, flags=re.I):
+    problems.append('html-style-attr-present')
+if re.search(r'\.style(?:\.|\[)|\.setAttribute\s*\(\s*[\"\']style[\"\']', app_js):
+    problems.append('app-style-sink-present')
+
+create_desc = 'unknown'
+if len(create_matches) == 1:
+    create_file, create_arg = create_matches[0]
+    create_desc = f'{create_file}:arg={create_arg}'
+mount_desc = 'unknown'
+if len(mount_matches) == 1:
+    mount_file, mount_receiver = mount_matches[0]
+    mount_desc = f'{mount_file}:{mount_receiver}.mount(#app)'
+
 fail(
     'PIN_REQUIRED: '
     + unit_summary
-    + f'; component-layout={layout}; createApp={create_file}:object-literal; '
-    + f'mount={mount_file}:{mount_receiver}.mount(#app); render-options=0; final-style-sinks=0'
+    + f'; component-layout={layout}; createApp={create_desc}; mount={mount_desc}; '
+    + f'render-options={render_count}; final-style-sinks={0 if not problems or all("style" not in p for p in problems) else "drift"}; '
+    + ('anchor-problems=' + '|'.join(problems) if problems else 'anchors=ready')
 )
