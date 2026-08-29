@@ -74,6 +74,6 @@ subject.financePeriod='QUARTER'; subject.financeQuarterYear=2026; subject.financ
 const groupedClient={id:'grp',currency:'USD',billingMode:'PRORATE',monthlyFee:310,startDate:'2026-01-16',endDate:'2026-03-15'};
 const groups=subject.financeServiceFeeGroups(groupedClient);
 assertEq(Object.keys(groups).length, 1, 'service fee groups preserve one contract currency');
-assertEq(groups.USD, 155 + 310 + 150, 'quarter service-fee group sums monthly prorated/full values');
+assertEq(groups.USD, 160 + 310 + 150, 'quarter service-fee group sums monthly prorated/full values');
 
 console.log('BUSINESS_FINANCE_PERIODS_OK: month+quarter+year+contract-overlap+full-month+prorate+leap-day+cent-rounding=executed');
