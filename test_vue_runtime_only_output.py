@@ -48,6 +48,63 @@ if not (parser.srcs.index(runtime_src)<parser.srcs.index(registry_src)<parser.sr
 if '/vendor/vue-3.5.41.global.js' in parser.srcs or 'vue-3.5.41.global.js' in html:
  fail('compiler-inclusive script reference remains')
 
+# Final browser subresource surface: executable code is already constrained by
+# connect-src 'self'. Independently keep network-bearing HTML/CSS references from
+# silently reintroducing a third-party CDN or exfiltration endpoint. Normal <a href>
+# navigation is intentionally not part of this subresource inventory.
+def unsafe_network_value(value):
+ value=(value or '').strip().lower()
+ return value.startswith(('http://','https://','//','javascript:'))
+
+class BrowserResourceInventory(HTMLParser):
+ RESOURCE_ATTRS={
+  'script':('src',), 'img':('src','srcset'), 'source':('src','srcset'),
+  'video':('src','poster'), 'audio':('src',), 'iframe':('src',),
+  'embed':('src',), 'object':('data',), 'form':('action',), 'base':('href',),
+ }
+ RESOURCE_LINK_RELS={'stylesheet','preload','modulepreload','icon','manifest','prefetch','preconnect','dns-prefetch'}
+ def __init__(self):
+  super().__init__(convert_charrefs=False); self.external=[]; self.resource_count=0; self.meta_refresh=0
+ def handle_starttag(self,tag,attrs):
+  tag=tag.lower(); amap={str(k).lower():v for k,v in attrs};
+  if tag=='meta' and (amap.get('http-equiv') or '').strip().lower()=='refresh': self.meta_refresh+=1
+  pairs=[]
+  for attr in self.RESOURCE_ATTRS.get(tag,()):
+   if amap.get(attr) is not None: pairs.append((attr,amap[attr]))
+  if tag=='link' and self.RESOURCE_LINK_RELS.intersection((amap.get('rel') or '').lower().split()) and amap.get('href') is not None:
+   pairs.append(('href',amap['href']))
+  for attr,value in pairs:
+   self.resource_count+=1
+   # srcset can contain several candidates; detecting an external scheme anywhere
+   # is sufficient and avoids mis-parsing commas inside data: URLs.
+   lowered=(value or '').strip().lower()
+   if unsafe_network_value(lowered) or re.search(r'(?:^|[\s,])(?:https?:)?//',lowered):
+    self.external.append(f'{tag}[{attr}]={value}')
+
+resources=BrowserResourceInventory(); resources.feed(html); resources.close()
+if resources.meta_refresh: fail(f'meta refresh returned: {resources.meta_refresh}')
+if resources.external: fail('external browser subresource returned: '+' | '.join(resources.external[:5]))
+if resources.resource_count < 8: fail(f'browser resource inventory unexpectedly small: {resources.resource_count}')
+
+css_url_re=re.compile(r'url\(\s*(["\']?)(.*?)\1\s*\)',re.I|re.S)
+css_import_re=re.compile(r'@import\s+(?:url\(\s*)?(["\']?)(.*?)\1',re.I)
+css_files=list(DIST.rglob('*.css'))
+if len(css_files) < 5: fail(f'CSS inventory unexpectedly small: {len(css_files)}')
+css_external=[]; css_urls=0
+for css_path in css_files:
+ text=css_path.read_text(encoding='utf-8')
+ # License comments may contain project homepages; remove comments before examining
+ # browser-fetching CSS syntax.
+ clean=re.sub(r'/\*.*?\*/','',text,flags=re.S)
+ for match in css_url_re.finditer(clean):
+  css_urls+=1; value=match.group(2).strip()
+  if unsafe_network_value(value): css_external.append(f'{css_path.relative_to(DIST)}:url({value})')
+ for match in css_import_re.finditer(clean):
+  value=match.group(2).strip()
+  if unsafe_network_value(value): css_external.append(f'{css_path.relative_to(DIST)}:@import {value}')
+if css_external: fail('external CSS subresource returned: '+' | '.join(css_external[:5]))
+if css_urls < 5: fail(f'CSS URL inventory unexpectedly small: {css_urls}')
+
 app='\n'.join(p.read_text(encoding='utf-8') for p in APP_FILES)
 if re.search(r'(?<![\w$])template\s*:',app): fail('Vue template option remains in shipped app JS')
 if app.count('GrowthOpsVueRenders.root')!=1: fail('root render reference drift')
@@ -69,4 +126,4 @@ const fs=require('fs'),vm=require('vm');const input=JSON.parse(fs.readFileSync(0
 '''
 smoke=subprocess.run(['node','-e',smoke_js],input=json.dumps({'runtime':runtime,'registry':registry}),text=True,capture_output=True,timeout=30,check=False)
 if smoke.returncode!=0 or smoke.stdout!='ok': fail('runtime-only VM smoke failed: '+re.sub(r'\s+',' ',smoke.stderr.strip())[:400])
-print(f'VUE_RUNTIME_ONLY_OUTPUT_OK: runtime={RUNTIME_SHA}/{RUNTIME_BYTES}B; registry={REGISTRY_SHA}/{REGISTRY_BYTES}B; renders=5; template-options=0; compiler=absent; CSP=self-only+eval-free; inline-scripts=0; vm-smoke=pass')
+print(f'VUE_RUNTIME_ONLY_OUTPUT_OK: runtime={RUNTIME_SHA}/{RUNTIME_BYTES}B; registry={REGISTRY_SHA}/{REGISTRY_BYTES}B; renders=5; template-options=0; compiler=absent; CSP=self-only+eval-free; inline-scripts=0; browser-external-subresources=0; html-resource-refs={resources.resource_count}; css-url-refs={css_urls}; vm-smoke=pass')
