@@ -1,3 +1,4 @@
+from html.parser import HTMLParser
 from pathlib import Path
 import json
 import re
@@ -14,27 +15,62 @@ def fail(message: str) -> None:
 
 
 def extract_app_inner_html(source: str) -> str:
-    opening = re.search(
-        r'<([A-Za-z][\w:-]*)\b(?=[^>]*\bid\s*=\s*["\']app["\'])[^>]*>',
-        source,
-        flags=re.I | re.S,
-    )
-    if not opening:
-        fail('root #app opening element not found')
-    tag = opening.group(1)
-    token_re = re.compile(r'<!--.*?-->|</?' + re.escape(tag) + r'\b[^>]*>', re.I | re.S)
-    depth = 1
-    for match in token_re.finditer(source, opening.end()):
-        token = match.group(0)
-        if token.startswith('<!--'):
-            continue
-        if re.match(r'</', token):
-            depth -= 1
-            if depth == 0:
-                return source[opening.end():match.start()]
-        elif not re.search(r'/\s*>$', token):
-            depth += 1
-    fail('root #app closing element not found')
+    # Use HTMLParser only to identify the exact source positions of the #app
+    # opening/closing tags. The returned template is still sliced from the
+    # original bytes, so Vue sees the same markup the browser mount path sees.
+    line_starts = [0]
+    for match in re.finditer(r'\n', source):
+        line_starts.append(match.end())
+
+    class AppExtractor(HTMLParser):
+        def __init__(self):
+            super().__init__(convert_charrefs=False)
+            self.active = False
+            self.root_tag = None
+            self.depth = 0
+            self.inner_start = None
+            self.inner_end = None
+            self.roots = 0
+
+        def absolute_pos(self) -> int:
+            line, offset = self.getpos()
+            return line_starts[line - 1] + offset
+
+        def handle_starttag(self, tag, attrs):
+            attrs_dict = dict(attrs)
+            if not self.active and attrs_dict.get('id') == 'app':
+                self.roots += 1
+                if self.roots != 1:
+                    fail('multiple #app roots found')
+                self.active = True
+                self.root_tag = tag.lower()
+                self.depth = 1
+                self.inner_start = self.absolute_pos() + len(self.get_starttag_text())
+                return
+            if self.active and tag.lower() == self.root_tag:
+                self.depth += 1
+
+        def handle_startendtag(self, tag, attrs):
+            attrs_dict = dict(attrs)
+            if attrs_dict.get('id') == 'app':
+                fail('#app root cannot be self-closing')
+
+        def handle_endtag(self, tag):
+            if not self.active or tag.lower() != self.root_tag:
+                return
+            self.depth -= 1
+            if self.depth == 0:
+                self.inner_end = self.absolute_pos()
+                self.active = False
+
+    parser = AppExtractor()
+    parser.feed(source)
+    parser.close()
+    if parser.roots != 1 or parser.inner_start is None:
+        fail('root #app opening element not found exactly once')
+    if parser.inner_end is None or parser.inner_end <= parser.inner_start:
+        fail('root #app closing element not found')
+    return source[parser.inner_start:parser.inner_end]
 
 
 def extract_template_literals(source: str) -> list[str]:
@@ -179,8 +215,8 @@ for item in first:
         + '+'.join(h[:12] for h in capture['argHashes'])
     )
 
-# First run is intentionally a fail-closed evidence probe. After the exact hashes
-# below are reviewed, replace this terminal probe with pinned deterministic asserts.
+# First successful compile run is intentionally a fail-closed evidence probe.
+# After exact hashes are reviewed, replace this terminal probe with pinned asserts.
 raise SystemExit(
     'VUE_PRECOMPILE_FEASIBILITY_PROBE: units=5; deterministic=2-vm-pass; '
     + '; '.join(summary)
