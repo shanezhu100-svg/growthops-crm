@@ -75,4 +75,4 @@ assertEq(subject.openingDealOwnsRecord(first,account,'2026-03-15'),false,'first 
 assertEq(subject.openingDealOwnsRecord(newer,account,'2026-03-15'),true,'newer deal owns post-switch record');
 
 console.log('BUSINESS_FINANCE_REBATE_OK: effective-policy-history+future-policy-deny+legacy-fallback+single-record-channel-ownership=executed');
-await import('./test_business_finance_amount_surface.mjs');
+await import('./test_business_finance_amounts.mjs');
