@@ -50,7 +50,7 @@ subject.financeReceivables=[
   {id:'c2',settlementMonth:'2026-09',clientId:'c2',ownerType:'CLIENT',incomeType:'REBATE',statusKey:'OVERDUE',unpaid:9,dueDate:'2026-09-03'},
   {id:'out-period',settlementMonth:'2026-10',clientId:'c1',ownerType:'CLIENT',incomeType:'SERVICE_FEE',statusKey:'PENDING',unpaid:999,dueDate:'2026-10-01'},
 ];
-jsonEq(subject.financeVisibleReceivables().map(r=>r.id),['company','sep-nodue','c2','sep-early','sep-late','default-fields','aug-late'],'ALL filters + settlement sort/date sort');
+jsonEq(subject.financeVisibleReceivables().map(r=>r.id),['sep-nodue','company','c2','sep-early','sep-late','default-fields','aug-late'],'ALL filters + settlement sort/date sort');
 
 subject.financeClientFilter='c1';
 jsonEq(subject.financeVisibleReceivables().map(r=>r.id),['sep-nodue','sep-early','sep-late','default-fields','aug-late'],'client filter');
