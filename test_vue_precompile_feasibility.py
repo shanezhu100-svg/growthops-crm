@@ -44,8 +44,7 @@ def extract_app_inner_html(source: str) -> str:
             self.inner_start = self.absolute_pos() + len(self.get_starttag_text())
 
         def handle_startendtag(self, tag, attrs):
-            attrs_dict = dict(attrs)
-            if attrs_dict.get('id') == 'app':
+            if dict(attrs).get('id') == 'app':
                 fail('#app root cannot be self-closing')
 
         def handle_endtag(self, tag):
@@ -53,9 +52,8 @@ def extract_app_inner_html(source: str) -> str:
             pos = self.absolute_pos()
             if low == 'body':
                 self.body_end = pos
-            if self.root_tag and low == self.root_tag:
-                if self.inner_start is not None and pos > self.inner_start:
-                    self.root_end_positions.append(pos)
+            if self.root_tag and low == self.root_tag and self.inner_start is not None and pos > self.inner_start:
+                self.root_end_positions.append(pos)
 
     parser = AppExtractor()
     parser.feed(source)
@@ -64,15 +62,13 @@ def extract_app_inner_html(source: str) -> str:
         fail('root #app opening element not found exactly once')
     if parser.body_end is None or parser.body_end <= parser.inner_start:
         fail('body closing boundary not found after #app root')
-
     candidate_ends = [pos for pos in parser.root_end_positions if pos < parser.body_end]
     if not candidate_ends:
         fail('root #app closing element not found before body boundary')
     inner_end = max(candidate_ends)
-    if inner_end <= parser.inner_start:
-        fail('root #app closing element precedes root content')
-
     template = source[parser.inner_start:inner_end]
+    if len(template.encode('utf-8')) < 100_000:
+        fail('root template unexpectedly small')
     if 'id="app"' in template or "id='app'" in template:
         fail('nested duplicate #app marker found inside extracted template')
     return template
@@ -110,8 +106,6 @@ root_template = extract_app_inner_html(html)
 component_templates = extract_template_literals(app_js)
 if len(component_templates) != 4:
     fail(f'expected 4 component template literals, found {len(component_templates)}')
-if len(root_template.encode('utf-8')) < 100_000:
-    fail('root template unexpectedly small')
 
 units = [{'name': 'root', 'template': root_template}]
 units.extend(
@@ -130,25 +124,15 @@ const sha = (s) => crypto.createHash('sha256').update(s, 'utf8').digest('hex');
 function decodeEntities(raw) {
   let out = '';
   for (let i = 0; i < raw.length;) {
-    if (raw[i] !== '&') {
-      out += raw[i++];
-      continue;
-    }
-    const start = i;
-    i += 1;
+    if (raw[i] !== '&') { out += raw[i++]; continue; }
+    const start = i++;
     if (raw[i] === '#') {
       let j = i + 1;
       let radix = 10;
-      if (raw[j] === 'x' || raw[j] === 'X') {
-        radix = 16;
-        j += 1;
-      }
+      if (raw[j] === 'x' || raw[j] === 'X') { radix = 16; j += 1; }
       const digitsStart = j;
       while (j < raw.length && (radix === 16 ? /[0-9A-Fa-f]/.test(raw[j]) : /[0-9]/.test(raw[j]))) j += 1;
-      if (j === digitsStart) {
-        out += '&';
-        continue;
-      }
+      if (j === digitsStart) { out += '&'; continue; }
       const value = Number.parseInt(raw.slice(digitsStart, j), radix);
       if (raw[j] === ';') j += 1;
       const valid = value > 0 && value <= 0x10ffff && !(value >= 0xd800 && value <= 0xdfff);
@@ -215,18 +199,24 @@ function compilePass() {
     setTimeout, clearTimeout, setInterval, clearInterval,
   };
   vm.createContext(sandbox);
-  // Load the compiler-inclusive Vue asset with no DOM at all, so runtime-dom
-  // initialization cannot use our compiler-only shim. Expose the minimal decoder
-  // only after Vue has loaded and immediately before Vue.compile() is exercised.
   vm.runInContext(vueSource, sandbox, { filename: 'vue-3.5.41.global.js', timeout: 10000 });
-  if (!sandbox.Vue || typeof sandbox.Vue.compile !== 'function') {
-    throw new Error('Vue.compile unavailable');
-  }
+  if (!sandbox.Vue || typeof sandbox.Vue.compile !== 'function') throw new Error('Vue.compile unavailable');
   sandbox.document = documentShim;
+
   const NativeFunction = vm.runInContext('Function', sandbox);
-  let captures = [];
+  let captureCount = 0;
+  let renderFactories = [];
   const WrappedFunction = function(...args) {
-    captures.push(args.map((arg) => String(arg)));
+    const strings = args.map((arg) => String(arg));
+    captureCount += 1;
+    if (
+      strings.length === 1 &&
+      strings[0].includes('return function render') &&
+      strings[0].includes('_Vue') &&
+      strings[0].includes('Vue')
+    ) {
+      renderFactories.push(strings[0]);
+    }
     return NativeFunction(...args);
   };
   WrappedFunction.prototype = NativeFunction.prototype;
@@ -234,22 +224,24 @@ function compilePass() {
 
   const out = [];
   for (const unit of input.units) {
-    captures = [];
+    captureCount = 0;
+    renderFactories = [];
     const render = sandbox.Vue.compile(unit.template);
     if (typeof render !== 'function') throw new Error(unit.name + ': compile did not return function');
+    if (renderFactories.length !== 1) {
+      throw new Error(unit.name + ': expected one render factory capture, found ' + renderFactories.length + '; total Function calls=' + captureCount);
+    }
+    const factory = renderFactories[0];
     const renderSource = Function.prototype.toString.call(render);
-    const normalizedCaptures = captures.map((args) => ({
-      argc: args.length,
-      argBytes: args.map((arg) => Buffer.byteLength(arg, 'utf8')),
-      argHashes: args.map(sha),
-    }));
     out.push({
       name: unit.name,
       templateBytes: Buffer.byteLength(unit.template, 'utf8'),
       templateHash: sha(unit.template),
       renderBytes: Buffer.byteLength(renderSource, 'utf8'),
       renderHash: sha(renderSource),
-      captures: normalizedCaptures,
+      functionCalls: captureCount,
+      factoryBytes: Buffer.byteLength(factory, 'utf8'),
+      factoryHash: sha(factory),
     });
   }
   return out;
@@ -261,11 +253,7 @@ process.stdout.write(JSON.stringify({ first, second }));
 '''
 
 payload = json.dumps(
-    {
-        'vuePath': str(VUE_ASSET),
-        'units': units,
-        'entities': dict(HTML5_ENTITIES),
-    },
+    {'vuePath': str(VUE_ASSET), 'units': units, 'entities': dict(HTML5_ENTITIES)},
     ensure_ascii=False,
 )
 try:
@@ -280,7 +268,7 @@ try:
 except Exception as exc:
     fail('node probe launch failed: ' + type(exc).__name__)
 if proc.returncode != 0:
-    detail = re.sub(r'\s+', ' ', proc.stderr.strip())[:500]
+    detail = re.sub(r'\s+', ' ', proc.stderr.strip())[:700]
     fail(f'node probe failed rc={proc.returncode}: {detail}')
 try:
     result = json.loads(proc.stdout)
@@ -295,24 +283,20 @@ if first != second:
 
 summary = []
 for item in first:
-    captures = item.get('captures') or []
-    if len(captures) != 1:
-        fail(f"{item.get('name')}: expected one Function compilation capture, found {len(captures)}")
-    capture = captures[0]
-    if capture.get('argc') not in (1, 2):
-        fail(f"{item.get('name')}: unexpected Function argument count {capture.get('argc')}")
-    if not capture.get('argBytes') or max(capture['argBytes']) < 100:
-        fail(f"{item.get('name')}: captured compiler code unexpectedly small")
+    if item.get('functionCalls', 0) < 1:
+        fail(f"{item.get('name')}: compiler Function call inventory unexpectedly empty")
+    if item.get('factoryBytes', 0) < 100 or item.get('renderBytes', 0) < 100:
+        fail(f"{item.get('name')}: generated render material unexpectedly small")
     summary.append(
         f"{item['name']}="
-        f"tpl:{item['templateHash'][:12]}/{item['templateBytes']}B,"
-        f"render:{item['renderHash'][:12]}/{item['renderBytes']}B,"
-        f"capture:{capture['argc']}args/"
-        + '+'.join(str(n) for n in capture['argBytes'])
-        + 'B/'
-        + '+'.join(h[:12] for h in capture['argHashes'])
+        f"tpl:{item['templateHash']}/{item['templateBytes']}B,"
+        f"render:{item['renderHash']}/{item['renderBytes']}B,"
+        f"factory:{item['factoryHash']}/{item['factoryBytes']}B,"
+        f"FunctionCalls:{item['functionCalls']}"
     )
 
+# Intentional fail-closed evidence probe. Once these full hashes/sizes are reviewed,
+# pin them below and turn this into a passing deterministic feasibility gate.
 raise SystemExit(
     'VUE_PRECOMPILE_FEASIBILITY_PROBE: units=5; deterministic=2-vm-pass; '
     + '; '.join(summary)
