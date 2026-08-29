@@ -6,8 +6,8 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parent
 URL = 'https://unpkg.com/vue@3.5.41/dist/vue.runtime.global.js'
-EXPECTED_SHA256 = '__PROBE__'
-EXPECTED_BYTES = 0
+EXPECTED_SHA256 = '45c904194aaf24112c8f4fc4386b87e107a32eede80c410ce93be459ebdee088'
+EXPECTED_BYTES = 414799
 
 
 def fail(message: str) -> None:
@@ -88,8 +88,6 @@ process.stdout.write('ok');
 finally:
     probe.unlink(missing_ok=True)
 
-if EXPECTED_SHA256 == '__PROBE__':
-    fail(f'PIN_REQUIRED: sha256={actual}; bytes={len(data)}; compiler=absent; compile-stub=warning-only; vm-smoke=pass')
 if actual != EXPECTED_SHA256 or len(data) != EXPECTED_BYTES:
     fail(f'asset drift: expected={EXPECTED_SHA256}/{EXPECTED_BYTES}B; actual={actual}/{len(data)}B')
 
