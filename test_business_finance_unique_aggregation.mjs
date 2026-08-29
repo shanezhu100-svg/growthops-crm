@@ -95,4 +95,4 @@ jsonEq(subject.financeChannelDeals('p1','x','c1').map(d=>d.id),['ok','no-overlap
 console.log('BUSINESS_FINANCE_UNIQUE_OK: combined-aggregation+currency-isolation+provider-filter+client-wrappers+deal-selection=executed');
 await import('./test_business_finance_settlement.mjs');
 await import('./test_business_finance_client_status.mjs');
-await import('./test_business_finance_receivable_status_probe.mjs');
+await import('./test_business_finance_receivable_status.mjs');
