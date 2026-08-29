@@ -161,7 +161,7 @@ print(
     'vue-build=compiler-inclusive-global; unsafe-eval=current-vue-compiler-boundary; debt-budget=frozen'
 )
 
-# Run the build-time precompile feasibility probe only after the debt boundary above
-# has passed. This imported test is fail-closed until deterministic compiler output
-# hashes are reviewed and pinned in a follow-up commit.
+# Freeze compiler feasibility first, then prove the exact factories can be
+# mechanically represented as a static registry with zero runtime dynamic code.
 import test_vue_precompile_feasibility  # noqa: F401,E402
+import test_vue_precompiled_render_artifact  # noqa: F401,E402
