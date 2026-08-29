@@ -106,3 +106,7 @@ print(
     'first-party-cssom=0; roas=progress; credential=data-state-css; clipboard=class-css; '
     f'dynamic-css={actual_css_sha}/{len(css_bytes)}B; style-src-attr=none; unsafe-inline=absent'
 )
+
+# Probe the exact post-style-finalizer Vue templates/bootstrap anchors. This is
+# deliberately fail-closed until the final-stage fingerprints are reviewed.
+import test_vue_runtime_final_stage_probe  # noqa: F401,E402
