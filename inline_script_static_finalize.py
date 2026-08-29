@@ -15,7 +15,10 @@ TYPE_RE = re.compile(r'\btype\s*=\s*(["\'])(.*?)\1', re.IGNORECASE | re.DOTALL)
 ID_RE = re.compile(r'\bid\s*=\s*(["\'])(.*?)\1', re.IGNORECASE | re.DOTALL)
 ATTR_NAME_RE = re.compile(r'([:@A-Za-z_][:\-\.\w]*)\s*(?:=|$)')
 EXPECTED_INLINE_COUNT = 3
-ALLOWED_SINGLETON_ID = 'growthops-session-restore-guard'
+REVIEWED_SINGLETON_IDS = {
+    'growthops-session-restore-guard',
+    'growthops-credential-ui-v5-preboot',
+}
 
 
 def fail(message: str) -> None:
@@ -40,26 +43,42 @@ for match in SCRIPT_RE.finditer(html):
 if len(matches) != EXPECTED_INLINE_COUNT:
     fail(f'expected exactly {EXPECTED_INLINE_COUNT} inline script blocks, found {len(matches)}')
 
+# Inventory all inline-script marker ids before writing anything. This keeps the
+# review loop fail-closed while exposing only non-sensitive DOM marker names.
+script_inventory = []
+unreviewed_ids = []
+for idx, match in enumerate(matches, start=1):
+    attrs = match.group('attrs') or ''
+    attr_names = [name.lower() for name in ATTR_NAME_RE.findall(attrs.strip())]
+    id_match = ID_RE.search(attrs)
+    script_id = id_match.group(2) if id_match else None
+    script_inventory.append((idx, attr_names, script_id))
+    if script_id and script_id not in REVIEWED_SINGLETON_IDS:
+        unreviewed_ids.append(f'{idx}:{script_id}')
+if unreviewed_ids:
+    summary = '; '.join(
+        f'{idx}:attrs={",".join(attrs) or "none"}:id={script_id or "none"}'
+        for idx, attrs, script_id in script_inventory
+    )
+    fail('unreviewed inline-script marker id(s): ' + ','.join(unreviewed_ids) + '; inventory=' + summary)
+
 prepared = []
 for idx, match in enumerate(matches, start=1):
     attrs = match.group('attrs') or ''
     body = match.group('body')
     # Only ordinary executable classic/module script attributes are safe to externalize
-    # mechanically. The one historical session-restore marker id is preserved only
-    # when it is a singleton in the final HTML, proving no other script/style/DOM code
-    # refers to the marker string. Any future attribute shape requires explicit review.
+    # mechanically. Reviewed historical marker ids are preserved only when each marker
+    # is a singleton in the final HTML, proving no other script/style/DOM code refers to
+    # that exact marker string. Any future attribute shape requires explicit review.
     attr_names = [name.lower() for name in ATTR_NAME_RE.findall(attrs.strip())]
     id_match = ID_RE.search(attrs)
     script_id = id_match.group(2) if id_match else None
     allowed_attrs = {'type'}
     if script_id is not None:
-        if script_id != ALLOWED_SINGLETON_ID:
+        if script_id not in REVIEWED_SINGLETON_IDS:
             fail(f'inline script {idx} has unreviewed id={script_id!r}')
-        if html.count(ALLOWED_SINGLETON_ID) != 1:
-            fail(
-                f'reviewed script id must be singleton; '
-                f'{ALLOWED_SINGLETON_ID!r} occurrences={html.count(ALLOWED_SINGLETON_ID)}'
-            )
+        if html.count(script_id) != 1:
+            fail(f'reviewed script id must be singleton; {script_id!r} occurrences={html.count(script_id)}')
         allowed_attrs.add('id')
     disallowed = [name for name in attr_names if name not in allowed_attrs]
     if disallowed:
@@ -115,5 +134,6 @@ print(
         f'{output.name}={sha256(data)}/{len(data)}B'
         for _, output, data, _, _, _, _ in prepared
     )
-    + f'; reviewed-id={ALLOWED_SINGLETON_ID}; inline-script-blocks=0; execution-order=preserved'
+    + '; reviewed-ids=' + ','.join(sorted(REVIEWED_SINGLETON_IDS))
+    + '; inline-script-blocks=0; execution-order=preserved'
 )
