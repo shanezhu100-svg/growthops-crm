@@ -53,8 +53,8 @@ parser.feed(html)
 parser.close()
 
 style_bytes = sum(len(block.encode('utf-8')) for block in parser.style_blocks)
-if not parser.style_blocks:
-    raise SystemExit('STYLE_CSP_READINESS_FAILED: no inline style blocks found; baseline drifted')
+if len(parser.style_blocks) != 4:
+    raise SystemExit(f'STYLE_CSP_READINESS_FAILED: expected four pre-externalization style blocks, found {len(parser.style_blocks)}')
 if style_bytes < 1024:
     raise SystemExit('STYLE_CSP_READINESS_FAILED: inline style inventory unexpectedly small')
 
@@ -80,11 +80,25 @@ for rule in cfg.get('headers', []):
         for item in rule.get('headers', []):
             if item.get('key') == 'Content-Security-Policy':
                 csp = item.get('value', '')
-style_part = csp.split('style-src ', 1)[1].split(';', 1)[0] if 'style-src ' in csp else ''
-if "'unsafe-inline'" not in style_part:
-    raise SystemExit('STYLE_CSP_READINESS_FAILED: style-src unsafe-inline already absent; readiness gate must be updated with migration')
-if 'style-src-elem ' in csp or 'style-src-attr ' in csp:
-    raise SystemExit('STYLE_CSP_READINESS_FAILED: split style directives already present; readiness gate must be updated with migration')
+
+def tokens(name):
+    marker = name + ' '
+    if marker not in csp:
+        return []
+    return csp.split(marker, 1)[1].split(';', 1)[0].split()
+
+if tokens('style-src') != ["'self'"]:
+    raise SystemExit('STYLE_CSP_READINESS_FAILED: style-src fallback must be self-only during migration')
+if tokens('style-src-elem') != ["'self'"]:
+    raise SystemExit('STYLE_CSP_READINESS_FAILED: style-src-elem must be self-only during migration')
+if tokens('style-src-attr') != ["'unsafe-inline'"]:
+    raise SystemExit('STYLE_CSP_READINESS_FAILED: style-src-attr must retain only transitional unsafe-inline')
+if parser.literal_style_attrs != 0:
+    raise SystemExit('STYLE_CSP_READINESS_FAILED: literal style attribute appeared unexpectedly')
+if parser.bound_style_attrs != 1:
+    raise SystemExit(f'STYLE_CSP_READINESS_FAILED: expected one reviewed Vue bound style, found {parser.bound_style_attrs}')
+if cssom_counts != {'dot-style': 8, 'set-attribute-style': 0, 'css-text': 0, 'set-property': 0}:
+    raise SystemExit('STYLE_CSP_READINESS_FAILED: reviewed CSSOM style-write inventory drifted: ' + repr(cssom_counts))
 
 attrs_summary = ','.join(
     'none' if not attrs else '+'.join(attrs)
@@ -93,8 +107,8 @@ attrs_summary = ','.join(
 cssom_summary = ','.join(f'{name}={count}' for name, count in cssom_counts.items())
 print(
     'STYLE_CSP_READINESS_OK: '
-    f'style-blocks={len(parser.style_blocks)}; style-bytes={style_bytes}; '
+    f'pre-externalization-style-blocks={len(parser.style_blocks)}; style-bytes={style_bytes}; '
     f'style-block-attrs={attrs_summary}; literal-style-attrs={parser.literal_style_attrs}; '
     f'vue-bound-style={parser.bound_style_attrs}; app-cssom={cssom_summary}; '
-    "style-src=current-self+unsafe-inline; split-elem-attr=pending"
+    'style-src=self; style-src-elem=self; style-src-attr=transitional-unsafe-inline'
 )

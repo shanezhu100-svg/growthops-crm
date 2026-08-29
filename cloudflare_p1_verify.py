@@ -8,11 +8,15 @@ DIST = ROOT / 'dist'
 # P1 verifier scope is intentionally narrow: Cloudflare output/parity only.
 # Application security is already enforced by sh build.sh and its existing tests.
 EXPECTED_SHA256 = {
-    'index.html': 'c7f4119a843b8828d1fe8a8d59eca90bd839864e74aaac12a5458f4b0b25387f',
+    'index.html': '4317315df80f33cf12b62536c6162d18258b83add560fe9c0f2e61c03f977a45',
     'tailwind.css': '082358f4ff9c6d67ccb8e628ed27669967e15cfa7908f2e4c36a1e89c0a3f7b6',
     'app/app-inline-01.js': '52ade14219e58afb7b9f4535440479add87f8a59a0404e7fe504cfde5f06c53e',
     'app/app-inline-02.js': '0b4def59e5d52e21fbd562204d300b45943d0fd5e7c242146538dcb11055f1f7',
     'app/app-inline-03.js': 'e770c457a262de74b4bf690b91ee454d650ea8cb96bf470b8003878133f8e012',
+    'app/app-style-01.css': '33a4a117d6b9e820b389e09d87a4ccb94242fb043e80ea087f72c17f46861a70',
+    'app/app-style-02.css': '01ed16d03067a8879b877440574fbc6d98af53e0909685e1a23271169c149997',
+    'app/app-style-03.css': '64bd5db676657f40c7962080ce62f3b74125865c3f084a67ce21d0fc77ed00b6',
+    'app/app-style-04.css': '59de39d8388f561c5229cfa39f7d4c5299b34997c21e3c142d9ced067850a11e',
     'vendor/vue-3.5.41.global.js': '14625269265de97b5c344b8fcfb7136c0c9ab09f7dbadc909a4967d14eca05fb',
     'vendor/xlsx-0.18.5.full.min.js': 'c9506197caf809a075b6dee1da0d36fb19da7158ffe8a88e7b0c96c5d8623c99',
     'vendor/fontawesome/css/all.min.css': '5ceaaba22d75b58e04150311f596306562a3e595e27ed4b1dfa451b82dda9e50',
@@ -87,4 +91,10 @@ missing_headers = [name for name in REQUIRED_STATIC_HEADERS if name not in heade
 if missing_headers:
     fail('dist/_headers missing security headers: ' + ', '.join(missing_headers))
 
-print('CLOUDFLARE_P1_OUTPUT_PARITY_OK: ' f'dist=present; key_artifacts={len(EXPECTED_SHA256)}; production_hashes=match; ' 'same-origin-app-js=hash-pinned; same-origin-vendor-js=hash-pinned; same-origin-fontawesome=hash-pinned; same-origin-inter=hash-pinned; failopen_404=guarded; static_headers=guarded')
+print(
+    'CLOUDFLARE_P1_OUTPUT_PARITY_OK: '
+    f'dist=present; key_artifacts={len(EXPECTED_SHA256)}; production_hashes=match; '
+    'same-origin-app-js=hash-pinned; same-origin-app-css=hash-pinned; '
+    'same-origin-vendor-js=hash-pinned; same-origin-fontawesome=hash-pinned; '
+    'same-origin-inter=hash-pinned; failopen_404=guarded; static_headers=guarded'
+)
