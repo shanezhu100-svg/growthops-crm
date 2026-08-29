@@ -15,6 +15,7 @@ TYPE_RE = re.compile(r'\btype\s*=\s*(["\'])(.*?)\1', re.IGNORECASE | re.DOTALL)
 ID_RE = re.compile(r'\bid\s*=\s*(["\'])(.*?)\1', re.IGNORECASE | re.DOTALL)
 ATTR_NAME_RE = re.compile(r'([:@A-Za-z_][:\-\.\w]*)\s*(?:=|$)')
 EXPECTED_INLINE_COUNT = 3
+ALLOWED_SINGLETON_ID = 'growthops-session-restore-guard'
 
 
 def fail(message: str) -> None:
@@ -44,14 +45,25 @@ for idx, match in enumerate(matches, start=1):
     attrs = match.group('attrs') or ''
     body = match.group('body')
     # Only ordinary executable classic/module script attributes are safe to externalize
-    # mechanically. Data scripts, nonce/integrity semantics, async/defer, or any future
-    # attribute shape require an explicit migration review instead of silent rewriting.
+    # mechanically. The one historical session-restore marker id is preserved only
+    # when it is a singleton in the final HTML, proving no other script/style/DOM code
+    # refers to the marker string. Any future attribute shape requires explicit review.
     attr_names = [name.lower() for name in ATTR_NAME_RE.findall(attrs.strip())]
-    disallowed = [name for name in attr_names if name != 'type']
+    id_match = ID_RE.search(attrs)
+    script_id = id_match.group(2) if id_match else None
+    allowed_attrs = {'type'}
+    if script_id is not None:
+        if script_id != ALLOWED_SINGLETON_ID:
+            fail(f'inline script {idx} has unreviewed id={script_id!r}')
+        if html.count(ALLOWED_SINGLETON_ID) != 1:
+            fail(
+                f'reviewed script id must be singleton; '
+                f'{ALLOWED_SINGLETON_ID!r} occurrences={html.count(ALLOWED_SINGLETON_ID)}'
+            )
+        allowed_attrs.add('id')
+    disallowed = [name for name in attr_names if name not in allowed_attrs]
     if disallowed:
-        id_match = ID_RE.search(attrs)
-        id_note = f'; id={id_match.group(2)!r}' if id_match else ''
-        fail(f'inline script {idx} has unsupported attribute(s): {",".join(disallowed)}{id_note}')
+        fail(f'inline script {idx} has unsupported attribute(s): {",".join(disallowed)}')
     type_match = TYPE_RE.search(attrs)
     script_type = (type_match.group(2).strip().lower() if type_match else '')
     if script_type not in ('', 'text/javascript', 'application/javascript', 'module'):
@@ -68,17 +80,17 @@ for idx, match in enumerate(matches, start=1):
     if replacement_attrs and not replacement_attrs.startswith((' ', '\t', '\r', '\n')):
         replacement_attrs = ' ' + replacement_attrs
     replacement = f'<script{replacement_attrs} src="{html_module.escape(local_src, quote=True)}"></script>'
-    prepared.append((match, output, data, local_src, replacement, script_type))
+    prepared.append((match, output, data, local_src, replacement, script_type, script_id))
 
 APP_DIR.mkdir(parents=True, exist_ok=True)
-for _, output, data, _, _, _ in prepared:
+for _, output, data, _, _, _, _ in prepared:
     tmp = output.with_suffix(output.suffix + '.tmp')
     tmp.write_bytes(data)
     os.replace(tmp, output)
 
 # Replace from the end so original byte offsets remain valid.
 rewritten = html
-for match, _, _, _, replacement, _ in reversed(prepared):
+for match, _, _, _, replacement, _, _ in reversed(prepared):
     rewritten = rewritten[:match.start()] + replacement + rewritten[match.end():]
 
 # Fail closed before committing the HTML rewrite.
@@ -88,18 +100,20 @@ for match in SCRIPT_RE.finditer(rewritten):
         remaining_inline.append(match.group(0)[:120])
 if remaining_inline:
     fail(f'inline script blocks remain after rewrite: {len(remaining_inline)}')
-for _, output, data, local_src, _, _ in prepared:
+for _, output, data, local_src, _, _, script_id in prepared:
     if rewritten.count(f'src="{local_src}"') != 1:
         fail(f'local app script reference drifted: {local_src}')
     if sha256(output.read_bytes()) != sha256(data):
         fail(f'written app script digest changed: {output.name}')
+    if script_id and rewritten.count(f'id="{script_id}"') != 1:
+        fail(f'reviewed script id not preserved exactly once: {script_id}')
 
 INDEX.write_text(rewritten, encoding='utf-8')
 print(
     'INLINE_SCRIPT_STATIC_FINALIZE_OK: '
     + '; '.join(
         f'{output.name}={sha256(data)}/{len(data)}B'
-        for _, output, data, _, _, _ in prepared
+        for _, output, data, _, _, _, _ in prepared
     )
-    + '; inline-script-blocks=0; execution-order=preserved'
+    + f'; reviewed-id={ALLOWED_SINGLETON_ID}; inline-script-blocks=0; execution-order=preserved'
 )
