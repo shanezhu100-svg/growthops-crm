@@ -37,26 +37,22 @@ except UnicodeDecodeError:
 for marker in ('vue v3.5.41', 'var Vue ='):
     if marker not in text:
         fail('runtime-only asset missing marker: ' + marker)
-# Runtime-only global must not contain the full compiler entrypoint. Keep several
-# independent markers so a packaging/layout drift cannot silently reintroduce it.
+# Runtime-only still contains the runtime-core registerRuntimeCompiler hook so an
+# external compiler could be injected. That hook is not the compiler. Reject the
+# actual compiler implementation/factory markers here, then prove dynamically
+# below that the shipped Vue global does not expose Vue.compile.
 for forbidden in (
     'function compileToFunction(',
-    'registerRuntimeCompiler(',
     'const compile = compileToFunction',
     'new Function(code)',
 ):
     if forbidden in text:
         fail('compiler-inclusive marker present: ' + forbidden)
-# It should still expose the normal global runtime surface used by the app.
 for marker in ('createApp', 'defineComponent', 'ref', 'computed', 'watch'):
     if marker not in text:
         fail('expected runtime API marker missing: ' + marker)
 
 actual = hashlib.sha256(data).hexdigest()
-if EXPECTED_SHA256 == '__PROBE__':
-    fail(f'PIN_REQUIRED: sha256={actual}; bytes={len(data)}')
-if actual != EXPECTED_SHA256 or len(data) != EXPECTED_BYTES:
-    fail(f'asset drift: expected={EXPECTED_SHA256}/{EXPECTED_BYTES}B; actual={actual}/{len(data)}B')
 
 # Prove the asset can initialize without a DOM and that no compiler is exposed.
 probe = ROOT / '.tmp-vue-runtime-probe.js'
@@ -79,6 +75,11 @@ process.stdout.write('ok');
         fail('runtime-only VM smoke failed: ' + re.sub(r'\s+', ' ', proc.stderr.strip())[:400])
 finally:
     probe.unlink(missing_ok=True)
+
+if EXPECTED_SHA256 == '__PROBE__':
+    fail(f'PIN_REQUIRED: sha256={actual}; bytes={len(data)}; compiler=absent; vm-smoke=pass')
+if actual != EXPECTED_SHA256 or len(data) != EXPECTED_BYTES:
+    fail(f'asset drift: expected={EXPECTED_SHA256}/{EXPECTED_BYTES}B; actual={actual}/{len(data)}B')
 
 print(
     'VUE_RUNTIME_ONLY_ASSET_OK: version=3.5.41; global=runtime-only; compiler=absent; '
