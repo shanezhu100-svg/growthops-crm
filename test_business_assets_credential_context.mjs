@@ -96,3 +96,4 @@ const clients=[{id:'c1',name:'Alpha'},{id:'c2',name:'Beta'}];
 }
 
 console.log('BUSINESS_ASSETS_CREDENTIAL_CONTEXT_OK: aggregate=0+ALL-deny; explicit-asset=authoritative; visible-fallback=unique; stale-detail=isolated; client-detail=preserved');
+await import('./test_business_analytics_inventory.mjs');
