@@ -77,3 +77,4 @@ assertEq(Object.keys(groups).length, 1, 'service fee groups preserve one contrac
 assertEq(groups.USD, 160 + 310 + 150, 'quarter service-fee group sums monthly prorated/full values');
 
 console.log('BUSINESS_FINANCE_PERIODS_OK: month+quarter+year+contract-overlap+full-month+prorate+leap-day+cent-rounding=executed');
+await import('./test_business_finance_rebate_ownership.mjs');
