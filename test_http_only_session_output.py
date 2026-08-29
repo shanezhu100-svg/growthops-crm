@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 root = Path(__file__).resolve().parent
 dist = root / 'dist'
@@ -11,6 +12,8 @@ html = (dist / 'index.html').read_text(encoding='utf-8')
 
 required_api = (
     "const COOKIE_NAME = '__Host-growthops_crm';",
+    "return `${COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; Max-Age=${COOKIE_MAX_AGE}; HttpOnly; Secure; SameSite=Strict`;",
+    "return `${COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict`;",
     'HttpOnly; Secure; SameSite=Strict',
     "const AUTH_RPCS = new Set([",
     "'crm_load_state_v3'",
@@ -33,6 +36,22 @@ required_api = (
 missing = [marker for marker in required_api if marker not in api]
 if missing:
     raise SystemExit('HTTP_ONLY_SESSION_OUTPUT_TESTS_FAILED missing API markers: ' + ', '.join(missing))
+
+# The __Host- cookie prefix is only meaningful when the cookie is host-only,
+# Secure, and scoped exactly to Path=/. Keep both Set-Cookie helpers fail-closed:
+# adding Domain= or broadening/narrowing Path must break the canonical build.
+for helper_name in ('sessionCookie', 'clearSessionCookie'):
+    match = re.search(rf'function {helper_name}\([^)]*\) \{{(.*?)\n\}}', api, flags=re.S)
+    if not match:
+        raise SystemExit('HTTP_ONLY_SESSION_OUTPUT_TESTS_FAILED missing cookie helper: ' + helper_name)
+    helper = match.group(1)
+    if re.search(r'\bDomain\s*=', helper, flags=re.I):
+        raise SystemExit('HTTP_ONLY_SESSION_OUTPUT_TESTS_FAILED __Host- cookie must not set Domain')
+    if helper.count('Path=/;') != 1:
+        raise SystemExit('HTTP_ONLY_SESSION_OUTPUT_TESTS_FAILED __Host- cookie must use exact Path=/')
+    for marker in ('HttpOnly', 'Secure', 'SameSite=Strict'):
+        if marker not in helper:
+            raise SystemExit('HTTP_ONLY_SESSION_OUTPUT_TESTS_FAILED __Host- cookie missing ' + marker)
 
 for forbidden in (
     "'crm_reveal_client_secret_field_v4'",
@@ -117,4 +136,4 @@ for forbidden in ('service_role', 'SUPABASE_SERVICE_ROLE_KEY'):
 if "return json(res, 200, stripSessionToken(data));" not in api:
     raise SystemExit('HTTP_ONLY_SESSION_OUTPUT_TESTS_FAILED successful login is not token-stripped')
 
-print('HTTP_ONLY_SESSION_OUTPUT_TESTS_OK: browser_token_storage=none; legacy_token_scrub=enabled; transport=same-origin-bff; cookie=HttpOnly+Secure+SameSiteStrict; credential_reveal=v5-single-value')
+print('HTTP_ONLY_SESSION_OUTPUT_TESTS_OK: browser_token_storage=none; legacy_token_scrub=enabled; transport=same-origin-bff; cookie=__Host+Path-root+host-only+HttpOnly+Secure+SameSiteStrict; credential_reveal=v5-single-value')
