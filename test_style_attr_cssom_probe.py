@@ -39,6 +39,13 @@ if len(hits) != 8:
 for idx, (name, offset, snippet) in enumerate(hits, start=1):
     print(f'STYLE_ATTR_CSSOM_PROBE_CSSOM_{idx}: file={name}; offset={offset}; context={snippet}')
 
+for path in app_files:
+    text = path.read_text(encoding='utf-8')
+    positions = [m.start() for m in re.finditer(r'roasBars', text)]
+    for idx, pos in enumerate(positions[:6], start=1):
+        snippet = re.sub(r'\s+', ' ', text[max(0, pos - 500):min(len(text), pos + 1100)]).strip()
+        print(f'STYLE_ATTR_CSSOM_PROBE_ROAS_{path.name}_{idx}: {snippet}')
+
 for css_path in sorted(APP.glob('app-style-*.css')):
     css = css_path.read_text(encoding='utf-8')
     for marker in ('growthops-credential-v6-gate', 'growthops-clipboard-fallback'):
