@@ -5,8 +5,11 @@ VERIFY = (ROOT / 'cloudflare_p1_verify.py').read_text(encoding='utf-8')
 BUILD = (ROOT / 'build.sh').read_text(encoding='utf-8')
 
 EXPECTED_PINS = {
-    'index.html': '67ba3f280398fcbec0c57bfaddc50661e05f301eb4a2447add38ecdaf6670fa0',
+    'index.html': 'c7f4119a843b8828d1fe8a8d59eca90bd839864e74aaac12a5458f4b0b25387f',
     'tailwind.css': '082358f4ff9c6d67ccb8e628ed27669967e15cfa7908f2e4c36a1e89c0a3f7b6',
+    'app/app-inline-01.js': '52ade14219e58afb7b9f4535440479add87f8a59a0404e7fe504cfde5f06c53e',
+    'app/app-inline-02.js': '0b4def59e5d52e21fbd562204d300b45943d0fd5e7c242146538dcb11055f1f7',
+    'app/app-inline-03.js': 'e770c457a262de74b4bf690b91ee454d650ea8cb96bf470b8003878133f8e012',
     'vendor/vue-3.5.41.global.js': '14625269265de97b5c344b8fcfb7136c0c9ab09f7dbadc909a4967d14eca05fb',
     'vendor/xlsx-0.18.5.full.min.js': 'c9506197caf809a075b6dee1da0d36fb19da7158ffe8a88e7b0c96c5d8623c99',
     'vendor/fontawesome/css/all.min.css': '5ceaaba22d75b58e04150311f596306562a3e595e27ed4b1dfa451b82dda9e50',
@@ -38,8 +41,9 @@ required_verify_markers = (
     'noindex,nofollow,noarchive', "'<script'", "'<form'", "'<iframe'", "'fetch('",
     "'xmlhttprequest'", '/api/crm', 'sb_secret_', 'growthops_supabase', 'document.cookie',
     'localstorage', 'sessionstorage', "re.search(r'\\b(?:src|href|action)\\s*='",
-    'same-origin-vendor-js=hash-pinned', 'same-origin-fontawesome=hash-pinned',
-    'same-origin-inter=hash-pinned', 'failopen_404=guarded', 'static_headers=guarded',
+    'same-origin-app-js=hash-pinned', 'same-origin-vendor-js=hash-pinned',
+    'same-origin-fontawesome=hash-pinned', 'same-origin-inter=hash-pinned',
+    'failopen_404=guarded', 'static_headers=guarded',
 )
 missing = [marker for marker in required_verify_markers if marker not in VERIFY]
 if missing:
@@ -51,4 +55,4 @@ if BUILD.count(call) != 1:
 if BUILD.index(call) < BUILD.index('python3 test_cloudflare_failopen_404.py'):
     raise SystemExit('CLOUDFLARE_P1_VERIFY_GUARD_TEST_FAILED verifier gate runs before 404 build test')
 
-print('CLOUDFLARE_P1_VERIFY_GUARD_TESTS_OK: production-pins=20-synchronized; static-tailwind+vendor-js+fontawesome+inter=hash-pinned; final-404-check=required; wildcard-static-headers=6-required; active-material-deny=required')
+print('CLOUDFLARE_P1_VERIFY_GUARD_TESTS_OK: production-pins=23-synchronized; static-tailwind+app-js+vendor-js+fontawesome+inter=hash-pinned; final-404-check=required; wildcard-static-headers=6-required; active-material-deny=required')
