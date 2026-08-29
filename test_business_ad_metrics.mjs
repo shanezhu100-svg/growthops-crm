@@ -77,3 +77,4 @@ assertEq(sparse.roasText, '2.00', 'ROAS remains valid when spend is positive');
 console.log(`BUSINESS_AD_METRICS_OK: source=${sourceFile}; cpm+frequency+ctr+cpc+cvr+cpa+roas=executed; zero-denominators=guarded`);
 await import('./test_business_ad_summary.mjs');
 await import('./test_business_finance_reconciliation_cost.mjs');
+await import('./test_business_client_module_home.mjs');
