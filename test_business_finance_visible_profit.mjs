@@ -89,6 +89,6 @@ eq(subject.financeProfitTotalPages(),3,'profit total pages');
 subject.financeRows=[];
 eq(subject.financeProfitTotalPages(),1,'empty profit list exposes one page');
 subject.financeRows=['a','b'];subject.profitPageSize=0;
-eq(subject.financeProfitTotalPages(),2,'nonpositive page size floors denominator to one');
+eq(subject.financeProfitTotalPages(),1,'nonpositive page size uses runtime fallback page size');
 
 console.log('BUSINESS_FINANCE_VISIBLE_PROFIT_OK: receivable-filters+sort+client-name+income-breakdown+profit-pagination=executed');
