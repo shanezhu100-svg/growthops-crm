@@ -12,6 +12,7 @@ APP_DIR = DIST / 'app'
 STYLE_RE = re.compile(r'<style(?P<attrs>[^>]*)>(?P<body>.*?)</style>', re.IGNORECASE | re.DOTALL)
 ID_RE = re.compile(r'\bid\s*=\s*(["\'])(.*?)\1', re.IGNORECASE | re.DOTALL)
 ATTR_NAME_RE = re.compile(r'([:@A-Za-z_][:\-\.\w]*)\s*(?:=|$)')
+URL_RE = re.compile(r'url\(\s*(?:(["\'])(.*?)\1|([^)]*))\s*\)', re.IGNORECASE | re.DOTALL)
 EXPECTED_STYLE_COUNT = 4
 REVIEWED_SINGLETON_IDS = {
     'growthops-session-restore-style',
@@ -26,6 +27,31 @@ def fail(message: str) -> None:
 
 def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def validate_base_stable_urls(css: str, idx: int) -> int:
+    """Allow only CSS URLs whose meaning cannot change when moved to /app/*.css."""
+    url_calls = list(URL_RE.finditer(css))
+    raw_url_calls = list(re.finditer(r'url\s*\(', css, flags=re.IGNORECASE))
+    if len(url_calls) != len(raw_url_calls):
+        fail(f'style block {idx} contains an unparseable url(...) expression')
+
+    for match in url_calls:
+        value = (match.group(2) if match.group(1) else match.group(3) or '').strip()
+        lower = value.lower()
+        if not value:
+            fail(f'style block {idx} contains an empty url(...)')
+        if lower.startswith('data:'):
+            continue
+        if value.startswith('/') and not value.startswith('//'):
+            continue
+        if lower.startswith('https://'):
+            continue
+        fail(
+            f'style block {idx} contains a base-relative or unsupported CSS url(...): '
+            f'{value[:80]!r}'
+        )
+    return len(url_calls)
 
 
 if not INDEX.is_file():
@@ -69,6 +95,7 @@ if unreviewed:
     fail('review required: ' + ','.join(unreviewed) + '; inventory=' + summary)
 
 prepared = []
+url_count = 0
 for idx, match in enumerate(matches, start=1):
     attrs = match.group('attrs') or ''
     css = match.group('body')
@@ -83,8 +110,7 @@ for idx, match in enumerate(matches, start=1):
     low_css = css.lower()
     if '@import' in low_css:
         fail(f'style block {idx} contains @import; externalization would change fetch semantics')
-    if re.search(r'url\s*\(', css, flags=re.I):
-        fail(f'style block {idx} contains url(...); externalization would change relative URL semantics')
+    url_count += validate_base_stable_urls(css, idx)
     data = css.encode('utf-8')
     if not data.strip():
         fail(f'style block {idx} is empty')
@@ -120,5 +146,5 @@ print(
     'INLINE_STYLE_STATIC_FINALIZE_OK: '
     + '; '.join(f'{output.name}={sha256(data)}/{len(data)}B' for _, output, data, _, _, _ in prepared)
     + '; reviewed-ids=' + ','.join(sorted(REVIEWED_SINGLETON_IDS))
-    + '; first-party-js-id-refs=0; style-blocks=0; order=preserved; url-import=absent'
+    + f'; first-party-js-id-refs=0; style-blocks=0; order=preserved; @import=absent; base-stable-urls={url_count}'
 )
