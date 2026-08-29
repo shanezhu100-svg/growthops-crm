@@ -49,8 +49,6 @@ const groupsEq=(actual,expected,label)=>{
   for(const [currency,value] of Object.entries(expected))near(actual[currency],value,`${label} ${currency}`);
 };
 
-// Payment arithmetic: an explicit payments ledger is authoritative over legacy
-// paidAmount, and unpaid balances are floored at zero.
 let subject=makeSubject();
 near(subject.financeReceivablePaid({payments:[{amount:30},{amount:'20.5'},{amount:null}],paidAmount:999}),50.5,'payments ledger sum');
 near(subject.financeReceivablePaid({payments:[],paidAmount:999}),0,'empty payments ledger remains authoritative');
@@ -59,7 +57,6 @@ near(subject.financeReceivablePaid(null),0,'missing receivable paid amount');
 near(subject.financeReceivableUnpaid({amount:100,payments:[{amount:30}]}),70,'unpaid amount');
 near(subject.financeReceivableUnpaid({amount:100,payments:[{amount:120}]}),0,'overpayment does not create negative unpaid');
 
-// Status semantics are amount-first, then strict overdue date, then partial/pending.
 const paid={amount:100,payments:[{amount:100}],dueDate:'2026-08-01'};
 const overpaid={amount:100,payments:[{amount:120}],dueDate:'2026-08-01'};
 const overdue={amount:100,payments:[],dueDate:'2026-08-28'};
@@ -79,15 +76,12 @@ for(const [row,key,text,style] of [
   eq(subject.financeReceivableStatusStyle(row),style,`${text} status style`);
 }
 
-// Margin is receivable minus direct cost. Non-positive receivables intentionally do
-// not display a percentage denominator.
 near(subject.financeReceivableMargin({amount:200,directCost:50}),150,'receivable margin');
 eq(subject.financeReceivableMarginRate({amount:200,directCost:50}),'75.00%','positive margin rate');
 eq(subject.financeReceivableMarginRate({amount:100,directCost:125}),'-25.00%','negative margin rate');
 eq(subject.financeReceivableMarginRate({amount:0,directCost:10}),'—','zero amount margin rate placeholder');
 eq(subject.financeReceivableMarginRate({amount:-5,directCost:0}),'—','negative amount margin rate placeholder');
 
-// Summary filtering is period-first and optionally client-scoped.
 subject=makeSubject();
 subject.financeReceivables=[
   {id:'a',clientId:'c1',settlementMonth:'2026-08'},
@@ -98,8 +92,6 @@ jsonEq(subject.financeSummaryReceivables().map(r=>r.id),['a','b'],'ALL summary p
 subject.financeClientFilter='c1';
 jsonEq(subject.financeSummaryReceivables().map(r=>r.id),['a'],'client summary filter');
 
-// Totals cap paid per row. When an active snapshot exists it is the expected-
-// receivable authority; otherwise current summary rows provide expected totals.
 subject=makeSubject();
 const summaryRows=[
   {currency:'USD',amount:100,payments:[{amount:40}]},
@@ -121,7 +113,6 @@ subject.financeActiveSnapshotScope={receivableGroups:{USD:50}};
 totals=subject.financeReceivableTotals();
 near(totals.unpaid.USD,0,'aggregate paid above snapshot expected floors unpaid at zero');
 
-// Summary text helpers must render the corresponding expected/paid/unpaid group.
 subject=makeSubject();
 subject.financeReceivableTotals={expected:{USD:10},paid:{USD:4},unpaid:{USD:6}};
 const rendered=[];
@@ -133,8 +124,6 @@ eq(rendered[0],subject.financeReceivableTotals.expected,'expected helper passes 
 eq(rendered[1],subject.financeReceivableTotals.paid,'paid helper passes paid group');
 eq(rendered[2],subject.financeReceivableTotals.unpaid,'unpaid helper passes unpaid group');
 
-// Pagination is a pure slice over the visible authority and always exposes at least
-// one page for an empty result set.
 subject=makeSubject();
 subject.financeVisibleReceivables=[1,2,3,4,5,6,7];
 subject.receivablePageStart=2;subject.receivablePageEnd=5;subject.receivablePageSize=3;
@@ -143,8 +132,6 @@ eq(subject.financeReceivableTotalPages(),3,'receivable page count');
 subject.financeVisibleReceivables=[];
 eq(subject.financeReceivableTotalPages(),1,'empty receivable list still has one page');
 
-// Invoice status labels keep the known 3-state vocabulary and fail to the pending
-// label for unknown/blank historical values.
 subject=makeSubject();
 eq(subject.financeInvoiceStatusText('NONE'),'无需开票','invoice none label');
 eq(subject.financeInvoiceStatusText('PENDING'),'待开票','invoice pending label');
@@ -152,8 +139,6 @@ eq(subject.financeInvoiceStatusText('ISSUED'),'已开票','invoice issued label'
 eq(subject.financeInvoiceStatusText('UNKNOWN'),'待开票','invoice unknown fallback');
 eq(subject.financeInvoiceStatusText(null),'待开票','invoice blank fallback');
 
-// Cash received is payment-date-period based (not settlement-month based), uses the
-// receivable currency/default USD, and respects the optional client filter.
 subject=makeSubject();
 subject.financePeriodMonths=()=>['2026-08','2026-09'];
 subject.financeReceivables=[
@@ -169,3 +154,4 @@ subject.financeClientFilter='c1';
 groupsEq(subject.financeCashReceivedGroups(),{USD:18,CNY:20},'client cash received by payment month');
 
 console.log('BUSINESS_FINANCE_RECEIVABLE_STATUS_OK: payment-ledger+four-state-status+margin+totals+summary+pagination+invoice+cash-received=executed');
+await import('./test_business_finance_visible_profit_probe.mjs');
