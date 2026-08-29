@@ -11,12 +11,12 @@ CSS = APP / 'app-dynamic-style.css'
 
 ROAS_OLD = '<div class="h-3 rounded-full bg-slate-100 overflow-hidden"><div class="h-full rounded-full" :class="bar.className" :style="{width:bar.width+\'%\'}"></div></div>'
 ROAS_NEW = '<progress class="growthops-roas-progress" :class="bar.className" :value="bar.width" max="100"></progress>'
-PENDING_OLD = "row.style.visibility='visible'; row.style.pointerEvents='none'; row.setAttribute('data-growthops-credential-v6-gate','pending');"
-PENDING_NEW = "row.setAttribute('data-growthops-credential-v6-gate','pending');"
-READY_OLD = "row.style.visibility='visible'; row.style.pointerEvents=''; row.setAttribute('data-growthops-credential-v6-gate','ready');"
-READY_NEW = "row.setAttribute('data-growthops-credential-v6-gate','ready');"
-COPY_OLD = "ta.style.position='fixed';ta.style.opacity='0';"
-COPY_NEW = "ta.className='growthops-clipboard-fallback';"
+ROW_VISIBILITY = "row.style.visibility='visible';"
+ROW_PENDING_POINTER = "row.style.pointerEvents='none';"
+ROW_READY_POINTER = "row.style.pointerEvents='';"
+COPY_POSITION = "ta.style.position='fixed';"
+COPY_OPACITY = "ta.style.opacity='0';"
+COPY_CLASS = "ta.className='growthops-clipboard-fallback';"
 CSS_LINK = '<link rel="stylesheet" href="/app/app-dynamic-style.css" />'
 
 CSS_TEXT = '''/* CSP-safe replacements for the final dynamic style sinks. */
@@ -88,12 +88,25 @@ js3 = APP3.read_text(encoding='utf-8')
 
 if html.count(ROAS_OLD) != 1:
     fail(f'ROAS bound-style anchor drifted: {html.count(ROAS_OLD)}')
-if js2.count(PENDING_OLD) != 2:
-    fail(f'credential pending style anchor drifted: {js2.count(PENDING_OLD)}')
-if js2.count(READY_OLD) != 1:
-    fail(f'credential ready style anchor drifted: {js2.count(READY_OLD)}')
-if js3.count(COPY_OLD) != 1:
-    fail(f'clipboard fallback style anchor drifted: {js3.count(COPY_OLD)}')
+# Probe-established inventory: credential preboot has exactly three visibility
+# writes, two pending pointer-event writes, and one ready pointer-event write.
+# Count the atomic sinks independently so harmless whitespace/layout changes do
+# not make the migration brittle, while any semantic inventory drift still fails.
+expected_js2 = (
+    (ROW_VISIBILITY, 3, 'credential visibility'),
+    (ROW_PENDING_POINTER, 2, 'credential pending pointerEvents'),
+    (ROW_READY_POINTER, 1, 'credential ready pointerEvents'),
+)
+for anchor, expected, label in expected_js2:
+    actual = js2.count(anchor)
+    if actual != expected:
+        fail(f'{label} anchor drifted: expected={expected}; actual={actual}')
+if js3.count(COPY_POSITION) != 1:
+    fail(f'clipboard position style anchor drifted: {js3.count(COPY_POSITION)}')
+if js3.count(COPY_OPACITY) != 1:
+    fail(f'clipboard opacity style anchor drifted: {js3.count(COPY_OPACITY)}')
+if COPY_CLASS in js3:
+    fail('clipboard fallback class already present before finalization')
 if CSS_LINK in html:
     fail('dynamic style link already present before finalization')
 if html.count('</head>') != 1:
@@ -101,9 +114,20 @@ if html.count('</head>') != 1:
 
 html = html.replace(ROAS_OLD, ROAS_NEW, 1)
 html = html.replace('</head>', CSS_LINK + '</head>', 1)
-js2 = js2.replace(PENDING_OLD, PENDING_NEW)
-js2 = js2.replace(READY_OLD, READY_NEW, 1)
-js3 = js3.replace(COPY_OLD, COPY_NEW, 1)
+js2 = js2.replace(ROW_VISIBILITY, '')
+js2 = js2.replace(ROW_PENDING_POINTER, '')
+js2 = js2.replace(ROW_READY_POINTER, '')
+js3 = js3.replace(COPY_POSITION, COPY_CLASS, 1)
+js3 = js3.replace(COPY_OPACITY, '', 1)
+
+# Fail before writing if any reviewed first-party style sink survived the exact
+# inventory migration. The permanent output gate performs a broader regex scan.
+for anchor, _, label in expected_js2:
+    if anchor in js2:
+        fail(f'{label} sink remains after replacement')
+for anchor, label in ((COPY_POSITION, 'clipboard position'), (COPY_OPACITY, 'clipboard opacity')):
+    if anchor in js3:
+        fail(f'{label} sink remains after replacement')
 
 INDEX.write_text(html, encoding='utf-8')
 APP2.write_text(js2, encoding='utf-8')
@@ -112,6 +136,7 @@ CSS.write_text(CSS_TEXT, encoding='utf-8')
 
 print(
     'STYLE_ATTR_CSSOM_FINALIZE_OK: roas=progress-value; credential-gate=data-attribute-css; '
+    'credential-sinks=3-visibility+2-pending-pointer+1-ready-pointer; '
     'clipboard=class-css; v-show=0; output=/app/app-dynamic-style.css; '
     f'css-sha256={sha256(CSS_TEXT.encode("utf-8"))}; css-bytes={len(CSS_TEXT.encode("utf-8"))}'
 )
