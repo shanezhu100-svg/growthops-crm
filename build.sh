@@ -120,10 +120,8 @@ python3 test_inline_style_static_output.py
 python3 test_style_attr_cssom_policy.py
 python3 style_attr_cssom_finalize.py
 python3 test_style_attr_cssom_output.py
-# Browser liveness is a required deployment invariant. The compiler-inclusive
-# Vue asset is self-hosted and SHA-pinned; a real Chromium run must mount #app,
-# consume the DOM template, and remove v-cloak before any release can merge.
-python3 test_browser_mount_smoke.py
+# Browser liveness is verified by the required GitHub CI after this portable
+# build completes. Hosting builds must not depend on a Chromium executable.
 # Business-semantic regression gates execute the final shipped application logic,
 # not a copied test implementation.
 node test_business_ad_metrics.mjs
