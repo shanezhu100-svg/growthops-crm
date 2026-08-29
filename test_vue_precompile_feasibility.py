@@ -16,12 +16,6 @@ def fail(message: str) -> None:
 
 
 def extract_app_inner_html(source: str) -> str:
-    # HTMLParser identifies real tag source positions without being confused by
-    # strings in externalized JavaScript. The Vue DOM template contains markup
-    # browsers tolerate but that does not always form a strict same-tag stack for
-    # HTMLParser, so use the last real closing tag for the unique #app root before
-    # the real </body> boundary. This stays independent of where external scripts
-    # are placed (head or body) while still slicing the original source bytes.
     line_starts = [0]
     for match in re.finditer(r'\n', source):
         line_starts.append(match.end())
@@ -219,13 +213,16 @@ function compilePass() {
   const sandbox = {
     console: { log(){}, info(){}, warn(){}, error(){} },
     setTimeout, clearTimeout, setInterval, clearInterval,
-    document: documentShim,
   };
   vm.createContext(sandbox);
+  // Load the compiler-inclusive Vue asset with no DOM at all, so runtime-dom
+  // initialization cannot use our compiler-only shim. Expose the minimal decoder
+  // only after Vue has loaded and immediately before Vue.compile() is exercised.
   vm.runInContext(vueSource, sandbox, { filename: 'vue-3.5.41.global.js', timeout: 10000 });
   if (!sandbox.Vue || typeof sandbox.Vue.compile !== 'function') {
     throw new Error('Vue.compile unavailable');
   }
+  sandbox.document = documentShim;
   const NativeFunction = vm.runInContext('Function', sandbox);
   let captures = [];
   const WrappedFunction = function(...args) {
@@ -316,8 +313,6 @@ for item in first:
         + '+'.join(h[:12] for h in capture['argHashes'])
     )
 
-# First successful compile run is intentionally a fail-closed evidence probe.
-# After exact hashes are reviewed, replace this terminal probe with pinned asserts.
 raise SystemExit(
     'VUE_PRECOMPILE_FEASIBILITY_PROBE: units=5; deterministic=2-vm-pass; '
     + '; '.join(summary)
