@@ -35,7 +35,7 @@ for directive in (
     "frame-src 'none'", "form-action 'self'", "connect-src 'self'", expected_script_src,
     expected_script_attr, expected_style_src, expected_style_elem, expected_style_attr,
     expected_font_src, "img-src 'self' data: blob:", "media-src 'self' data: blob:",
-    "worker-src 'self' blob:", "manifest-src 'self'", 'upgrade-insecure-requests',
+    "worker-src 'none'", "manifest-src 'none'", 'upgrade-insecure-requests',
 ):
     if directive not in csp:
         raise SystemExit(f'VERCEL_SECURITY_HEADERS_TESTS_FAILED csp {directive}')
@@ -53,7 +53,9 @@ font_tokens=directive_tokens('font-src')
 connect_tokens=directive_tokens('connect-src')
 img_tokens=directive_tokens('img-src')
 media_tokens=directive_tokens('media-src')
-all_source_sets=(script_tokens, script_attr_tokens, style_tokens, style_elem_tokens, style_attr_tokens, font_tokens, connect_tokens, img_tokens, media_tokens)
+worker_tokens=directive_tokens('worker-src')
+manifest_tokens=directive_tokens('manifest-src')
+all_source_sets=(script_tokens,script_attr_tokens,style_tokens,style_elem_tokens,style_attr_tokens,font_tokens,connect_tokens,img_tokens,media_tokens,worker_tokens,manifest_tokens)
 if any('*' in tokens for tokens in all_source_sets):
     raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED CSP wildcard source')
 if any(source in tokens for tokens in (script_tokens, style_tokens, style_elem_tokens, font_tokens) for source in ('https:', 'http:')):
@@ -64,18 +66,17 @@ if "'unsafe-inline'" in csp or "'unsafe-eval'" in csp:
     raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED all unsafe script/style CSP capabilities must be absent')
 if script_attr_tokens != ["'none'"]:
     raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED script-src-attr must deny all HTML event handler attributes')
-if style_tokens != ["'self'"]:
-    raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED style-src fallback must be same-origin only')
-if style_elem_tokens != ["'self'"]:
-    raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED style-src-elem must be same-origin only')
+if style_tokens != ["'self'"] or style_elem_tokens != ["'self'"]:
+    raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED style sources must be same-origin only')
 if style_attr_tokens != ["'none'"]:
     raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED style-src-attr must deny all inline/dynamic style attributes')
 if font_tokens != ["'self'", 'data:']:
     raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED font-src must be same-origin/data only')
-for forbidden in (
-    'cdnjs.cloudflare.com', 'unpkg.com', 'cdn.jsdelivr.net', 'cdn.tailwindcss.com',
-    'fonts.googleapis.com', 'fonts.gstatic.com',
-):
+if worker_tokens != ["'none'"]:
+    raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED unused worker capability must remain denied')
+if manifest_tokens != ["'none'"]:
+    raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED unused manifest capability must remain denied')
+for forbidden in ('cdnjs.cloudflare.com','unpkg.com','cdn.jsdelivr.net','cdn.tailwindcss.com','fonts.googleapis.com','fonts.gstatic.com'):
     if forbidden in csp:
         raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED retired external dependency remains in CSP: ' + forbidden)
 if any(token.startswith(('https://', 'http://')) for tokens in (script_tokens, style_tokens, style_elem_tokens, font_tokens) for token in tokens):
@@ -86,4 +87,4 @@ for name,tokens in (('img-src',img_tokens),('media-src',media_tokens)):
     if tokens != ["'self'",'data:','blob:']:
         raise SystemExit(f'VERCEL_SECURITY_HEADERS_TESTS_FAILED {name} must remain self/data/blob only')
 
-print('VERCEL_SECURITY_HEADERS_TESTS_OK: csp=same-origin-script+style; script-attr=none; style-attr=none; unsafe-inline=absent; unsafe-eval=absent; connect=self-only; img-media=self-data-blob')
+print("VERCEL_SECURITY_HEADERS_TESTS_OK: csp=same-origin-script+style; script-attr=none; style-attr=none; unsafe-inline=absent; unsafe-eval=absent; worker=none; manifest=none; connect=self-only; img-media=self-data-blob")
