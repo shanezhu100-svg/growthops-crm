@@ -110,6 +110,9 @@ python3 test_inline_script_static_policy.py
 python3 inline_script_static_finalize.py
 python3 test_inline_script_static_output.py
 python3 test_vue_runtime_csp_readiness.py
+# Inventory style blocks/attributes and app CSSOM writes before splitting style-src
+# into independently hardened element and attribute policies.
+python3 test_style_csp_readiness.py
 # Final server-side identity and input boundaries. Patch the two deployment BFFs
 # before syntax/runtime tests so canonical builds and deployed handlers are aligned.
 python3 preview_runtime_boundary_finalize.py
