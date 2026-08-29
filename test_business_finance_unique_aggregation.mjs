@@ -21,16 +21,7 @@ function extractMethod(name){
 }
 
 const names=[
-  'openingDealsSpendGroupsUniqueForPeriod',
-  'openingDealsRebateGroupsUniqueForPeriod',
-  'openingDealsSpendGroupsUnique',
-  'rebateGroups',
-  'openingProvidersRebateGroups',
-  'mergeSpendGroups',
-  'financeClientAdSpendGroups',
-  'financeUnassignedSpendGroupsForMonth',
-  'financeDealsForClient',
-  'financeChannelDeals',
+  'openingDealsSpendGroupsUniqueForPeriod','openingDealsRebateGroupsUniqueForPeriod','openingDealsSpendGroupsUnique','rebateGroups','openingProvidersRebateGroups','mergeSpendGroups','financeClientAdSpendGroups','financeUnassignedSpendGroupsForMonth','financeDealsForClient','financeChannelDeals',
 ];
 const sources=Object.fromEntries(names.map(name=>[name,extractMethod(name)]));
 const factory=`({
@@ -50,8 +41,6 @@ const fail=(label,expected,actual)=>{throw new Error(`BUSINESS_FINANCE_UNIQUE_FA
 const eq=(actual,expected,label)=>{if(actual!==expected)fail(label,expected,actual);};
 const jsonEq=(actual,expected,label)=>{const a=JSON.stringify(actual),e=JSON.stringify(expected);if(a!==e)fail(label,e,a);};
 
-// Unique spend/rebate wrappers must delegate once to the ownership-aware combined
-// financials calculation instead of summing per-deal results independently.
 const deals=[{id:'a'},{id:'b'}];
 jsonEq(subject.openingDealsSpendGroupsUniqueForPeriod(deals,'2026-07'),{USD:123,CNY:456},'unique spend delegates to combined financials');
 eq(subject._financialCalls.length,1,'unique spend calls combined financials exactly once');
@@ -66,16 +55,12 @@ jsonEq(subject.openingDealsSpendGroupsUnique(deals),{USD:123,CNY:456},'default u
 eq(subject._financialCalls.length,1,'default unique spend single delegation');
 eq(subject._financialCalls[0].period,'2026-08','default unique spend uses current opening period');
 
-// Generic currency group helpers preserve currency boundaries and numeric coercion.
 jsonEq(subject.rebateGroups({USD:200,CNY:'700'},5),{USD:10,CNY:35},'rebateGroups computes each currency independently');
 const mergeTarget={USD:10};
 eq(subject.mergeSpendGroups(mergeTarget,{USD:'2.5',CNY:7}),mergeTarget,'mergeSpendGroups mutates/returns target authority');
 jsonEq(mergeTarget,{USD:12.5,CNY:7},'mergeSpendGroups sums currencies without cross-currency conversion');
 
-// Provider aggregate must filter deals before one unique rebate aggregation call.
-subject.openingDeals=[
-  {id:'p1-a',providerId:'p1'},{id:'p2-a',providerId:'p2'},{id:'p1-b',providerId:'p1'},
-];
+subject.openingDeals=[{id:'p1-a',providerId:'p1'},{id:'p2-a',providerId:'p2'},{id:'p1-b',providerId:'p1'}];
 subject._financialCalls.length=0;
 subject.openingProvidersRebateGroups('2026-05','p1');
 eq(subject._financialCalls.length,1,'provider rebate uses one unique financial aggregation');
@@ -85,7 +70,6 @@ subject._financialCalls.length=0;
 subject.openingProvidersRebateGroups('2026-04','ALL');
 jsonEq(subject._financialCalls[0].deals.map(d=>d.id),['p1-a','p2-a','p1-b'],'ALL provider filter preserves all deals');
 
-// Client/month wrappers must preserve caller identity, period set and mode exactly.
 subject._adSpendCalls.length=0;
 jsonEq(subject.financeClientAdSpendGroups({id:'client-1'},['2026-01']),{USD:99},'client ad-spend wrapper returns delegated groups');
 jsonEq(subject._adSpendCalls[0],{clientId:'client-1',months:['2026-01'],mode:'ALL'},'client ad-spend wrapper arguments');
@@ -96,8 +80,6 @@ subject._adSpendCalls.length=0;
 subject.financeUnassignedSpendGroupsForMonth('2026-03');
 jsonEq(subject._adSpendCalls[0],{clientId:null,months:['2026-03'],mode:'UNASSIGNED'},'unassigned month wrapper arguments');
 
-// Finance deal selections must exclude non-open, wrong-client or non-overlapping
-// records; channel selection additionally isolates provider/contact and optional client.
 subject.openingDeals=[
   {id:'ok',status:'OPENED',clientId:'c1',providerId:'p1',contactId:'x',overlaps:true},
   {id:'wrong-client',status:'OPENED',clientId:'c2',providerId:'p1',contactId:'x',overlaps:true},
@@ -111,3 +93,4 @@ jsonEq(subject.financeChannelDeals('p1','x').map(d=>d.id),['ok','wrong-client','
 jsonEq(subject.financeChannelDeals('p1','x','c1').map(d=>d.id),['ok','no-overlap'],'optional channel client filter isolates client');
 
 console.log('BUSINESS_FINANCE_UNIQUE_OK: combined-aggregation+currency-isolation+provider-filter+client-wrappers+deal-selection=executed');
+await import('./test_business_finance_settlement.mjs');
