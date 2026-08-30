@@ -73,6 +73,11 @@ def template_entries(source:str):
   else: fail('unterminated component template')
  return out
 
+# Apply the narrowly scoped finance correction before the final Vue render registry
+# is generated. This keeps the shipped application JS and its precompiled runtime
+# materialization on the same byte authority for downstream browser regressions.
+import finance_confirmed_profit_cost_finalize  # noqa: E402,F401
+
 for p in [INDEX,COMPILER,*APP_FILES]:
  if not p.is_file(): fail('missing '+str(p.relative_to(ROOT)))
 html=INDEX.read_text(encoding='utf-8')
