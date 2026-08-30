@@ -99,7 +99,9 @@ security = replace_block(
 # Route persistence is deliberately metadata-only. Never persist login identifiers,
 # passwords, session tokens, Vault data, forms, or whole client objects. Restore is
 # gated on an authenticated vm.currentUser so refresh cannot expose an authenticated
-# route before session restoration finishes.
+# route before session restoration finishes. It is inserted immediately before the
+# existing client-detail return authority so the two session route mechanisms remain
+# separate and deterministic.
 route_insert = r'''  const UI_ROUTE_STATE_KEY='growthops_ui_route_state_v1';
   const UI_ROUTE_PAGES=new Set(['dashboard','leads','clients','client-form','client-detail','assets','sop','analytics','ads','account-opening','finance','alerts','tools','system']);
   const UI_ROUTE_SELECTION_KEYS=['selectedClientId','selectedAssetsClientId','selectedAdsClientId','selectedAnalyticsClientId','selectedSopClientId','selectedSopAccountKey'];
@@ -174,7 +176,7 @@ route_insert = r'''  const UI_ROUTE_STATE_KEY='growthops_ui_route_state_v1';
     }
   };
 '''
-route_anchor = "  const finalizeClientListNavigation=()=>navigateWithPageScroll('clients');\n"
+route_anchor = "  const CLIENT_DETAIL_RETURN_KEY='growthops_client_detail_return_page';\n"
 if bridge.count(route_anchor) != 1:
     fail(f'unexpected route-state insertion anchor count: {bridge.count(route_anchor)}')
 bridge = bridge.replace(route_anchor, route_insert + route_anchor, 1)
@@ -206,7 +208,11 @@ if bridge.count(interval_old) != 1:
 bridge = bridge.replace(interval_old, interval_new, 1)
 
 # Explicitly fail closed if route persistence ever starts collecting sensitive state.
-route_region = bridge[bridge.find("const UI_ROUTE_STATE_KEY"):bridge.find("const finalizeClientListNavigation")]
+route_region_start = bridge.find("const UI_ROUTE_STATE_KEY")
+route_region_end = bridge.find("const CLIENT_DETAIL_RETURN_KEY", route_region_start)
+if route_region_start < 0 or route_region_end <= route_region_start:
+    fail('unable to bound route-state persistence region')
+route_region = bridge[route_region_start:route_region_end]
 for forbidden in ('TOKEN_KEY','loginAccount','loginPassword','password','twofa','credential','accountSafeSummary','Vault'):
     if forbidden.lower() in route_region.lower():
         fail('sensitive route-state marker found: ' + forbidden)
