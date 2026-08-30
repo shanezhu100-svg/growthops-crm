@@ -15,10 +15,14 @@ required = (
     "'fa-solid-900.woff2': ('ae17c16afbea216707b2203ea1cf9bdb45b9bfe47d0f4ae3258ddbc6294dd02f', 156400)",
     "'fa-v4compatibility.ttf': ('ff8f525fb050c5d24519ccc8f5723d85b2e51edd3f9bc6548af55aebadd4f269', 10832)",
     "'fa-v4compatibility.woff2': ('c7a869faca299d15be10a01f19d0765a7c4d46d8922d9b9317235c1e4a6f0982', 4792)",
-    "if final_url != url",
+    'from build_http_redirect_guard import NO_REDIRECT_OPENER, RedirectDenied',
+    'with NO_REDIRECT_OPENER.open(request, timeout=90) as response:',
+    'except RedirectDenied as exc:',
+    'unexpected redirect denied before follow',
     'CSS webfont inventory drift',
     'Only after every network input has passed the complete digest inventory',
     'browser-cdnjs-fontawesome=removed',
+    'redirects=pre-follow-denied',
     'DOWNLOAD_ATTEMPTS = 3',
     'for attempt in range(1, DOWNLOAD_ATTEMPTS + 1):',
     'time.sleep(attempt)',
@@ -28,26 +32,28 @@ required = (
 missing = [marker for marker in required if marker not in FINALIZER]
 if missing:
     raise SystemExit('FONTAWESOME_STATIC_POLICY_FAILED missing: ' + ', '.join(missing))
-for forbidden in ('__PROBE__', 'latest', 'http://'):
+for forbidden in ('__PROBE__', 'latest', 'http://', 'urllib.request.urlopen('):
     if forbidden in FINALIZER:
         raise SystemExit('FONTAWESOME_STATIC_POLICY_FAILED forbidden marker: ' + forbidden)
 
 retry_start = FINALIZER.index('for attempt in range(1, DOWNLOAD_ATTEMPTS + 1):')
-redirect_check = FINALIZER.index('unexpected redirect', retry_start)
-retry_return = FINALIZER.index('return response.read()', redirect_check)
-digest_check = FINALIZER.index('css_actual = sha256(css_bytes)', retry_return)
-if not (retry_start < redirect_check < retry_return < digest_check):
-    raise SystemExit('FONTAWESOME_STATIC_POLICY_FAILED retry/security validation order drift')
+redirect_except = FINALIZER.index('except RedirectDenied as exc:', retry_start)
+generic_except = FINALIZER.index('except Exception as exc:', redirect_except)
+retry_return = FINALIZER.index('return response.read()', retry_start)
+digest_check = FINALIZER.index('css_actual = sha256(css_bytes)', generic_except)
+if not (retry_start < retry_return < redirect_except < generic_except < digest_check):
+    raise SystemExit('FONTAWESOME_STATIC_POLICY_FAILED retry/redirect/validation order drift')
 if FINALIZER.count('time.sleep(attempt)') != 1:
     raise SystemExit('FONTAWESOME_STATIC_POLICY_FAILED retry backoff count drift')
 
 policy_call = 'python3 test_fontawesome_static_policy.py'
 finalizer_call = 'python3 fontawesome_static_finalize.py'
 output_call = 'python3 test_frontend_dependency_pin_output.py'
-for call in (policy_call, finalizer_call, output_call):
+redirect_gate = 'python3 test_build_http_redirect_guard.py'
+for call in (policy_call, finalizer_call, output_call, redirect_gate):
     if BUILD.count(call) != 1:
         raise SystemExit('FONTAWESOME_STATIC_POLICY_FAILED build call count: ' + call)
-if not (BUILD.index('python3 frontend_vendor_static_finalize.py') < BUILD.index(policy_call) < BUILD.index(finalizer_call) < BUILD.index(output_call)):
+if not (BUILD.index(redirect_gate) < BUILD.index(policy_call) < BUILD.index(finalizer_call) < BUILD.index(output_call)):
     raise SystemExit('FONTAWESOME_STATIC_POLICY_FAILED build order drift')
 
-print('FONTAWESOME_STATIC_POLICY_OK: version=6.5.2; css+8-webfonts=sha256+size-pinned; redirects=denied; transport-retries<=3; full-inventory-before-write; output=same-origin')
+print('FONTAWESOME_STATIC_POLICY_OK: version=6.5.2; css+8-webfonts=sha256+size-pinned; redirects=pre-follow-denied; transport-retries<=3; full-inventory-before-write; output=same-origin')
