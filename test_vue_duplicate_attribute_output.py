@@ -31,7 +31,10 @@ class DuplicateAttributeGuard(HTMLParser):
             key = (name or '').lower()
             if key in seen:
                 line, column = self.getpos()
-                self.duplicates.append((tag, key, line, column))
+                raw = (self.get_starttag_text() or '').replace('\n', ' ').strip()
+                if len(raw) > 360:
+                    raw = raw[:357] + '...'
+                self.duplicates.append((tag, key, line, column, raw))
             seen.add(key)
 
     def handle_starttag(self, tag, attrs):
@@ -45,7 +48,10 @@ guard = DuplicateAttributeGuard()
 guard.feed(html)
 guard.close()
 if guard.duplicates:
-    sample = ', '.join(f'{tag}[{name}]@{line}:{column}' for tag, name, line, column in guard.duplicates[:12])
+    sample = ' | '.join(
+        f'{tag}[{name}]@{line}:{column} tag={raw}'
+        for tag, name, line, column, raw in guard.duplicates[:12]
+    )
     fail('duplicate HTML/Vue attributes remain: ' + sample)
 
 print(
