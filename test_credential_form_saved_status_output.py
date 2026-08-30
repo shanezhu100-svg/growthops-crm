@@ -48,6 +48,7 @@ for marker in (
     "overflow:kind==='secret'?'visible':'hidden'",
     "host.style.left=`${Math.max(0,controlRect.left-parentRect.left+14)}px`",
     "host.style.height=`${Math.max(1,controlRect.height)}px`",
+    "host.style.color=kind==='account'?'#0f172a':controlStyle.color",
     "host.__growthOpsCredentialFormControl=control",
     "host.__growthOpsCredentialFormSync=sync",
     "host.addEventListener('mousedown'",
@@ -117,7 +118,7 @@ require('navigator.clipboard' not in security, 'credential UI must not auto-copy
 print(
     'CREDENTIAL_FORM_SAVED_STATUS_OUTPUT_OK: '
     'client-form=safe-summary-enabled+direct-client-id-before-asset-sentinel; '
-    'login=input-overlay+focus-preserved; password-2fa=input-overlay+masked+visible-eye-hit-target; '
+    'login=input-overlay+focus-preserved+normal-value-color; password-2fa=input-overlay+masked+visible-eye-hit-target; '
     'typing=mutation-handoff; empty-form-status=original-placeholder; '
     'form-inputs=mutation-only; plaintext-hydration=none; multi-account-card=nearest-pair'
 )
