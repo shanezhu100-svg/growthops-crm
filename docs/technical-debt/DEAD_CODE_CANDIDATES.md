@@ -1,8 +1,8 @@
 # Dead-code cleanup record
 
-Last reviewed: 2026-08-24
+Last reviewed: 2026-08-30
 
-The Cloudflare P1/P2 baseline freeze has ended. P2-B completed real Cloudflare and Vercel Preview acceptance, and the repository has since advanced through P5/Post-P5 hardening. Historical candidates are removed only after a fresh reference audit and a complete authoritative CRM Build Gate.
+The Cloudflare P1/P2 baseline freeze has ended. P2-B completed real Cloudflare and Vercel Preview acceptance, and the repository has since advanced through P5/Post-P5 hardening and the accepted Vue 3.5.41 runtime-only/eval-free cutover. Historical candidates are removed only after a fresh reference audit and a complete authoritative CRM Build Gate.
 
 ## Removed candidates
 
@@ -11,6 +11,7 @@ The Cloudflare P1/P2 baseline freeze has ended. P2-B completed real Cloudflare a
 - `ui_runtime_diagnostic_finalize.py`
 - `test_ui_runtime_diagnostic_output.py`
 - `ui-runtime-diagnostic.js`
+- `test_vue_runtime_final_stage_probe.py`
 
 ## Deletion-gate evidence
 
@@ -27,6 +28,14 @@ For `ui-runtime-diagnostic.js`:
 2. Narrow repository searches for `ui-runtime-diagnostic.js`, `growthops-ui-runtime-diag`, `client-nav-diag-v2`, and `UI DIAG v2` found no build, workflow, documentation, or runtime references.
 3. The script was a standalone diagnostic overlay that monkey-patched client navigation functions and was not part of the canonical production artifact path.
 4. This follow-up cleanup must merge only after the complete authoritative CRM Build Gate passes unchanged.
+
+For `test_vue_runtime_final_stage_probe.py`:
+
+1. PR #178 replaced its GitHub-only template probe with the accepted portable `vue_runtime_only_finalize.py` + `vue_runtime_compiled_marker_finalize.py` + `test_vue_runtime_only_output.py` cutover.
+2. `.github/workflows/crm-build.yml` now repeats `test_vue_runtime_only_output.py` after the canonical build and then runs the real Chromium mount and client-form credential DOM regressions; it no longer calls the final-stage probe.
+3. `test_ci_quota_guard.py` explicitly treats `test_vue_runtime_final_stage_probe.py` as `legacy_final_probe` and requires its call count to remain zero in both `build.sh` and the GitHub workflow.
+4. Narrow repository reference search found no remaining build, workflow, runtime, or current-document consumer of the retired probe.
+5. The accepted runtime-only production path is independently guarded by the 28-artifact Cloudflare verifier, compiler-asset absence check, eval-free CSP gate, VM smoke, real Chromium mount smoke, and credential DOM regression.
 
 ## Remaining candidates
 
