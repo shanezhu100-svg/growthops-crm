@@ -59,20 +59,25 @@ require(build.count('python3 test_vercel_ignore_build.py') == 1, 'canonical buil
 
 # Browser liveness and client-form credential DOM behavior need a real Chromium
 # binary. Keep the portable deploy build browser-independent while making the
-# protected GitHub build execute both probes against the exact final dist.
+# protected GitHub build execute both probes against the exact final dist. Before
+# Chromium starts, require the final-stage Vue runtime-only precompile probe so the
+# protected build continuously proves that the current final HTML/templates can be
+# deterministically compiled and initialized with dynamic Function disabled.
+vue_runtime_probe = 'python3 test_vue_runtime_final_stage_probe.py'
 browser_mount = 'python3 test_browser_mount_smoke.py'
 browser_credential = 'python3 test_browser_client_form_credential_status.py'
 cloudflare_verify = 'python3 cloudflare_p1_verify.py'
 for call, label in (
+    (vue_runtime_probe, 'final-stage Vue runtime-only precompile probe'),
     (browser_mount, 'browser mount smoke'),
     (browser_credential, 'client-form credential browser regression'),
 ):
     require(workflow.count(call) == 1, f'GitHub required build must run {label} exactly once')
-    require(build.count(call) == 0, f'portable build.sh must not require Chromium for {label}')
+    require(build.count(call) == 0, f'portable build.sh must not require GitHub-only {label}')
 require(workflow.count(cloudflare_verify) == 1, 'GitHub required build must run Cloudflare final verifier exactly once')
 require(
-    workflow.index('sh build.sh') < workflow.index(browser_mount) < workflow.index(browser_credential) < workflow.index(cloudflare_verify),
-    'CI order must be build -> browser mount -> client-form credential browser regression -> final verifier',
+    workflow.index('sh build.sh') < workflow.index(vue_runtime_probe) < workflow.index(browser_mount) < workflow.index(browser_credential) < workflow.index(cloudflare_verify),
+    'CI order must be build -> Vue runtime-only final-stage probe -> browser mount -> client-form credential browser regression -> final verifier',
 )
 
 # Preserve the real-browser semantic assertions while making Chrome process
@@ -97,4 +102,4 @@ require(
     'browser retry must wrap process completion only; DOM semantic assertions must remain outside retry loop',
 )
 
-print('CI_QUOTA_GUARD_OK: vercel-git=main-only; non-main=globstar-deployment-disabled; nonruntime-main=ignored-conservatively; slash-branches=covered; pr-ci=github-actions; runner=ubuntu-24.04; secrets=none; permissions=contents-read; actions=sha-pinned; node=24.x; canonical-build=sh-build.sh; browser-mount+credential-regression=github-only; browser-smoke=fresh-profile+process-group+bounded-retry')
+print('CI_QUOTA_GUARD_OK: vercel-git=main-only; non-main=globstar-deployment-disabled; nonruntime-main=ignored-conservatively; slash-branches=covered; pr-ci=github-actions; runner=ubuntu-24.04; secrets=none; permissions=contents-read; actions=sha-pinned; node=24.x; canonical-build=sh-build.sh; vue-runtime-final-stage-probe=github-only; browser-mount+credential-regression=github-only; browser-smoke=fresh-profile+process-group+bounded-retry')
