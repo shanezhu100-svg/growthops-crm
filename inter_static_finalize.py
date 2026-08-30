@@ -2,6 +2,7 @@ from pathlib import Path
 import hashlib
 import os
 import re
+import time
 import urllib.parse
 import urllib.request
 
@@ -14,6 +15,7 @@ LOCAL_CSS_TAG = '<link rel="stylesheet" href="/vendor/inter/inter.css" />'
 USER_AGENT = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
 CSS_SHA256 = 'ccb4927c1e665717c1f91e480fbbad168db8c70373b7ccf7abf2f70131c04de3'
 CSS_SIZE = 12355
+DOWNLOAD_ATTEMPTS = 3
 EXPECTED_WEIGHTS = (400, 500, 600, 700, 800)
 EXPECTED_SUBSETS = ('latin-ext', 'latin')
 EXPECTED_ASSETS = {
@@ -36,23 +38,28 @@ def fetch_exact(url: str) -> bytes:
     parsed = urllib.parse.urlsplit(url)
     if parsed.scheme != 'https' or parsed.username or parsed.password or parsed.fragment:
         fail('source URL is not an exact HTTPS resource: ' + url)
-    request = urllib.request.Request(
-        url,
-        headers={
-            'User-Agent': USER_AGENT,
-            'Accept': 'text/css,*/*;q=0.1' if parsed.netloc == 'fonts.googleapis.com' else '*/*',
-        },
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=90) as response:
-            final_url = response.geturl()
-            if final_url != url:
-                fail('unexpected redirect: ' + final_url)
-            return response.read()
-    except SystemExit:
-        raise
-    except Exception as exc:
-        fail('download failed: ' + type(exc).__name__)
+    for attempt in range(1, DOWNLOAD_ATTEMPTS + 1):
+        request = urllib.request.Request(
+            url,
+            headers={
+                'User-Agent': USER_AGENT,
+                'Accept': 'text/css,*/*;q=0.1' if parsed.netloc == 'fonts.googleapis.com' else '*/*',
+            },
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=90) as response:
+                final_url = response.geturl()
+                if final_url != url:
+                    fail('unexpected redirect: ' + final_url)
+                return response.read()
+        except SystemExit:
+            raise
+        except Exception as exc:
+            if attempt < DOWNLOAD_ATTEMPTS:
+                time.sleep(attempt)
+                continue
+            fail(f'download failed after {DOWNLOAD_ATTEMPTS} attempts: {type(exc).__name__}')
+    fail('download retry loop exited unexpectedly')
 
 
 def atomic_write(path: Path, data: bytes) -> None:
@@ -178,5 +185,6 @@ for subset, (expected_sha, _, filename) in EXPECTED_ASSETS.items():
 print(
     'INTER_STATIC_FINALIZE_OK: css-source='
     f'{CSS_SHA256}/{CSS_SIZE}B; weights=400+500+600+700+800; subsets=latin+latin-ext; '
-    f'output-css={sha256(local_css)}/{len(local_css)}B; fonts=2-deduplicated; browser-google-fonts=removed'
+    f'output-css={sha256(local_css)}/{len(local_css)}B; fonts=2-deduplicated; '
+    f'download-attempts<={DOWNLOAD_ATTEMPTS}; browser-google-fonts=removed'
 )

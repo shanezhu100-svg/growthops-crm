@@ -19,6 +19,11 @@ required = (
     "Inter latin and latin-ext unexpectedly resolve to the same upstream URL",
     "Only after every network input has passed its exact digest/size inventory",
     "browser-google-fonts=removed",
+    'DOWNLOAD_ATTEMPTS = 3',
+    'for attempt in range(1, DOWNLOAD_ATTEMPTS + 1):',
+    'time.sleep(attempt)',
+    'download failed after {DOWNLOAD_ATTEMPTS} attempts',
+    'download-attempts<={DOWNLOAD_ATTEMPTS}',
 )
 missing = [marker for marker in required if marker not in FINALIZER]
 if missing:
@@ -27,6 +32,15 @@ if missing:
 for forbidden in ('__PROBE__', 'latest', 'fonts.googleapis.com/css?family='):
     if forbidden in FINALIZER:
         raise SystemExit('INTER_STATIC_POLICY_FAILED forbidden floating/probe marker: ' + forbidden)
+
+retry_start = FINALIZER.index('for attempt in range(1, DOWNLOAD_ATTEMPTS + 1):')
+redirect_check = FINALIZER.index('unexpected redirect', retry_start)
+retry_return = FINALIZER.index('return response.read()', redirect_check)
+digest_check = FINALIZER.index('css_actual = sha256(css_bytes)', retry_return)
+if not (retry_start < redirect_check < retry_return < digest_check):
+    raise SystemExit('INTER_STATIC_POLICY_FAILED retry/security validation order drift')
+if FINALIZER.count('time.sleep(attempt)') != 1:
+    raise SystemExit('INTER_STATIC_POLICY_FAILED retry backoff count drift')
 
 policy_call = 'python3 test_inter_static_policy.py'
 finalizer_call = 'python3 inter_static_finalize.py'
@@ -39,4 +53,4 @@ if not (BUILD.index(policy_call) < BUILD.index(finalizer_call) < BUILD.index(out
 if BUILD.index(finalizer_call) < BUILD.index('python3 fontawesome_static_finalize.py'):
     raise SystemExit('INTER_STATIC_POLICY_FAILED Inter finalizer must run after other browser dependency finalizers')
 
-print('INTER_STATIC_POLICY_OK: css+2-variable-fonts=sha256+size-pinned; weights=5; subsets=latin+latin-ext; redirects=denied; deduplicated-before-write; output=same-origin')
+print('INTER_STATIC_POLICY_OK: css+2-variable-fonts=sha256+size-pinned; weights=5; subsets=latin+latin-ext; redirects=denied; transport-retries<=3; deduplicated-before-write; output=same-origin')

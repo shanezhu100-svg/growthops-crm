@@ -2,6 +2,7 @@ from pathlib import Path
 import hashlib
 import os
 import re
+import time
 import urllib.parse
 import urllib.request
 
@@ -11,6 +12,7 @@ INDEX = DIST / 'index.html'
 CSS_URL = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css'
 CSS_SHA256 = '5ceaaba22d75b58e04150311f596306562a3e595e27ed4b1dfa451b82dda9e50'
 CSS_SIZE = 103009
+DOWNLOAD_ATTEMPTS = 3
 EXPECTED_FONTS = {
     'fa-brands-400.ttf': ('e28096fa75a96ac77020155ea3a6dd7312983e84115366d4cf49a0c312ec6d51', 209128),
     'fa-brands-400.woff2': ('232c6f6a7678304f9efaa26f30b1610debc2ba9f4cd636b5e6751c8d73761b92', 117852),
@@ -34,17 +36,22 @@ def fetch_exact(url: str) -> bytes:
     parsed = urllib.parse.urlsplit(url)
     if parsed.scheme != 'https' or parsed.username or parsed.password or parsed.query or parsed.fragment:
         fail('source URL is not an exact HTTPS resource: ' + url)
-    request = urllib.request.Request(url, headers={'User-Agent': 'growthops-crm-build/1'})
-    try:
-        with urllib.request.urlopen(request, timeout=90) as response:
-            final_url = response.geturl()
-            if final_url != url:
-                fail('unexpected redirect: ' + final_url)
-            return response.read()
-    except SystemExit:
-        raise
-    except Exception as exc:
-        fail('download failed: ' + type(exc).__name__)
+    for attempt in range(1, DOWNLOAD_ATTEMPTS + 1):
+        request = urllib.request.Request(url, headers={'User-Agent': 'growthops-crm-build/1'})
+        try:
+            with urllib.request.urlopen(request, timeout=90) as response:
+                final_url = response.geturl()
+                if final_url != url:
+                    fail('unexpected redirect: ' + final_url)
+                return response.read()
+        except SystemExit:
+            raise
+        except Exception as exc:
+            if attempt < DOWNLOAD_ATTEMPTS:
+                time.sleep(attempt)
+                continue
+            fail(f'download failed after {DOWNLOAD_ATTEMPTS} attempts: {type(exc).__name__}')
+    fail('download retry loop exited unexpectedly')
 
 
 def sha256(data: bytes) -> str:
@@ -112,5 +119,5 @@ for name, (expected_sha, _) in EXPECTED_FONTS.items():
 print(
     'FONTAWESOME_STATIC_FINALIZE_OK: version=6.5.2; '
     f'css={CSS_SHA256}/{CSS_SIZE}B; webfonts={len(EXPECTED_FONTS)}; '
-    'output=/vendor/fontawesome; browser-cdnjs-fontawesome=removed'
+    f'download-attempts<={DOWNLOAD_ATTEMPTS}; output=/vendor/fontawesome; browser-cdnjs-fontawesome=removed'
 )
