@@ -1,7 +1,8 @@
 -- SUPERSEDED TIMESTAMP — DO NOT EXECUTE.
--- Production recorded this change as migration version 20260830071649.
+-- Production recorded this reviewed change as migration version 20260830071649.
 -- The authoritative rollback is:
 --   supabase/rollback/20260830071649_client_account_safe_summary_correspondence.sql
 --
--- This marker is intentionally non-executable so the historical PR filename cannot
--- be mistaken for the Production migration-ledger authority.
+-- This file intentionally contains comments only. It cannot mutate a database and
+-- exists solely so the historical PR-era timestamp cannot be mistaken for the
+-- current Production migration-ledger authority.
