@@ -147,7 +147,10 @@ value_block = r'''  const configureCredentialFormOverlay=(host,control,kind)=>{
       const controlStyle=getComputedStyle(control);
       host.style.font=controlStyle.font;
       host.style.letterSpacing=controlStyle.letterSpacing;
-      host.style.color=controlStyle.color;
+      // A saved login identifier is a real persisted value, not placeholder text.
+      // Present it with the same normal dark value color as adjacent ID fields while
+      // leaving the password / 2FA overlay styling untouched.
+      host.style.color=kind==='account'?'#0f172a':controlStyle.color;
     };
     const sync=()=>{
       place();
@@ -284,7 +287,7 @@ print(
     'CREDENTIAL_FORM_SAVED_STATUS_FINALIZE_OK: '
     'context=client-form+detail+assets; client-form-id=before-asset-sentinel; '
     'form-inputs=mutation-only; safe-summary=input-overlay; focus=preserves-saved-state; '
-    'typing=mutation-handoff; empty-form-status=placeholder; '
+    'typing=mutation-handoff; empty-form-status=placeholder; login=value-color; '
     'password=masked+visible-hit-target-eye-inside-input; per-account-card=nearest-pair; '
     'security=' + hashlib.sha256(SECURITY.read_bytes()).hexdigest()
 )
