@@ -90,6 +90,10 @@ python3 test_credential_eye_self_heal_output.py
 # state without hydrating plaintext back into Vue/browser form state.
 python3 credential_form_saved_status_finalize.py
 python3 test_credential_form_saved_status_output.py
+# Keep login identifiers bound to the currently visible account and remember only
+# non-sensitive page/client selection metadata across a browser refresh.
+python3 client_account_correspondence_finalize.py
+python3 test_client_account_correspondence_output.py
 python3 admin_password_byte_cap_finalize.py
 python3 test_admin_password_byte_cap_output.py
 # Public deployment guidance must describe the actual server-authenticated runtime
