@@ -13,7 +13,7 @@ RUNTIME=DIST/'vendor'/'vue-3.5.41.runtime.global.js'
 REGISTRY=DIST/'vendor'/'vue-3.5.41.renders.js'
 COMPILER=DIST/'vendor'/'vue-3.5.41.global.js'
 RUNTIME_SHA='45c904194aaf24112c8f4fc4386b87e107a32eede80c410ce93be459ebdee088'; RUNTIME_BYTES=414799
-REGISTRY_SHA='d91a71ac97b904f27b0a4bf8527473e525ed311635eb1bdcd04ebf95c882658e'; REGISTRY_BYTES=1185796
+REGISTRY_SHA='a958722d8a7ddbe16c0533f6f463c91f011f2595c3a59b267ff1ddbc39fcf2ee'; REGISTRY_BYTES=1187627
 
 def fail(m): raise SystemExit('VUE_RUNTIME_ONLY_OUTPUT_FAILED: '+m)
 def digest(p): return hashlib.sha256(p.read_bytes()).hexdigest()
@@ -21,12 +21,24 @@ for p in [INDEX,RUNTIME,REGISTRY,*APP_FILES]:
  if not p.is_file(): fail('missing '+str(p.relative_to(ROOT)))
 if COMPILER.exists(): fail('compiler-inclusive Vue remains in deploy output')
 if (digest(RUNTIME),RUNTIME.stat().st_size)!=(RUNTIME_SHA,RUNTIME_BYTES): fail('runtime-only asset drift')
-if (digest(REGISTRY),REGISTRY.stat().st_size)!=(REGISTRY_SHA,REGISTRY_BYTES): fail('render registry drift')
+if (digest(REGISTRY),REGISTRY.stat().st_size)!=(REGISTRY_SHA,REGISTRY_BYTES): fail(f'render registry drift: actual={digest(REGISTRY)}/{REGISTRY.stat().st_size}B')
 runtime=RUNTIME.read_text(encoding='utf-8'); registry=REGISTRY.read_text(encoding='utf-8')
 for marker in ('function compileToFunction(','const compile = compileToFunction','new Function(code)'):
  if marker in runtime: fail('compiler marker in runtime asset: '+marker)
 for marker in ('new Function(','eval(','setTimeout("',"setTimeout('"):
  if marker in registry: fail('dynamic-code marker in registry: '+marker)
+for marker in (
+ '__GrowthOpsVueRuntimeGlobals', '__GrowthOpsVueWithProxyCache',
+ '__GrowthOpsVueRuntimeCompiledProxyHandlers', '__GrowthOpsVueWrapRuntimeCompiled',
+ "Object.defineProperty(wrapped, '_rc'", 'key[0] !==', 'Symbol.unscopables',
+):
+ if marker not in registry: fail('runtime-compiled proxy compatibility marker missing: '+marker)
+for global_name in (
+ 'Infinity','undefined','NaN','isFinite','isNaN','parseFloat','parseInt','decodeURI',
+ 'decodeURIComponent','encodeURI','encodeURIComponent','Math','Number','Date','Array',
+ 'Object','Boolean','String','RegExp','Map','Set','JSON','Intl','BigInt','console','Error','Symbol',
+):
+ if f'"{global_name}"' not in registry: fail('Vue 3.5.41 globally-allowed marker missing: '+global_name)
 
 html=INDEX.read_text(encoding='utf-8')
 class ScriptInventory(HTMLParser):
@@ -48,10 +60,9 @@ if not (parser.srcs.index(runtime_src)<parser.srcs.index(registry_src)<parser.sr
 if '/vendor/vue-3.5.41.global.js' in parser.srcs or 'vue-3.5.41.global.js' in html:
  fail('compiler-inclusive script reference remains')
 
-# Final browser subresource surface: executable code is already constrained by
-# connect-src 'self'. Independently keep network-bearing HTML/CSS references from
-# silently reintroducing a third-party CDN or exfiltration endpoint. Normal <a href>
-# navigation is intentionally not part of this subresource inventory.
+# Final browser subresource surface: executable code is constrained to same-origin.
+# Independently keep network-bearing HTML/CSS references from silently reintroducing
+# a third-party CDN or exfiltration endpoint. Normal <a href> navigation is excluded.
 def unsafe_network_value(value):
  value=(value or '').strip().lower()
  return value.startswith(('http://','https://','//','javascript:'))
@@ -66,7 +77,7 @@ class BrowserResourceInventory(HTMLParser):
  def __init__(self):
   super().__init__(convert_charrefs=False); self.external=[]; self.resource_count=0; self.meta_refresh=0
  def handle_starttag(self,tag,attrs):
-  tag=tag.lower(); amap={str(k).lower():v for k,v in attrs};
+  tag=tag.lower(); amap={str(k).lower():v for k,v in attrs}
   if tag=='meta' and (amap.get('http-equiv') or '').strip().lower()=='refresh': self.meta_refresh+=1
   pairs=[]
   for attr in self.RESOURCE_ATTRS.get(tag,()):
@@ -75,8 +86,6 @@ class BrowserResourceInventory(HTMLParser):
    pairs.append(('href',amap['href']))
   for attr,value in pairs:
    self.resource_count+=1
-   # srcset can contain several candidates; detecting an external scheme anywhere
-   # is sufficient and avoids mis-parsing commas inside data: URLs.
    lowered=(value or '').strip().lower()
    if unsafe_network_value(lowered) or re.search(r'(?:^|[\s,])(?:https?:)?//',lowered):
     self.external.append(f'{tag}[{attr}]={value}')
@@ -93,8 +102,6 @@ if len(css_files) < 5: fail(f'CSS inventory unexpectedly small: {len(css_files)}
 css_external=[]; css_urls=0
 for css_path in css_files:
  text=css_path.read_text(encoding='utf-8')
- # License comments may contain project homepages; remove comments before examining
- # browser-fetching CSS syntax.
  clean=re.sub(r'/\*.*?\*/','',text,flags=re.S)
  for match in css_url_re.finditer(clean):
   css_urls+=1; value=match.group(2).strip()
@@ -122,8 +129,8 @@ script=csp.split('script-src ',1)[1].split(';',1)[0].split() if 'script-src ' in
 if script != ["'self'"] or "'unsafe-eval'" in csp or "'unsafe-inline'" in csp: fail('final CSP is not same-origin/eval-free')
 
 smoke_js=r'''
-const fs=require('fs'),vm=require('vm');const input=JSON.parse(fs.readFileSync(0,'utf8'));const sandbox={console:{log(){},info(){},warn(){},error(){}},setTimeout,clearTimeout,setInterval,clearInterval};vm.createContext(sandbox);vm.runInContext(input.runtime,sandbox,{timeout:10000});sandbox.Function=function(){throw Error('dynamic Function forbidden');};vm.runInContext(input.registry,sandbox,{timeout:10000});const r=sandbox.GrowthOpsVueRenders;if(!r||!Object.isFrozen(r)||typeof r.root!=='function')throw Error('registry invalid');for(const k of ['component01','component02','component03','component04'])if(typeof r[k]!=='function')throw Error(k+' missing');const app=sandbox.Vue.createApp({render:r.root});if(!app||typeof app.mount!=='function')throw Error('runtime createApp failed');process.stdout.write('ok');
+const fs=require('fs'),vm=require('vm');const input=JSON.parse(fs.readFileSync(0,'utf8'));const sandbox={console:{log(){},info(){},warn(){},error(){}},setTimeout,clearTimeout,setInterval,clearInterval};vm.createContext(sandbox);vm.runInContext(input.runtime,sandbox,{timeout:10000});sandbox.Function=function(){throw Error('dynamic Function forbidden');};vm.runInContext(input.registry,sandbox,{timeout:10000});const r=sandbox.GrowthOpsVueRenders;if(!r||!Object.isFrozen(r)||typeof r.root!=='function')throw Error('registry invalid');for(const k of ['component01','component02','component03','component04'])if(typeof r[k]!=='function')throw Error(k+' missing');for(const k of ['root','component01','component02','component03','component04'])if(r[k]._rc!==true)throw Error(k+' _rc missing');const app=sandbox.Vue.createApp({render:r.root});if(!app||typeof app.mount!=='function')throw Error('runtime createApp failed');process.stdout.write('ok');
 '''
 smoke=subprocess.run(['node','-e',smoke_js],input=json.dumps({'runtime':runtime,'registry':registry}),text=True,capture_output=True,timeout=30,check=False)
 if smoke.returncode!=0 or smoke.stdout!='ok': fail('runtime-only VM smoke failed: '+re.sub(r'\s+',' ',smoke.stderr.strip())[:400])
-print(f'VUE_RUNTIME_ONLY_OUTPUT_OK: runtime={RUNTIME_SHA}/{RUNTIME_BYTES}B; registry={REGISTRY_SHA}/{REGISTRY_BYTES}B; renders=5; template-options=0; compiler=absent; CSP=self-only+eval-free; inline-scripts=0; browser-external-subresources=0; html-resource-refs={resources.resource_count}; css-url-refs={css_urls}; vm-smoke=pass')
+print(f'VUE_RUNTIME_ONLY_OUTPUT_OK: runtime={RUNTIME_SHA}/{RUNTIME_BYTES}B; registry={REGISTRY_SHA}/{REGISTRY_BYTES}B; renders=5; compiled-marker=_rc; runtime-compiled-proxy=vue-3.5.41-compatible; template-options=0; compiler=absent; CSP=self-only+eval-free; inline-scripts=0; browser-external-subresources=0; html-resource-refs={resources.resource_count}; css-url-refs={css_urls}; vm-smoke=pass')

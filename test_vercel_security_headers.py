@@ -26,7 +26,7 @@ for directive in ('camera=()', 'microphone=()', 'geolocation=()', 'payment=()', 
         raise SystemExit(f'VERCEL_SECURITY_HEADERS_TESTS_FAILED permissions {directive}')
 
 csp = headers.get('Content-Security-Policy', '')
-expected_script_src = "script-src 'self' 'unsafe-eval'"
+expected_script_src = "script-src 'self'"
 expected_script_attr = "script-src-attr 'none'"
 expected_style_src = "style-src 'self'"
 expected_style_elem = "style-src-elem 'self'"
@@ -62,10 +62,10 @@ if any('*' in tokens for tokens in all_source_sets):
     raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED CSP wildcard source')
 if any(source in tokens for tokens in (script_tokens, style_tokens, style_elem_tokens, font_tokens) for source in ('https:', 'http:')):
     raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED broad scheme source')
-if script_tokens != ["'self'", "'unsafe-eval'"]:
-    raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED script-src must be same-origin plus transitional Vue compiler eval only')
-if "'unsafe-inline'" in csp:
-    raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED unsafe-inline must remain absent from the entire CSP')
+if script_tokens != ["'self'"]:
+    raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED script-src must be same-origin only')
+if "'unsafe-inline'" in csp or "'unsafe-eval'" in csp:
+    raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED unsafe script capability returned')
 if script_attr_tokens != ["'none'"]:
     raise SystemExit('VERCEL_SECURITY_HEADERS_TESTS_FAILED script-src-attr must deny all HTML event handler attributes')
 if style_tokens != ["'self'"] or style_elem_tokens != ["'self'"]:
@@ -89,4 +89,4 @@ for name,tokens in (('img-src',img_tokens),('media-src',media_tokens)):
     if tokens != ["'self'",'data:','blob:']:
         raise SystemExit(f'VERCEL_SECURITY_HEADERS_TESTS_FAILED {name} must remain self/data/blob only')
 
-print("VERCEL_SECURITY_HEADERS_TESTS_OK: csp=same-origin-script+vue-eval; script-attr=none; style-attr=none; unsafe-inline=absent; worker=none; manifest=none; connect=self-only; img-media=self-data-blob; coop+corp=same-origin; robots=noindex+nofollow+noarchive")
+print("VERCEL_SECURITY_HEADERS_TESTS_OK: csp=same-origin-script+eval-free; script-attr=none; style-attr=none; unsafe-inline=absent; unsafe-eval=absent; worker=none; manifest=none; connect=self-only; img-media=self-data-blob; coop+corp=same-origin; robots=noindex+nofollow+noarchive")

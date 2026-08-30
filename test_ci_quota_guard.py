@@ -14,30 +14,12 @@ def require(ok, message):
         raise SystemExit(message)
 
 rules = vercel.get('git', {}).get('deploymentEnabled')
-require(
-    rules == {'**': False, 'main': True},
-    'Vercel Git deployment policy must deny slash-containing/non-main branch names with globstar and explicitly allow main',
-)
-require(
-    '*' not in rules,
-    'Vercel bare-star deny is insufficient for slash-containing branch names; use globstar',
-)
-require(
-    vercel.get('ignoreCommand') == 'sh vercel-ignore-build.sh',
-    'Vercel ignored-build policy must use the reviewed conservative classifier',
-)
-for marker in (
-    'VERCEL_GIT_PREVIOUS_SHA',
-    'git merge-base --is-ancestor',
-    '.github/*|test_*.py|test_*.js|test_*.mjs|*.md',
-    'runtime-relevant change',
-    'previous deployment SHA unavailable; continue build',
-):
+require(rules == {'**': False, 'main': True}, 'Vercel Git deployment policy must deny slash-containing/non-main branch names with globstar and explicitly allow main')
+require('*' not in rules, 'Vercel bare-star deny is insufficient for slash-containing branch names; use globstar')
+require(vercel.get('ignoreCommand') == 'sh vercel-ignore-build.sh', 'Vercel ignored-build policy must use the reviewed conservative classifier')
+for marker in ('VERCEL_GIT_PREVIOUS_SHA','git merge-base --is-ancestor','.github/*|test_*.py|test_*.js|test_*.mjs|*.md','runtime-relevant change','previous deployment SHA unavailable; continue build'):
     require(marker in ignore_script, f'Vercel ignored-build classifier missing fail-safe marker: {marker}')
-require(
-    'api/*' not in ignore_script and 'functions/*' not in ignore_script and 'supabase/*' not in ignore_script,
-    'runtime/API/Supabase paths must never be allowlisted as non-runtime Vercel changes',
-)
+require('api/*' not in ignore_script and 'functions/*' not in ignore_script and 'supabase/*' not in ignore_script, 'runtime/API/Supabase paths must never be allowlisted as non-runtime Vercel changes')
 
 require('name: CRM Build Gate' in workflow, 'missing CRM Build Gate workflow')
 require('pull_request:' in workflow and 'branches: [main]' in workflow, 'PR workflow must target main')
@@ -57,49 +39,40 @@ require('cancel-in-progress: true' in workflow, 'stale PR CI must be cancelled')
 require(build.count('python3 test_ci_quota_guard.py') == 1, 'canonical build must run quota/CI guard exactly once')
 require(build.count('python3 test_vercel_ignore_build.py') == 1, 'canonical build must run Vercel ignored-build regression exactly once')
 
-# Browser liveness and client-form credential DOM behavior need a real Chromium
-# binary. Keep the portable deploy build browser-independent while making the
-# protected GitHub build execute both probes against the exact final dist. Before
-# Chromium starts, require the final-stage Vue runtime-only precompile probe so the
-# protected build continuously proves that the current final HTML/templates can be
-# deterministically compiled and initialized with dynamic Function disabled.
-vue_runtime_probe = 'python3 test_vue_runtime_final_stage_probe.py'
+# The portable build now performs the deterministic runtime-only Vue cutover and
+# its final artifact/VM checks. GitHub CI repeats that final output assertion and
+# then supplies the real Chromium liveness/credential DOM regressions that hosting
+# builds intentionally do not require.
+runtime_output = 'python3 test_vue_runtime_only_output.py'
+legacy_final_probe = 'python3 test_vue_runtime_final_stage_probe.py'
 browser_mount = 'python3 test_browser_mount_smoke.py'
 browser_credential = 'python3 test_browser_client_form_credential_status.py'
 cloudflare_verify = 'python3 cloudflare_p1_verify.py'
-for call, label in (
-    (vue_runtime_probe, 'final-stage Vue runtime-only precompile probe'),
-    (browser_mount, 'browser mount smoke'),
-    (browser_credential, 'client-form credential browser regression'),
-):
+require(build.count(runtime_output) == 1, 'portable build must enforce final runtime-only Vue output exactly once')
+require(build.count(legacy_final_probe) == 0, 'portable build must not run the retired GitHub-only template probe')
+require(workflow.count(runtime_output) == 1, 'GitHub required build must repeat final runtime-only Vue output exactly once')
+require(workflow.count(legacy_final_probe) == 0, 'GitHub workflow must not look for templates after runtime-only cutover')
+for call, label in ((browser_mount, 'browser mount smoke'), (browser_credential, 'client-form credential browser regression')):
     require(workflow.count(call) == 1, f'GitHub required build must run {label} exactly once')
     require(build.count(call) == 0, f'portable build.sh must not require GitHub-only {label}')
 require(workflow.count(cloudflare_verify) == 1, 'GitHub required build must run Cloudflare final verifier exactly once')
 require(
-    workflow.index('sh build.sh') < workflow.index(vue_runtime_probe) < workflow.index(browser_mount) < workflow.index(browser_credential) < workflow.index(cloudflare_verify),
-    'CI order must be build -> Vue runtime-only final-stage probe -> browser mount -> client-form credential browser regression -> final verifier',
+    workflow.index('sh build.sh') < workflow.index(runtime_output) < workflow.index(browser_mount) < workflow.index(browser_credential) < workflow.index(cloudflare_verify),
+    'CI order must be build -> runtime-only final output -> browser mount -> client-form credential browser regression -> final verifier',
 )
 
-# Preserve the real-browser semantic assertions while making Chrome process
-# lifecycle deterministic on hosted runners. Only process launch/exit can retry;
-# mounted-DOM assertions still execute once against the successful browser result.
+# Preserve real-browser semantic assertions while making Chrome process lifecycle
+# deterministic on hosted runners. Only process launch/exit can retry; mounted-DOM
+# assertions still execute once against the successful browser result.
 for marker in (
-    'BROWSER_ATTEMPT_TIMEOUT_SECONDS = 20',
-    'MAX_BROWSER_ATTEMPTS = 2',
-    'tempfile.TemporaryDirectory',
-    'start_new_session=True',
-    'os.killpg(proc.pid, signal.SIGKILL)',
-    "'--virtual-time-budget=6000'",
-    "if 'v-cloak' in app_tag",
-    "if '{{ currentuser' in dom.lower() or 'v-if=\"!loggedin\"' in dom.lower()",
-    "if len(text) < 40",
+    'BROWSER_ATTEMPT_TIMEOUT_SECONDS = 20','MAX_BROWSER_ATTEMPTS = 2','tempfile.TemporaryDirectory','start_new_session=True',
+    'os.killpg(proc.pid, signal.SIGKILL)',"'--virtual-time-budget=6000'","if 'v-cloak' in app_tag",
+    "if '{{ currentuser' in dom.lower() or 'v-if=\"!loggedin\"' in dom.lower()","if len(text) < 40",
 ):
     require(marker in browser_smoke_source, f'browser mount reliability/semantic marker missing: {marker}')
 require(
-    browser_smoke_source.index('for attempt in range(1, MAX_BROWSER_ATTEMPTS + 1)')
-    < browser_smoke_source.index("if len(dom) < 1000")
-    < browser_smoke_source.index("if 'v-cloak' in app_tag"),
+    browser_smoke_source.index('for attempt in range(1, MAX_BROWSER_ATTEMPTS + 1)') < browser_smoke_source.index("if len(dom) < 1000") < browser_smoke_source.index("if 'v-cloak' in app_tag"),
     'browser retry must wrap process completion only; DOM semantic assertions must remain outside retry loop',
 )
 
-print('CI_QUOTA_GUARD_OK: vercel-git=main-only; non-main=globstar-deployment-disabled; nonruntime-main=ignored-conservatively; slash-branches=covered; pr-ci=github-actions; runner=ubuntu-24.04; secrets=none; permissions=contents-read; actions=sha-pinned; node=24.x; canonical-build=sh-build.sh; vue-runtime-final-stage-probe=github-only; browser-mount+credential-regression=github-only; browser-smoke=fresh-profile+process-group+bounded-retry')
+print('CI_QUOTA_GUARD_OK: vercel-git=main-only; non-main=globstar-deployment-disabled; nonruntime-main=ignored-conservatively; slash-branches=covered; pr-ci=github-actions; runner=ubuntu-24.04; secrets=none; permissions=contents-read; actions=sha-pinned; node=24.x; canonical-build=sh-build.sh; vue-runtime-only=portable+github-recheck; browser-mount+credential-regression=github-only; browser-smoke=fresh-profile+process-group+bounded-retry')

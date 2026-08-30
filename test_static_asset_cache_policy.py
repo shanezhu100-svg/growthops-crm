@@ -5,13 +5,14 @@ ROOT = Path(__file__).resolve().parent
 VERCEL = json.loads((ROOT / 'vercel.json').read_text(encoding='utf-8'))
 HEADERS = (ROOT / 'dist' / '_headers').read_text(encoding='utf-8')
 VENDOR = (ROOT / 'frontend_vendor_static_finalize.py').read_text(encoding='utf-8')
+RUNTIME = (ROOT / 'vue_runtime_only_finalize.py').read_text(encoding='utf-8')
 
 IMMUTABLE = 'public, max-age=31536000, immutable'
 EXPECTED = {
-    '/vendor/vue-3.5.41.global.js': (
-        '14625269265de97b5c344b8fcfb7136c0c9ab09f7dbadc909a4967d14eca05fb',
-        'vue-3.5.41.global.js',
-        VENDOR,
+    '/vendor/vue-3.5.41.runtime.global.js': (
+        '45c904194aaf24112c8f4fc4386b87e107a32eede80c410ce93be459ebdee088',
+        'vue-3.5.41.runtime.global.js',
+        RUNTIME,
     ),
     '/vendor/xlsx-0.18.5.full.min.js': (
         'c9506197caf809a075b6dee1da0d36fb19da7158ffe8a88e7b0c96c5d8623c99',
@@ -44,7 +45,7 @@ for source, (digest, filename, authority) in EXPECTED.items():
     if HEADERS.count(block) != 1:
         raise SystemExit('STATIC_ASSET_CACHE_POLICY_FAILED Cloudflare cache parity drift: ' + source)
 
-for forbidden in ('/api/', '/index.html', '/tailwind.css', '/app/', '/vendor/inter/', '/vendor/fontawesome/', 'vue-3.5.41.runtime.global.js', 'vue-3.5.41.renders.js'):
+for forbidden in ('/api/', '/index.html', '/tailwind.css', '/app/', '/vendor/inter/', '/vendor/fontawesome/', 'vue-3.5.41.global.js', 'vue-3.5.41.renders.js'):
     if any(forbidden in str(r.get('source') or '') for r in static):
         raise SystemExit('STATIC_ASSET_CACHE_POLICY_FAILED mutable/retired surface cached immutably: ' + forbidden)
 
@@ -54,6 +55,6 @@ if HEADERS.count('Cache-Control: ' + IMMUTABLE) != len(EXPECTED):
     raise SystemExit('STATIC_ASSET_CACHE_POLICY_FAILED unexpected immutable Cache-Control count')
 
 print(
-    'STATIC_ASSET_CACHE_POLICY_OK: immutable=vue-compiler-3.5.41+xlsx-0.18.5; '
-    'html+api+tailwind+app+fonts=not-immutable; vercel-cloudflare=parity'
+    'STATIC_ASSET_CACHE_POLICY_OK: immutable=vue-runtime-3.5.41+xlsx-0.18.5; '
+    'render-registry+html+api+tailwind+app+fonts=not-immutable; vercel-cloudflare=parity'
 )

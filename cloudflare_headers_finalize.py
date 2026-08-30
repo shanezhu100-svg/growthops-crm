@@ -8,7 +8,7 @@ CLOUDFLARE_FUNCTION = ROOT / 'functions' / 'api' / 'crm.js'
 
 IMMUTABLE_CACHE = 'public, max-age=31536000, immutable'
 EXPECTED_STATIC_RULES = {
-    '/vendor/vue-3.5.41.global.js': IMMUTABLE_CACHE,
+    '/vendor/vue-3.5.41.runtime.global.js': IMMUTABLE_CACHE,
     '/vendor/xlsx-0.18.5.full.min.js': IMMUTABLE_CACHE,
 }
 
