@@ -31,38 +31,52 @@ browser = next(
 if not browser:
     fail('no supported Chromium executable on CI runner')
 
-# Synthetic-only fixture. It reproduces the exact client-edit interaction boundary:
-# saved account/password state is painted inside blank mutation inputs. Clicking the
-# saved account must not make it disappear; only actual typed replacement content may
-# hand control to the mutation input. Password eye controls must be visibly rendered
-# and hit-testable, not merely present as hidden/clipped DOM nodes. No real credential
-# plaintext exists and no reveal RPC may run during passive render/click/focus.
+# Synthetic-only fixture. It reproduces the exact multi-account client-edit boundary
+# from the reported screen: two Facebook cards plus two TikTok cards. Internal account
+# IDs deliberately do NOT appear in card text, so a refresh/reopen cannot rely on a
+# visible ID token to reconnect the Vault safe summary to each blank mutation input.
+# The edit-only ordinal fallback must keep each saved login/password status on the
+# correct card. No real credential plaintext exists and no reveal RPC may run during
+# passive render/click/focus.
 fixture = r'''<!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta charset="utf-8"><title>credential form regression</title>
+  <meta charset="utf-8"><title>credential form multi-account regression</title>
   <link rel="stylesheet" href="/vendor/fontawesome/css/all.min.css">
   <style>
     body{font:14px system-ui,sans-serif;padding:20px}
     .field{width:480px;margin:14px 0}
     .field label{display:block;margin-bottom:6px}
     .field input{display:block;width:100%;height:48px;box-sizing:border-box;padding:0 14px;font:14px system-ui,sans-serif}
+    .account-card{padding:12px;margin:12px 0;border:1px solid #ddd}
   </style>
 </head>
 <body>
   <h1>Synthetic Client</h1>
   <section id="facebook-section">
     <h2>Facebook 资产</h2>
-    <div class="account-card" data-account="fb1">
-      <div class="field"><label>登录账号</label><input id="fb-login" value="" placeholder="邮箱 / 个人号"></div>
-      <div class="field"><label>密码 / 2FA</label><input id="fb-secret" value="" placeholder="密码 / 2FA Token"></div>
+    <div class="account-card">
+      <h3>电动叉车</h3>
+      <div class="field"><label>登录账号</label><input id="fb1-login" value="" placeholder="邮箱 / 个人号"></div>
+      <div class="field"><label>密码 / 2FA</label><input id="fb1-secret" value="" placeholder="密码 / 2FA Token"></div>
+    </div>
+    <div class="account-card">
+      <h3>工程机械</h3>
+      <div class="field"><label>登录账号</label><input id="fb2-login" value="" placeholder="邮箱 / 个人号"></div>
+      <div class="field"><label>密码 / 2FA</label><input id="fb2-secret" value="" placeholder="密码 / 2FA Token"></div>
     </div>
   </section>
   <section id="tiktok-section">
     <h2>TikTok 资产</h2>
-    <div class="account-card" data-account="tk1">
-      <div class="field"><label>登录账号</label><input id="tk-login" value="" placeholder="邮箱 / 个人号"></div>
-      <div class="field"><label>密码 / 2FA</label><input id="tk-secret" value="" placeholder="密码 / 2FA Token"></div>
+    <div class="account-card">
+      <h3>电动叉车</h3>
+      <div class="field"><label>登录账号</label><input id="tk1-login" value="" placeholder="邮箱 / TikTok 账号"></div>
+      <div class="field"><label>密码 / 2FA</label><input id="tk1-secret" value="" placeholder="密码 / 2FA Token"></div>
+    </div>
+    <div class="account-card">
+      <h3>工程机械</h3>
+      <div class="field"><label>登录账号</label><input id="tk2-login" value="" placeholder="邮箱 / TikTok 账号"></div>
+      <div class="field"><label>密码 / 2FA</label><input id="tk2-secret" value="" placeholder="密码 / 2FA Token"></div>
     </div>
   </section>
   <script>
@@ -77,8 +91,8 @@ fixture = r'''<!doctype html>
       selectedClient:{
         id:'client-1',
         name:'Synthetic Client',
-        fbAccounts:[{id:'fb1'}],
-        tkAccounts:[{id:'tk1'}]
+        fbAccounts:[{id:'fb-internal-1'},{id:'fb-internal-2'}],
+        tkAccounts:[{id:'tk-internal-1'},{id:'tk-internal-2'}]
       },
       notify:()=>{},
       persist:()=>{},
@@ -90,8 +104,17 @@ fixture = r'''<!doctype html>
         if(name==='crm_client_account_safe_summary'){
           window.__growthOpsCredentialSummaryCalls.push(args||{});
           return Promise.resolve({
-            facebook:{loginAccount:'fb-login@example.test',hasPassword:true,has2FA:true},
-            tiktok:{loginAccount:'tk-login@example.test',hasPassword:true,has2FA:false}
+            facebookAccounts:[
+              {id:'fb-internal-1',loginAccount:'fb-one@example.test',hasPassword:true,has2FA:true},
+              {id:'fb-internal-2',loginAccount:'fb-two@example.test',hasPassword:true,has2FA:false}
+            ],
+            tiktokAccounts:[
+              {id:'tk-internal-1',loginAccount:'tk-one@example.test',hasPassword:true,has2FA:false},
+              {id:'tk-internal-2',loginAccount:'tk-two@example.test',hasPassword:true,has2FA:true}
+            ],
+            // Deliberately wrong legacy values: multi-account edit must never reuse them.
+            facebook:{loginAccount:'legacy-fb-wrong@example.test',hasPassword:false,has2FA:false},
+            tiktok:{loginAccount:'legacy-tk-wrong@example.test',hasPassword:false,has2FA:false}
           });
         }
         window.__growthOpsUnexpectedRpc.push(name);
@@ -107,11 +130,12 @@ fixture = r'''<!doctype html>
       const allHosts=[...accountHosts,...secretHosts];
       const accountTexts=accountHosts.map(node=>String(node.textContent||'').trim());
       const secretTexts=secretHosts.map(node=>String(node.textContent||'').trim());
-      const inputIds=['fb-login','fb-secret','tk-login','tk-secret'];
+      const inputIds=['fb1-login','fb1-secret','fb2-login','fb2-secret','tk1-login','tk1-secret','tk2-login','tk2-secret'];
       const inputs=inputIds.map(id=>document.getElementById(id));
       const initialInputValues=inputs.map(node=>node?.value??'__missing__');
       const summaryCalls=window.__growthOpsCredentialSummaryCalls||[];
       const unexpected=window.__growthOpsUnexpectedRpc||[];
+      const expectedAccounts=['fb-one@example.test','fb-two@example.test','tk-one@example.test','tk-two@example.test'];
 
       const eyeIntegrity=secretHosts.map(host=>{
         const input=host.previousElementSibling;
@@ -144,13 +168,13 @@ fixture = r'''<!doctype html>
       });
       const savedPlaceholdersHidden=inputs.map(node=>String(node?.getAttribute('placeholder')||'')==='');
 
-      const fbLogin=document.getElementById('fb-login');
+      const fbLogin=document.getElementById('fb1-login');
       const fbAccountHost=accountHosts.find(host=>host.previousElementSibling===fbLogin);
       fbAccountHost?.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,cancelable:true,button:0}));
       const clickPreservesSavedAccount=Boolean(
         fbLogin && fbAccountHost && document.activeElement===fbLogin &&
         getComputedStyle(fbAccountHost).visibility==='visible' &&
-        String(fbAccountHost.textContent||'').trim()==='fb-login@example.test' &&
+        String(fbAccountHost.textContent||'').trim()==='fb-one@example.test' &&
         fbLogin.getAttribute('placeholder')===''
       );
 
@@ -166,11 +190,13 @@ fixture = r'''<!doctype html>
       );
 
       const noSavedPrefix=accountTexts.every(text=>!text.includes('已保存：'));
+      const exactAccountCorrespondence=expectedAccounts.every((value,index)=>accountTexts[index]===value);
+      const noLegacyReuse=accountTexts.every(text=>!text.includes('legacy-'));
       const pass=(
-        accountHosts.length===2 &&
-        secretHosts.length===2 &&
-        accountTexts.includes('fb-login@example.test') &&
-        accountTexts.includes('tk-login@example.test') &&
+        accountHosts.length===4 &&
+        secretHosts.length===4 &&
+        exactAccountCorrespondence &&
+        noLegacyReuse &&
         noSavedPrefix &&
         secretTexts.every(text=>text.includes('••••••••')) &&
         eyeIntegrity.every(Boolean) &&
@@ -186,6 +212,9 @@ fixture = r'''<!doctype html>
       document.body.setAttribute('data-credential-regression',pass?'pass':'fail');
       document.body.setAttribute('data-account-host-count',String(accountHosts.length));
       document.body.setAttribute('data-secret-host-count',String(secretHosts.length));
+      document.body.setAttribute('data-account-texts',JSON.stringify(accountTexts));
+      document.body.setAttribute('data-exact-account-correspondence',String(exactAccountCorrespondence));
+      document.body.setAttribute('data-no-legacy-reuse',String(noLegacyReuse));
       document.body.setAttribute('data-initial-input-values',JSON.stringify(initialInputValues));
       document.body.setAttribute('data-overlays-inside',JSON.stringify(overlayInsideInput));
       document.body.setAttribute('data-eye-integrity',JSON.stringify(eyeIntegrity));
@@ -285,35 +314,39 @@ if 'data-credential-regression="pass"' not in dom:
     attrs = {}
     for name in (
         'data-credential-regression', 'data-account-host-count', 'data-secret-host-count',
+        'data-account-texts', 'data-exact-account-correspondence', 'data-no-legacy-reuse',
         'data-initial-input-values', 'data-overlays-inside', 'data-eye-integrity',
         'data-click-preserves-saved-account', 'data-typing-handoff',
         'data-summary-client-id', 'data-unexpected-rpc-count',
     ):
         match = re.search(rf'{re.escape(name)}="([^"]*)"', dom)
         attrs[name] = match.group(1) if match else '__missing__'
-    fail('synthetic client-form regression failed: ' + json.dumps(attrs, ensure_ascii=False) + '; stderr=' + stderr[-1200:])
+    fail('synthetic client-form multi-account regression failed: ' + json.dumps(attrs, ensure_ascii=False) + '; stderr=' + stderr[-1200:])
 
-if 'fb-login@example.test' not in dom or 'tk-login@example.test' not in dom:
-    fail('safe login summary text missing from rendered input overlay')
-if '已保存：fb-login@example.test' in dom or '已保存：tk-login@example.test' in dom:
-    fail('legacy below-input saved prefix remains')
+for value in ('fb-one@example.test','fb-two@example.test','tk-one@example.test','tk-two@example.test'):
+    if value not in dom:
+        fail('safe login summary missing from rendered input overlay: ' + value)
+if 'legacy-fb-wrong@example.test' in dom or 'legacy-tk-wrong@example.test' in dom:
+    fail('multi-account edit reused legacy platform-level summary')
+if 'data-exact-account-correspondence="true"' not in dom:
+    fail('multi-account saved credential summaries did not follow card order')
+if 'data-no-legacy-reuse="true"' not in dom:
+    fail('legacy platform summary leaked into multi-account edit')
 if 'data-summary-client-id="client-1"' not in dom:
     fail('client-form did not use active selectedClientId')
-if 'data-initial-input-values="[&quot;&quot;,&quot;&quot;,&quot;&quot;,&quot;&quot;]"' not in dom and 'data-initial-input-values="[\"\",\"\",\"\",\"\"]"' not in dom:
-    fail('edit inputs were unexpectedly hydrated before user input')
 if 'data-click-preserves-saved-account="true"' not in dom:
     fail('clicking saved login account still makes the visible identifier disappear')
 if 'data-typing-handoff="true"' not in dom:
     fail('actual typed replacement did not hand off to mutation input')
-if 'data-eye-integrity="[true,true]"' not in dom and 'data-eye-integrity="[true, true]"' not in dom:
-    fail('password eye controls are not both visibly rendered and hit-testable')
+if 'data-eye-integrity="[true,true,true,true]"' not in dom and 'data-eye-integrity="[true, true, true, true]"' not in dom:
+    fail('password eye controls are not all visibly rendered and hit-testable')
 if 'data-unexpected-rpc-count="0"' not in dom:
     fail('credential regression invoked an unexpected sensitive RPC')
 
 print(
     'BROWSER_CLIENT_FORM_CREDENTIAL_STATUS_OK: '
     f'browser={Path(browser).name}; currentPage=client-form; stale-assets-id=0; '
-    'safe-summary-client=client-1; facebook+tiktok=in-input-login+masked-eye; '
-    'click=preserves-saved-account; typing=mutation-handoff; eye=visible+font-icon+hit-testable; '
-    'initial-edit-values=blank; reveal-rpc=not-called'
+    'facebook=2+tiktok=2; safe-summary=per-account+edit-order-fallback; '
+    'click=preserves-saved-account; typing=mutation-handoff; eye=4-visible+hit-testable; '
+    'initial-edit-values=blank; legacy-platform-summary=not-reused; reveal-rpc=not-called'
 )
