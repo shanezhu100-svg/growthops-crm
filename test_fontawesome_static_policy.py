@@ -19,6 +19,11 @@ required = (
     'CSS webfont inventory drift',
     'Only after every network input has passed the complete digest inventory',
     'browser-cdnjs-fontawesome=removed',
+    'DOWNLOAD_ATTEMPTS = 3',
+    'for attempt in range(1, DOWNLOAD_ATTEMPTS + 1):',
+    'time.sleep(attempt)',
+    'download failed after {DOWNLOAD_ATTEMPTS} attempts',
+    'download-attempts<={DOWNLOAD_ATTEMPTS}',
 )
 missing = [marker for marker in required if marker not in FINALIZER]
 if missing:
@@ -26,6 +31,15 @@ if missing:
 for forbidden in ('__PROBE__', 'latest', 'http://'):
     if forbidden in FINALIZER:
         raise SystemExit('FONTAWESOME_STATIC_POLICY_FAILED forbidden marker: ' + forbidden)
+
+retry_start = FINALIZER.index('for attempt in range(1, DOWNLOAD_ATTEMPTS + 1):')
+redirect_check = FINALIZER.index('unexpected redirect', retry_start)
+retry_return = FINALIZER.index('return response.read()', redirect_check)
+digest_check = FINALIZER.index('css_actual = sha256(css_bytes)', retry_return)
+if not (retry_start < redirect_check < retry_return < digest_check):
+    raise SystemExit('FONTAWESOME_STATIC_POLICY_FAILED retry/security validation order drift')
+if FINALIZER.count('time.sleep(attempt)') != 1:
+    raise SystemExit('FONTAWESOME_STATIC_POLICY_FAILED retry backoff count drift')
 
 policy_call = 'python3 test_fontawesome_static_policy.py'
 finalizer_call = 'python3 fontawesome_static_finalize.py'
@@ -36,4 +50,4 @@ for call in (policy_call, finalizer_call, output_call):
 if not (BUILD.index('python3 frontend_vendor_static_finalize.py') < BUILD.index(policy_call) < BUILD.index(finalizer_call) < BUILD.index(output_call)):
     raise SystemExit('FONTAWESOME_STATIC_POLICY_FAILED build order drift')
 
-print('FONTAWESOME_STATIC_POLICY_OK: version=6.5.2; css+8-webfonts=sha256+size-pinned; redirects=denied; full-inventory-before-write; output=same-origin')
+print('FONTAWESOME_STATIC_POLICY_OK: version=6.5.2; css+8-webfonts=sha256+size-pinned; redirects=denied; transport-retries<=3; full-inventory-before-write; output=same-origin')
