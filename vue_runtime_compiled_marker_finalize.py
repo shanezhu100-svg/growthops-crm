@@ -7,9 +7,8 @@ ROOT = Path(__file__).resolve().parent
 REGISTRY = ROOT / 'dist' / 'vendor' / 'vue-3.5.41.renders.js'
 EXPECTED_INPUT_SHA = '8406eb412573ef3093b6190ba8ee0a3764bda2c7cba0f8c94484098bdb801d3d'
 EXPECTED_INPUT_BYTES = 1185798
-# Fail closed until CI reports and we review the deterministic compatibility-registry bytes.
-EXPECTED_OUTPUT_SHA = '__PROBE__'
-EXPECTED_OUTPUT_BYTES = 0
+EXPECTED_OUTPUT_SHA = 'a958722d8a7ddbe16c0533f6f463c91f011f2595c3a59b267ff1ddbc39fcf2ee'
+EXPECTED_OUTPUT_BYTES = 1187627
 
 # Vue 3.5.41 packages/shared/src/globalsAllowList.ts. Runtime-compiled templates
 # deliberately do not capture these JavaScript globals through the component proxy.
@@ -111,8 +110,6 @@ for forbidden in ('new Function(', 'eval('):
 
 out = patched.encode('utf-8')
 out_sha = digest(out)
-if EXPECTED_OUTPUT_SHA == '__PROBE__':
-    fail(f'PIN_REQUIRED: output={out_sha}/{len(out)}B')
 if (out_sha, len(out)) != (EXPECTED_OUTPUT_SHA, EXPECTED_OUTPUT_BYTES):
     fail(
         'compatibility registry drift; expected='
