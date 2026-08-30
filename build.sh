@@ -100,6 +100,9 @@ python3 test_admin_password_byte_cap_output.py
 # rather than the historical browser-local prototype.
 python3 production_auth_copy_finalize.py
 python3 test_production_auth_copy_output.py
+# Normalize the one reviewed duplicate Vue :class binding inherited from the
+# immutable byte-sliced canonical source before strict compiler/tooling stages.
+python3 vue_duplicate_attribute_finalize.py
 # Convert browser dependencies to verified same-origin build artifacts. Prove first
 # that direct-CDN downloaders deny redirects before urllib can touch Location.
 python3 test_build_http_redirect_guard.py
@@ -131,6 +134,8 @@ python3 test_inline_style_static_output.py
 python3 test_style_attr_cssom_policy.py
 python3 style_attr_cssom_finalize.py
 python3 test_style_attr_cssom_output.py
+# Final Vue/HTML structural gate: no tag may retain duplicate attribute names.
+python3 test_vue_duplicate_attribute_output.py
 # Browser liveness is verified by the required GitHub CI after this portable
 # build completes. Hosting builds must not depend on a Chromium executable.
 # Business-semantic regression gates execute the final shipped application logic,

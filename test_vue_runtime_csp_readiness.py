@@ -13,9 +13,9 @@ APP_FILES = [ROOT / 'dist' / 'app' / f'app-inline-{idx:02d}.js' for idx in range
 # 'unsafe-eval'. Freeze the accepted compiler debt at (or below) this baseline.
 # Reductions are allowed; increases fail closed.
 COMPILER_DEBT_BUDGET = {
-    'directives': 1329,
+    'directives': 1327,
     'events': 299,
-    'bindings': 368,
+    'bindings': 366,
     'loops': 124,
     'conditionals': 293,
     'interpolations': 709,

@@ -12,13 +12,13 @@ VUE_ASSET = ROOT / 'dist' / 'vendor' / 'vue-3.5.41.global.js'
 
 EXPECTED = {
     'root': {
-        'templateHash': 'b1a23cfb9eee70764c61821d8ee4a6c5db91d4399d4e4e2eb581540ba68d387b',
-        'templateBytes': 355202,
-        'renderHash': '304ab977bf92a167fcd823bf9153df27a4f660c798ccf7633ce69839efa23ba6',
-        'renderBytes': 958344,
-        'factoryHash': '51cca92d97aaacfe925d7e8d54fc33fcf265ffdec549062d091282f9220b050d',
-        'factoryBytes': 1095421,
-        'functionCalls': 2159,
+        'templateHash': '1da528f35f324c08987065cc734bccf2b0cd948b47cd880e66ebc5ed85fbc5f3',
+        'templateBytes': 355190,
+        'renderHash': '416835ec9c00f34f2018bf8bc771e2d3b4beedf048b9913b64dc152aeb3c6683',
+        'renderBytes': 958346,
+        'factoryHash': 'a50d08721462a90906440c5a351caedf24a871fd794ad4b9eb0dfb5c2adcdb9e',
+        'factoryBytes': 1095423,
+        'functionCalls': 2157,
     },
     'component-01': {
         'templateHash': '2f51f5b5ec5ef5bbe12bac62b317a4ad4154cb545779ef8cecb908d016642088',
@@ -265,6 +265,6 @@ for item in first:
 
 print(
     'VUE_PRECOMPILE_FEASIBILITY_OK: units=5; deterministic=2-vm-pass; '
-    'root-factory=51cca92d97aa/1095421B; components=4; full-template+render+factory-hashes=pinned; '
+    'root-factory=a50d08721462/1095423B; components=4; full-template+render+factory-hashes=pinned; '
     'compiler-Function-call-inventory=pinned; runtime=unchanged'
 )

@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parent
 DIST = ROOT / 'dist'
 
 EXPECTED_SHA256 = {
-    'index.html': '05676f3af5dcbdf2404469b5483d139fc1556fa266904d5336a44919fe465ad2',
+    'index.html': '1e829233b990f830181fe93e66d5b14d73ee6202224ac2ad78929d9d7de332b1',
     'tailwind.css': '082358f4ff9c6d67ccb8e628ed27669967e15cfa7908f2e4c36a1e89c0a3f7b6',
     'app/app-inline-01.js': '52ade14219e58afb7b9f4535440479add87f8a59a0404e7fe504cfde5f06c53e',
     'app/app-inline-02.js': 'dfb07b154ec1ab7c540dbf044164a0ea7445dee996f859504d22f673d247f26b',

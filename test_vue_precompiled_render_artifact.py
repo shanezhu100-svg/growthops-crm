@@ -11,14 +11,14 @@ INDEX = ROOT / 'dist' / 'index.html'
 APP_FILES = [ROOT / 'dist' / 'app' / f'app-inline-{idx:02d}.js' for idx in range(1, 4)]
 VUE_ASSET = ROOT / 'dist' / 'vendor' / 'vue-3.5.41.global.js'
 EXPECTED_FACTORY_HASHES = {
-    'root': '51cca92d97aaacfe925d7e8d54fc33fcf265ffdec549062d091282f9220b050d',
+    'root': 'a50d08721462a90906440c5a351caedf24a871fd794ad4b9eb0dfb5c2adcdb9e',
     'component01': '12ce20f7003c90017ebf8cd31e97bc632eb90518176775dbfe663c9b9166fae6',
     'component02': '7a99ecc1e3f6f9d2d14501681e630c40fa59f94144a50d72f392aa757732dcd7',
     'component03': '658b8af682a2023c6e01515def82b39f1fcaf5fe7a7315c582e298ff0c3a85be',
     'component04': '0ca46a8239700de84f36e527fc8bef3d737fdb09fb78fa64c5242a9ba4d8bb87',
 }
-EXPECTED_ASSET_SHA256 = '133f3a3ef18f356079d58688c0e4d379753dd8e0b1ec7db7f8d14175f8bf9882'
-EXPECTED_ASSET_BYTES = 1185979
+EXPECTED_ASSET_SHA256 = '2513083b982f45485270505abdb4fc8b5a24b259802d3795ca8a21cfa71f3a30'
+EXPECTED_ASSET_BYTES = 1185981
 
 
 def fail(message: str) -> None:
