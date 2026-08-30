@@ -24,7 +24,9 @@ def replace_block(text: str, start_marker: str, end_marker: str, replacement: st
 # Safe-summary rows must follow the account that is actually visible/edited. The
 # older FB/TK path used one platform-level summary, which is ambiguous as soon as a
 # client has multiple accounts. Prefer per-account arrays + exact ID matching and
-# fail closed when a multi-account row cannot be identified.
+# fail closed when a multi-account row cannot be identified. Anchor only on the
+# stable summary function because earlier credential-form finalizers may reorganize
+# helper functions around it.
 summary_block = r'''  const credentialClientForContext=()=>{
     const directId=String(vm.selectedClientId??'');
     if(vm.currentPage==='client-detail'||vm.currentPage==='client-form'){
@@ -89,7 +91,7 @@ summary_block = r'''  const credentialClientForContext=()=>{
 '''
 security = replace_block(
     security,
-    '  const currentExternalAssetAccount=platform=>{',
+    '  const summaryForCredentialRow=row=>{',
     '  const applyAccountSafeSummaryToCards=()=>{',
     summary_block,
     'safe-summary account correspondence block',
