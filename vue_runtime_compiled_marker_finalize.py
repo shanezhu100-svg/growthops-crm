@@ -4,8 +4,8 @@ import os
 
 ROOT = Path(__file__).resolve().parent
 REGISTRY = ROOT / 'dist' / 'vendor' / 'vue-3.5.41.renders.js'
-EXPECTED_INPUT_SHA = 'd91a71ac97b904f27b0a4bf8527473e525ed311635eb1bdcd04ebf95c882658e'
-EXPECTED_INPUT_BYTES = 1185796
+EXPECTED_INPUT_SHA = '8406eb412573ef3093b6190ba8ee0a3764bda2c7cba0f8c94484098bdb801d3d'
+EXPECTED_INPUT_BYTES = 1185798
 
 
 def fail(message: str) -> None:
