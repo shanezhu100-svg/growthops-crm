@@ -26,6 +26,11 @@ for marker in (
 
 for marker in (
     "vm.currentPage==='client-form'",
+    "if(vm.currentPage==='client-detail'||vm.currentPage==='client-form')",
+    'const directCandidates=[vm.selectedClientId,vm.selectedClient?.id,vm.currentClient?.id]',
+    "if(text&&text!=='0'&&text.toUpperCase()!=='ALL')return text",
+    'const explicitAssetsClientId=vm.selectedAssetsClientId',
+    "if(explicitAssetsClientText==='0'||explicitAssetsClientText.toUpperCase()==='ALL')return ''",
     'credentialLabelCount',
     "credentialLabelCount(node,'登录账号')===1",
     "credentialLabelCount(node,'密码 / 2FA')===1",
@@ -72,6 +77,7 @@ require('navigator.clipboard' not in security, 'credential UI must not auto-copy
 
 print(
     'CREDENTIAL_FORM_SAVED_STATUS_OUTPUT_OK: '
-    'client-form=safe-summary-enabled; login=saved-status; password-2fa=masked+scalar-eye; '
+    'client-form=safe-summary-enabled+direct-client-id-before-asset-sentinel; '
+    'login=saved-status; password-2fa=masked+scalar-eye; '
     'form-inputs=mutation-only; plaintext-hydration=none; multi-account-card=nearest-pair'
 )
