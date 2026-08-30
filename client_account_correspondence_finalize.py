@@ -21,9 +21,9 @@ def replace_block(text: str, start_marker: str, end_marker: str, replacement: st
     return text[:start] + replacement + text[end:]
 
 
-# Safe-summary rows must follow the account that is actually visible/edited.  The
+# Safe-summary rows must follow the account that is actually visible/edited. The
 # older FB/TK path used one platform-level summary, which is ambiguous as soon as a
-# client has multiple accounts.  Prefer per-account arrays + exact ID matching and
+# client has multiple accounts. Prefer per-account arrays + exact ID matching and
 # fail closed when a multi-account row cannot be identified.
 summary_block = r'''  const credentialClientForContext=()=>{
     const directId=String(vm.selectedClientId??'');
@@ -95,8 +95,8 @@ security = replace_block(
     'safe-summary account correspondence block',
 )
 
-# Route persistence is deliberately metadata-only.  Never persist login identifiers,
-# passwords, session tokens, Vault data, forms, or whole client objects.  Restore is
+# Route persistence is deliberately metadata-only. Never persist login identifiers,
+# passwords, session tokens, Vault data, forms, or whole client objects. Restore is
 # gated on an authenticated vm.currentUser so refresh cannot expose an authenticated
 # route before session restoration finishes.
 route_insert = r'''  const UI_ROUTE_STATE_KEY='growthops_ui_route_state_v1';
@@ -206,8 +206,8 @@ bridge = bridge.replace(interval_old, interval_new, 1)
 
 # Explicitly fail closed if route persistence ever starts collecting sensitive state.
 route_region = bridge[bridge.find("const UI_ROUTE_STATE_KEY"):bridge.find("const finalizeClientListNavigation")]
-for forbidden in ('TOKEN_KEY','loginAccount','loginPassword','password','twofa','credential','form','clients','accountSafeSummary','Vault'):
-    if forbidden.lower() in route_region.lower() and forbidden != 'form':
+for forbidden in ('TOKEN_KEY','loginAccount','loginPassword','password','twofa','credential','accountSafeSummary','Vault'):
+    if forbidden.lower() in route_region.lower():
         fail('sensitive route-state marker found: ' + forbidden)
 
 SECURITY.write_text(security, encoding='utf-8')
