@@ -32,8 +32,13 @@ EXPECTED_FACTORIES={
  'component03':('658b8af682a2023c6e01515def82b39f1fcaf5fe7a7315c582e298ff0c3a85be',646),
  'component04':('0ca46a8239700de84f36e527fc8bef3d737fdb09fb78fa64c5242a9ba4d8bb87',4776),
 }
-REGISTRY_SHA='8406eb412573ef3093b6190ba8ee0a3764bda2c7cba0f8c94484098bdb801d3d'
-REGISTRY_BYTES=1185798
+# The shipped registry now wraps browser-compiled `with(_ctx)` render functions in
+# the same scope-resolution semantics Vue 3.5.41 installs for runtime-compiled
+# templates. Start the changed registry in fail-closed probe mode and accept its
+# exact digest only from CI before this branch can become deployable.
+REGISTRY_SHA='__PROBE__'
+REGISTRY_BYTES=0
+GLOBALS_ALLOWED='Infinity,undefined,NaN,isFinite,isNaN,parseFloat,parseInt,decodeURI,decodeURIComponent,encodeURI,encodeURIComponent,Math,Number,Date,Array,Object,Boolean,String,RegExp,Map,Set,JSON,Intl,BigInt,console,Error,Symbol'
 
 
 def fail(message:str)->None: raise SystemExit('VUE_RUNTIME_ONLY_FINALIZE_FAILED: '+message)
@@ -99,17 +104,59 @@ except Exception: fail('invalid compiler JSON')
 for item in compiled:
  expected=EXPECTED_FACTORIES[item['name']]; actual=(item['hash'],item['bytes'])
  if actual!=expected: fail(f"{item['name']} factory drift")
-lines=['/* GrowthOps CRM: deterministic Vue 3.5.41 final-stage render registry. */','(function () {','  const renders = Object.freeze({']
+
+# Vue's browser compiler emits `with (_ctx)` render functions. The full runtime
+# installs RuntimeCompiledPublicInstanceProxyHandlers automatically, but the
+# runtime-only build intentionally does not. Preserve only that documented scope
+# behavior here: names beginning with `_` and standard allowed globals fall through
+# lexical scope; other template identifiers resolve through the component proxy.
+# Cache the wrapper proxy per component proxy so normal rerenders do not allocate.
+lines=[
+ '/* GrowthOps CRM: deterministic Vue 3.5.41 final-stage render registry. */',
+ '(function () {',
+ f'  const GLOBALS_ALLOWED = new Set({json.dumps(GLOBALS_ALLOWED)}.split(","));',
+ '  const runtimeScopeCache = new WeakMap();',
+ '  function runtimeCompiledScope(ctx) {',
+ '    if ((typeof ctx !== "object" && typeof ctx !== "function") || ctx === null) return ctx;',
+ '    const cached = runtimeScopeCache.get(ctx);',
+ '    if (cached) return cached;',
+ '    const scoped = new Proxy(ctx, {',
+ '      get(target, key) {',
+ '        if (key === Symbol.unscopables) return undefined;',
+ '        return Reflect.get(target, key, target);',
+ '      },',
+ '      has(target, key) {',
+ '        if (typeof key !== "string") return Reflect.has(target, key);',
+ '        return key[0] !== "_" && !GLOBALS_ALLOWED.has(key);',
+ '      }',
+ '    });',
+ '    runtimeScopeCache.set(ctx, scoped);',
+ '    return scoped;',
+ '  }',
+ '  function runtimeCompiledRender(render) {',
+ '    return function (...args) {',
+ '      if (args.length) args[0] = runtimeCompiledScope(args[0]);',
+ '      return Reflect.apply(render, this, args);',
+ '    };',
+ '  }',
+ '  const renders = Object.freeze({',
+]
 for idx,item in enumerate(compiled):
  comma=',' if idx+1<len(compiled) else ''
- lines.append(f"    {item['name']}: (function () {{")
+ lines.append(f"    {item['name']}: runtimeCompiledRender((function () {{")
  for line in item['factory'].splitlines(): lines.append('      '+line)
- lines.append(f'    }})(){comma}')
+ lines.append(f'    }})()){comma}')
 lines.extend(['  });',"  Object.defineProperty(globalThis, 'GrowthOpsVueRenders', {",'    value: renders, writable: false, configurable: false, enumerable: false','  });','})();',''])
 registry='\n'.join(lines); registry_bytes=registry.encode('utf-8')
-if (sha(registry_bytes),len(registry_bytes))!=(REGISTRY_SHA,REGISTRY_BYTES): fail('render registry drift')
+registry_actual=(sha(registry_bytes),len(registry_bytes))
+if REGISTRY_SHA=='__PROBE__':
+ fail(f'REGISTRY_PIN_REQUIRED: actual={registry_actual[0]}/{registry_actual[1]}B')
+if registry_actual!=(REGISTRY_SHA,REGISTRY_BYTES):
+ fail(f'render registry drift: expected={REGISTRY_SHA}/{REGISTRY_BYTES}B; actual={registry_actual[0]}/{registry_actual[1]}B')
 for forbidden in ('new Function(','eval(','setTimeout("',"setTimeout('"):
  if forbidden in registry: fail('dynamic code in render registry: '+forbidden)
+for marker in ('runtimeCompiledScope(ctx)','key[0] !== "_" && !GLOBALS_ALLOWED.has(key)','Symbol.unscopables'):
+ if marker not in registry: fail('runtime-compiled scope adapter missing: '+marker)
 
 req=urllib.request.Request(RUNTIME_URL,headers={'User-Agent':'growthops-crm-build/1'})
 try:
@@ -152,4 +199,4 @@ for path,content in zip(APP_FILES,new_blocks): write_atomic(path,content.encode(
 write_atomic(INDEX,new_html.encode('utf-8'))
 COMPILER.unlink()
 
-print(f'VUE_RUNTIME_ONLY_FINALIZE_OK: runtime={RUNTIME_SHA}/{RUNTIME_BYTES}B; registry={REGISTRY_SHA}/{REGISTRY_BYTES}B; renders=root+4; templates=removed; compiler-browser-asset=removed; unsafe-eval-target=absent')
+print(f'VUE_RUNTIME_ONLY_FINALIZE_OK: runtime={RUNTIME_SHA}/{RUNTIME_BYTES}B; registry={REGISTRY_SHA}/{REGISTRY_BYTES}B; renders=root+4; runtime-compiled-scope=explicit; templates=removed; compiler-browser-asset=removed; unsafe-eval-target=absent')
