@@ -1,6 +1,7 @@
 from pathlib import Path
 import http.server
 import json
+import mimetypes
 import re
 import shutil
 import socket
@@ -30,14 +31,17 @@ browser = next(
 if not browser:
     fail('no supported Chromium executable on CI runner')
 
-# Synthetic-only fixture. It reproduces the client edit page while a stale account-
-# assets aggregate selector remains 0. Persisted login/password state must render
-# visually inside the matching input chrome without changing the input values. No
-# real credential plaintext exists and the reveal RPC must never be called.
+# Synthetic-only fixture. It reproduces the exact client-edit interaction boundary:
+# saved account/password state is painted inside blank mutation inputs. Clicking the
+# saved account must not make it disappear; only actual typed replacement content may
+# hand control to the mutation input. Password eye controls must be visibly rendered
+# and hit-testable, not merely present as hidden/clipped DOM nodes. No real credential
+# plaintext exists and no reveal RPC may run during passive render/click/focus.
 fixture = r'''<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8"><title>credential form regression</title>
+  <link rel="stylesheet" href="/vendor/fontawesome/css/all.min.css">
   <style>
     body{font:14px system-ui,sans-serif;padding:20px}
     .field{width:480px;margin:14px 0}
@@ -105,10 +109,30 @@ fixture = r'''<!doctype html>
       const secretTexts=secretHosts.map(node=>String(node.textContent||'').trim());
       const inputIds=['fb-login','fb-secret','tk-login','tk-secret'];
       const inputs=inputIds.map(id=>document.getElementById(id));
-      const inputValues=inputs.map(node=>node?.value??'__missing__');
+      const initialInputValues=inputs.map(node=>node?.value??'__missing__');
       const summaryCalls=window.__growthOpsCredentialSummaryCalls||[];
       const unexpected=window.__growthOpsUnexpectedRpc||[];
-      const eyeButtons=secretHosts.map(node=>Boolean(node.querySelector('button[aria-label="显示密码和 2FA"]')));
+
+      const eyeIntegrity=secretHosts.map(host=>{
+        const input=host.previousElementSibling;
+        const button=host.querySelector('button[aria-label="显示密码和 2FA"]');
+        const icon=button?.querySelector('i.fa-eye');
+        if(!input||!button||!icon)return false;
+        const br=button.getBoundingClientRect();
+        const ir=input.getBoundingClientRect();
+        const xr=icon.getBoundingClientRect();
+        const bs=getComputedStyle(button);
+        const hs=getComputedStyle(host);
+        if(bs.display==='none'||bs.visibility==='hidden'||Number(bs.opacity||1)<=0)return false;
+        if(hs.visibility==='hidden')return false;
+        if(br.width<24||br.height<24||xr.width<4||xr.height<4)return false;
+        if(br.left<ir.left-1||br.right>ir.right+1||br.top<ir.top-1||br.bottom>ir.bottom+1)return false;
+        const x=br.left+br.width/2;
+        const y=br.top+br.height/2;
+        const hit=document.elementFromPoint(x,y);
+        return hit===button||button.contains(hit);
+      });
+
       const overlayInsideInput=allHosts.map(host=>{
         const input=host.previousElementSibling;
         if(!input||!input.matches('input,textarea'))return false;
@@ -119,14 +143,28 @@ fixture = r'''<!doctype html>
           hr.top>=ir.top-1 && hr.bottom<=ir.bottom+1;
       });
       const savedPlaceholdersHidden=inputs.map(node=>String(node?.getAttribute('placeholder')||'')==='');
+
       const fbLogin=document.getElementById('fb-login');
       const fbAccountHost=accountHosts.find(host=>host.previousElementSibling===fbLogin);
-      fbLogin?.focus();
-      const focusHidesOverlay=Boolean(
+      fbAccountHost?.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,cancelable:true,button:0}));
+      const clickPreservesSavedAccount=Boolean(
+        fbLogin && fbAccountHost && document.activeElement===fbLogin &&
+        getComputedStyle(fbAccountHost).visibility==='visible' &&
+        String(fbAccountHost.textContent||'').trim()==='fb-login@example.test' &&
+        fbLogin.getAttribute('placeholder')===''
+      );
+
+      if(fbLogin){
+        fbLogin.value='replacement-login@example.test';
+        fbLogin.dispatchEvent(new Event('input',{bubbles:true}));
+      }
+      const typingHandsOffToMutation=Boolean(
         fbLogin && fbAccountHost &&
         getComputedStyle(fbAccountHost).visibility==='hidden' &&
+        fbLogin.value==='replacement-login@example.test' &&
         fbLogin.getAttribute('placeholder')==='邮箱 / 个人号'
       );
+
       const noSavedPrefix=accountTexts.every(text=>!text.includes('已保存：'));
       const pass=(
         accountHosts.length===2 &&
@@ -135,11 +173,12 @@ fixture = r'''<!doctype html>
         accountTexts.includes('tk-login@example.test') &&
         noSavedPrefix &&
         secretTexts.every(text=>text.includes('••••••••')) &&
-        eyeButtons.every(Boolean) &&
+        eyeIntegrity.every(Boolean) &&
         overlayInsideInput.every(Boolean) &&
         savedPlaceholdersHidden.every(Boolean) &&
-        focusHidesOverlay &&
-        inputValues.every(value=>value==='') &&
+        clickPreservesSavedAccount &&
+        typingHandsOffToMutation &&
+        initialInputValues.every(value=>value==='') &&
         summaryCalls.length===1 &&
         String(summaryCalls[0]?.p_client_id||'')==='client-1' &&
         unexpected.length===0
@@ -147,12 +186,14 @@ fixture = r'''<!doctype html>
       document.body.setAttribute('data-credential-regression',pass?'pass':'fail');
       document.body.setAttribute('data-account-host-count',String(accountHosts.length));
       document.body.setAttribute('data-secret-host-count',String(secretHosts.length));
-      document.body.setAttribute('data-input-values',JSON.stringify(inputValues));
+      document.body.setAttribute('data-initial-input-values',JSON.stringify(initialInputValues));
       document.body.setAttribute('data-overlays-inside',JSON.stringify(overlayInsideInput));
-      document.body.setAttribute('data-focus-hides-overlay',String(focusHidesOverlay));
+      document.body.setAttribute('data-eye-integrity',JSON.stringify(eyeIntegrity));
+      document.body.setAttribute('data-click-preserves-saved-account',String(clickPreservesSavedAccount));
+      document.body.setAttribute('data-typing-handoff',String(typingHandsOffToMutation));
       document.body.setAttribute('data-summary-client-id',String(summaryCalls[0]?.p_client_id||''));
       document.body.setAttribute('data-unexpected-rpc-count',String(unexpected.length));
-    },1200);
+    },1400);
   </script>
 </body>
 </html>'''
@@ -161,6 +202,22 @@ fixture = r'''<!doctype html>
 class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass
+
+    def send_file(self, path: Path) -> None:
+        if not path.is_file():
+            self.send_error(404)
+            return
+        body = path.read_bytes()
+        content_type = mimetypes.guess_type(path.name)[0] or 'application/octet-stream'
+        if path.suffix == '.js':
+            content_type = 'application/javascript; charset=utf-8'
+        elif path.suffix == '.css':
+            content_type = 'text/css; charset=utf-8'
+        self.send_response(200)
+        self.send_header('Content-Type', content_type)
+        self.send_header('Content-Length', str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def do_GET(self):
         if self.path in ('/', '/fixture.html'):
@@ -172,12 +229,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
         if self.path == '/cloud-security-hotfix.js':
-            body = HOTFIX.read_bytes()
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/javascript; charset=utf-8')
-            self.send_header('Content-Length', str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+            self.send_file(HOTFIX)
+            return
+        if self.path.startswith('/vendor/fontawesome/'):
+            relative = self.path.lstrip('/')
+            target = (DIST / relative).resolve()
+            vendor_root = (DIST / 'vendor' / 'fontawesome').resolve()
+            if target != vendor_root and vendor_root not in target.parents:
+                self.send_error(403)
+                return
+            self.send_file(target)
             return
         self.send_error(404)
 
@@ -204,7 +265,7 @@ cmd = [
     '--no-first-run',
     '--enable-logging=stderr',
     '--v=0',
-    '--virtual-time-budget=4000',
+    '--virtual-time-budget=5000',
     '--dump-dom',
     f'http://127.0.0.1:{port}/fixture.html',
 ]
@@ -224,7 +285,8 @@ if 'data-credential-regression="pass"' not in dom:
     attrs = {}
     for name in (
         'data-credential-regression', 'data-account-host-count', 'data-secret-host-count',
-        'data-input-values', 'data-overlays-inside', 'data-focus-hides-overlay',
+        'data-initial-input-values', 'data-overlays-inside', 'data-eye-integrity',
+        'data-click-preserves-saved-account', 'data-typing-handoff',
         'data-summary-client-id', 'data-unexpected-rpc-count',
     ):
         match = re.search(rf'{re.escape(name)}="([^"]*)"', dom)
@@ -237,10 +299,14 @@ if '已保存：fb-login@example.test' in dom or '已保存：tk-login@example.t
     fail('legacy below-input saved prefix remains')
 if 'data-summary-client-id="client-1"' not in dom:
     fail('client-form did not use active selectedClientId')
-if 'data-input-values="[&quot;&quot;,&quot;&quot;,&quot;&quot;,&quot;&quot;]"' not in dom and 'data-input-values="[\"\",\"\",\"\",\"\"]"' not in dom:
-    fail('edit inputs were unexpectedly hydrated')
-if 'data-focus-hides-overlay="true"' not in dom:
-    fail('input focus did not hand control from saved overlay to mutation input')
+if 'data-initial-input-values="[&quot;&quot;,&quot;&quot;,&quot;&quot;,&quot;&quot;]"' not in dom and 'data-initial-input-values="[\"\",\"\",\"\",\"\"]"' not in dom:
+    fail('edit inputs were unexpectedly hydrated before user input')
+if 'data-click-preserves-saved-account="true"' not in dom:
+    fail('clicking saved login account still makes the visible identifier disappear')
+if 'data-typing-handoff="true"' not in dom:
+    fail('actual typed replacement did not hand off to mutation input')
+if 'data-eye-integrity="[true,true]"' not in dom and 'data-eye-integrity="[true, true]"' not in dom:
+    fail('password eye controls are not both visibly rendered and hit-testable')
 if 'data-unexpected-rpc-count="0"' not in dom:
     fail('credential regression invoked an unexpected sensitive RPC')
 
@@ -248,5 +314,6 @@ print(
     'BROWSER_CLIENT_FORM_CREDENTIAL_STATUS_OK: '
     f'browser={Path(browser).name}; currentPage=client-form; stale-assets-id=0; '
     'safe-summary-client=client-1; facebook+tiktok=in-input-login+masked-eye; '
-    'focus-edit=overlay-hidden; edit-input-values=blank; reveal-rpc=not-called'
+    'click=preserves-saved-account; typing=mutation-handoff; eye=visible+font-icon+hit-testable; '
+    'initial-edit-values=blank; reveal-rpc=not-called'
 )
