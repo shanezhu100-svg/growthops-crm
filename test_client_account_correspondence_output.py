@@ -3,7 +3,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 SECURITY = (ROOT / 'dist' / 'cloud-security-hotfix.js').read_text(encoding='utf-8')
 BRIDGE = (ROOT / 'dist' / 'cloud-ui-action-bridge.js').read_text(encoding='utf-8')
-MIGRATION = (ROOT / 'supabase/migrations/20260830063000_client_account_safe_summary_correspondence.sql').read_text(encoding='utf-8')
+MIGRATION = (ROOT / 'supabase/migrations/20260830071649_client_account_safe_summary_correspondence.sql').read_text(encoding='utf-8')
 
 
 def require(ok: bool, message: str) -> None:
