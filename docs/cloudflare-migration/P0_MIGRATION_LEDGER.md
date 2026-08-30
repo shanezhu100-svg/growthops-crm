@@ -1,7 +1,7 @@
 # P0 Supabase Migration Ledger
 
 Original checkpoint date: 2026-08-21
-Last consolidated from Production: 2026-08-25
+Last consolidated from Production: 2026-08-30
 
 This document records the live `supabase_migrations.schema_migrations` ledger observed for GrowthOps CRM and distinguishes it from SQL files currently present in the repository. The original 2026-08-21 baseline remains visible below; later forward migrations are consolidated into the same authority without rewriting or guessing the unresolved 2026-08-13/14 historical SQL gap.
 
@@ -46,7 +46,7 @@ The repository also contains `supabase/migrations/20260815_security_vault_enforc
 
 ## Consolidated forward ledger
 
-The Production ledger was re-read on 2026-08-25 after the Post-P5 concurrency deployment. The entries below are genuine forward migrations after the original 2026-08-21 checkpoint and each maps to retained repository SQL.
+The Production ledger was re-read on 2026-08-30 after the client-account correspondence migration. The entries below are genuine forward migrations after the original 2026-08-21 checkpoint and each maps to retained repository SQL.
 
 | Remote version | Migration name | Repository file |
 | --- | --- | --- |
@@ -71,29 +71,29 @@ The Production ledger was re-read on 2026-08-25 after the Post-P5 concurrency de
 | `20260825032049` | `post_p5_revoke_rls_auto_enable_service_role_exec` | `supabase/migrations/20260824_post_p5_revoke_rls_auto_enable_service_role_exec.sql` |
 | `20260825040850` | `post_p5_public_default_privilege_guard` | `supabase/migrations/20260824_post_p5_public_default_privilege_guard.sql` |
 | `20260825075808` | `post_p5_rate_limit_concurrency` | `supabase/migrations/20260825_post_p5_rate_limit_concurrency.sql` |
+| `20260830071649` | `client_account_safe_summary_correspondence` | `supabase/migrations/20260830071649_client_account_safe_summary_correspondence.sql` |
 
-The `20260825075808` migration also retains its exact rollback, preflight, read-only post-check, canonical regression test, and acceptance record:
+The `20260825075808` migration retains its exact rollback, preflight, read-only post-check, canonical regression test, and acceptance record. The new `20260830071649` migration is a forward-compatible replacement of `crm_client_account_safe_summary(text,text)` and retains its matching rollback at `supabase/rollback/20260830071649_client_account_safe_summary_correspondence.sql`; it does not change customer rows or broaden application-role privileges.
 
-- `supabase/rollback/20260825_post_p5_rate_limit_concurrency.sql`;
-- `supabase/baseline/post_p5_rate_limit_concurrency_preflight.sql`;
-- `supabase/baseline/post_p5_rate_limit_concurrency_check.sql`;
-- `test_post_p5_rate_limit_concurrency.py`;
-- `docs/cloudflare-migration/POST_P5_RATE_LIMIT_CONCURRENCY.md`.
+As of the 2026-08-30 Production re-read, there is no newly observed remote-history-only migration after 2026-08-14. The unresolved historical gap remains exactly the eleven 2026-08-13/14 entries listed above; do not blur that known gap with later forward migrations that are present in GitHub.
 
-As of the 2026-08-25 Production re-read, there is no newly observed remote-history-only migration after 2026-08-14. The unresolved historical gap remains exactly the eleven 2026-08-13/14 entries listed above; do not blur that known gap with later forward migrations that are present in GitHub.
-
-`P0_MIGRATION_LEDGER_20260825_APPENDIX.md` is retained as the point-in-time acceptance note that first recorded the concurrency migration. Its information is now consolidated here; the appendix is no longer required to determine the current migration head.
+`P0_MIGRATION_LEDGER_20260825_APPENDIX.md` is retained as point-in-time acceptance evidence for the concurrency migration. Its information is historical; this main ledger is the consolidated current remote migration-history authority.
 
 ## Current recovery comparison anchors
 
-At the same current recovery checkpoint:
+Fresh read-only Production evidence after `20260830071649` is:
 
-- primary CRM fingerprint: `200 / 77ba3a7c646cf2ea04f41d20ceb1dd02aa9f041db7cbd2a0ad0386ddedbfba65`;
+- primary CRM fingerprint: `200 / 8ff7dd1447bf2cea9802438f91e8e1d3bf34bc7f7b4878592dd2eca8b06da7f9`;
 - supplemental three-guard fingerprint: `9 / 2a6c96fe5c2290cd30ee5b29800dcb47d9f1686d48b51344486c2c7780030140`;
-- supplemental wider-public recovery fingerprint: `225 / a0078c5da6c5844a6d02c96e5c486d3fd8b13bb859a640073fb13cbacc6032ab`;
-- current Production migration head: `20260825075808 / post_p5_rate_limit_concurrency`.
+- supplemental wider-public recovery fingerprint: `225 / b89328f5548d4787a650b7f079bc1843125cc7c1b550d959a8cb4df2b2df04f2`;
+- current Production migration head: `20260830071649 / client_account_safe_summary_correspondence`;
+- current Production migration rows: `52`.
 
-These deterministic fingerprints are comparison anchors only. They do not replace the outstanding full schema-only `pg_dump`/`supabase db dump` recovery artifact.
+The immediately preceding accepted checkpoint remains historical evidence: `20260825075808 / post_p5_rate_limit_concurrency`, primary `200 / 77ba3a7c646cf2ea04f41d20ceb1dd02aa9f041db7cbd2a0ad0386ddedbfba65`, wider-public `225 / a0078c5da6c5844a6d02c96e5c486d3fd8b13bb859a640073fb13cbacc6032ab`.
+
+Recovery Bundle v3 remains an accepted, independently restored **51-migration recovery base** through `20260825075808`; do not rewrite its historical artifact metadata. Until a newer portable bundle is generated and independently accepted, recovery to the current Production schema is **Recovery Bundle v3 followed by the repository-backed forward migration `20260830071649_client_account_safe_summary_correspondence.sql`**, then fresh fingerprints/ACL checks.
+
+These deterministic fingerprints are comparison anchors only. They do not replace an authorized portable schema artifact plus forward migrations and restore verification.
 
 ## Recovery rule
 
@@ -104,7 +104,7 @@ For recovery and Cloudflare migration safety:
 1. Preserve this exact remote ledger.
 2. Preserve the current live schema/security inventory and validation queries.
 3. Preserve all genuine SQL migration files currently in `supabase/migrations`.
-4. Use a real database schema dump/export when available as the authoritative structural snapshot.
+4. Use the accepted schema dump/export as structural recovery base and apply repository-backed forward migrations after its ledger head.
 5. Treat later schema changes as forward migrations committed to the repository.
 6. Before a destructive database restore, verify Vault handling separately; ordinary backups must not contain credential values.
 
