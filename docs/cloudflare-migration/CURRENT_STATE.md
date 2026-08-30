@@ -133,7 +133,7 @@ Cloudflare Preview must not silently use Production Supabase. Standard Preview h
 
 Historical fail-closed evidence is retained: on 2026-08-25 Vercel Preview deployment `dpl_HfSpEkWs9D34A1a28WLiaCMrCnKY` failed with `PREVIEW_SECRET_BOUNDARY_FAILED` while a Production server secret was still present in Preview. The guard did not print the secret. This is historical evidence that the boundary worked, not evidence that cleanup remains open.
 
-**Preview Production-secret cleanup accepted on 2026-08-27.** Cloudflare Preview no longer carries `GROWTHOPS_SUPABASE_SECRET_KEY`; Cloudflare Production retains its encrypted Production binding. `Vercel Preview: no project environment variables`; Production retained its hidden Production-only server identity. Issue #92 remains closed / completed.
+**Preview Production-secret cleanup accepted on 2026-08-27.** Cloudflare Preview: `GROWTHOPS_SUPABASE_SECRET_KEY` removed; Cloudflare Production retains its encrypted Production binding. Vercel Preview: no project environment variables; Production retained its hidden Production-only server identity. Issue #92: closed / completed.
 
 ## Historical / maintenance rules
 
