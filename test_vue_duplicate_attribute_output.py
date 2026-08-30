@@ -3,8 +3,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 INDEX = ROOT / 'dist' / 'index.html'
-EXPECTED = '<i :class="[alertStyle(item.typeKey).icon, alertStyle(item.typeKey).text]"></i>'
-FORBIDDEN = '<i :class="alertStyle(item.typeKey).icon" :class="alertStyle(item.typeKey).text"></i>'
+ICON = 'alertStyle(item.typeKey).icon'
+TEXT = 'alertStyle(item.typeKey).text'
+EXPECTED = (
+    '<i :class="[' + ICON + ', ' + TEXT + ']">',
+    '<i class="text-sm" :class="[' + ICON + ', ' + TEXT + ']">',
+)
+FORBIDDEN = (
+    '<i :class="' + ICON + '" :class="' + TEXT + '">',
+    '<i :class="' + ICON + '" class="text-sm" :class="' + TEXT + '">',
+)
 
 
 def fail(message: str) -> None:
@@ -14,10 +22,12 @@ def fail(message: str) -> None:
 if not INDEX.is_file():
     fail('dist/index.html missing')
 html = INDEX.read_text(encoding='utf-8')
-if html.count(EXPECTED) != 1:
-    fail(f'normalized alert icon binding drifted: {html.count(EXPECTED)}')
-if FORBIDDEN in html:
-    fail('reviewed duplicate :class anchor remains')
+for marker in EXPECTED:
+    if html.count(marker) != 1:
+        fail(f'normalized alert icon binding drifted: marker={marker}; count={html.count(marker)}')
+for marker in FORBIDDEN:
+    if marker in html:
+        fail('reviewed duplicate :class anchor remains: ' + marker)
 
 
 class DuplicateAttributeGuard(HTMLParser):
@@ -56,5 +66,5 @@ if guard.duplicates:
 
 print(
     'VUE_DUPLICATE_ATTRIBUTE_OUTPUT_OK: '
-    'reviewed-alert-binding=class-array; duplicate-attributes=0; parser=HTMLParser'
+    'reviewed-alert-bindings=2-class-arrays; duplicate-attributes=0; parser=HTMLParser'
 )
