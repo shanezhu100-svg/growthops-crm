@@ -133,7 +133,7 @@ value_block = r'''  const configureCredentialFormOverlay=(host,control,kind)=>{
     host.className='growthops-credential-inline';
     Object.assign(host.style,{
       position:'absolute',zIndex:'3',display:'flex',alignItems:'center',gap:'8px',
-      margin:'0',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',
+      margin:'0',whiteSpace:'nowrap',overflow:kind==='secret'?'visible':'hidden',textOverflow:'ellipsis',
       cursor:'text',boxSizing:'border-box'
     });
     const place=()=>{
@@ -152,11 +152,23 @@ value_block = r'''  const configureCredentialFormOverlay=(host,control,kind)=>{
     const sync=()=>{
       place();
       const hasSavedDisplay=String(host.textContent||'').trim()!=='';
-      const editing=document.activeElement===control||String(control.value||'')!=='';
+      // Focus alone is not an edit. Keep the saved identifier / masked secret visible
+      // when the user clicks into the field; hand off to the blank mutation input only
+      // after the user actually types a replacement value.
+      const editing=String(control.value||'')!=='';
       const visible=hasSavedDisplay&&!editing;
       host.style.visibility=visible?'visible':'hidden';
       const original=control.getAttribute(originalPlaceholderAttr)||'';
       control.setAttribute('placeholder',visible?'':original);
+      if(kind==='secret'){
+        const eye=host.querySelector('button[aria-label="显示密码和 2FA"],button[aria-label="隐藏密码和 2FA"]');
+        if(eye){
+          Object.assign(eye.style,{
+            display:'inline-flex',alignItems:'center',justifyContent:'center',flex:'0 0 auto',
+            minWidth:'26px',minHeight:'26px',position:'relative',zIndex:'4'
+          });
+        }
+      }
     };
     host.__growthOpsCredentialFormSync=sync;
     if(host.getAttribute('data-growthops-credential-overlay-click-bound')!=='1'){
@@ -255,8 +267,8 @@ if security.count(old_secret_recorded) != 1:
 security = security.replace(old_secret_recorded, new_secret_recorded, 1)
 
 # Fail closed if any future change starts hydrating persisted credentials into form
-# values/model state. The overlay is visual-only; typing focuses the real mutation
-# input and temporarily hides the saved-value overlay.
+# values/model state. The overlay is visual-only; focus preserves saved state and
+# actual typed content hands control to the mutation input.
 for forbidden in (
     ".value=login",
     ".value=password",
@@ -271,7 +283,8 @@ SECURITY.write_text(security, encoding='utf-8')
 print(
     'CREDENTIAL_FORM_SAVED_STATUS_FINALIZE_OK: '
     'context=client-form+detail+assets; client-form-id=before-asset-sentinel; '
-    'form-inputs=mutation-only; safe-summary=input-overlay; empty-form-status=placeholder; '
-    'password=masked+scalar-eye-inside-input; per-account-card=nearest-pair; '
+    'form-inputs=mutation-only; safe-summary=input-overlay; focus=preserves-saved-state; '
+    'typing=mutation-handoff; empty-form-status=placeholder; '
+    'password=masked+visible-hit-target-eye-inside-input; per-account-card=nearest-pair; '
     'security=' + hashlib.sha256(SECURITY.read_bytes()).hexdigest()
 )
