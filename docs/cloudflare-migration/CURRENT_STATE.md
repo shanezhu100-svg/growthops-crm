@@ -109,6 +109,8 @@ The required GitHub `build` job additionally runs the real Chromium mount, clien
 
 GitHub `main` remains protected with required status context `build`. The expected release path remains isolated branch → green required `build` → expected-head merge → merged-main verification. A docs-only or single-platform-success change is not considered merge-safe by itself.
 
+The accepted PR #86 globstar/main Git deployment-policy checkpoint remains `91c0edcb24b79d282faa72d7d83435a1e1265d30`. It is historical policy evidence and does not freeze the forever-current runtime deployment.
+
 ## Current hosting checkpoint
 
 ### Vercel
@@ -123,7 +125,15 @@ Latest accepted runtime/business Production after PR #183:
 - merged-main required `build`: success
 - reviewed post-deploy Vercel `error`/`fatal` log window: no matching events
 
-The stable alias remains `https://growthops-crm.vercel.app`. The much older `dpl_JWXVvjCdjRF59gMrZycDUJEXYP7G` remains historical POST-200/server-secret-repair evidence, not the current frontend/runtime artifact authority.
+Current validated runtime/security checkpoint deployment:
+
+- deployment: `dpl_v4W4CAABooUMYYjnTgKpHhFCXr55`;
+- state: `READY`;
+- Git commit: `23f3bbd7e491357d2533a2c5e09c263592399fdb`;
+- merged-main CRM Build Gate #496: completed / success;
+- stable alias assigned successfully.
+
+The stable alias remains `https://growthops-crm.vercel.app`. The much older `dpl_JWXVvjCdjRF59gMrZycDUJEXYP7G` remains historical POST-200/server-secret-repair evidence, not the current frontend/runtime artifact authority. Documentation/test-only may exist without superseding this checkpoint; advance this runtime/security checkpoint only when a later runtime/security artifact is explicitly accepted.
 
 ### Cloudflare Pages
 
