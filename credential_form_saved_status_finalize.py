@@ -37,6 +37,56 @@ def replace_block(start_marker: str, end_marker: str, replacement: str, label: s
     security = security[:start] + replacement + security[end:]
 
 
+# client-form contains the same Facebook/TikTok labels as the account-assets page,
+# so the historical body-text detector can classify it as an asset page. Resolve
+# explicit detail/edit context before applying the account-assets ALL/0 sentinel.
+# This prevents a stale selectedAssetsClientId=0 from suppressing the actual client
+# being edited while preserving the aggregate no-credential boundary on /assets.
+resolver_block = r'''  const resolveCredentialClientId=()=>{
+    if(vm.currentPage==='client-detail'||vm.currentPage==='client-form'){
+      const directCandidates=[vm.selectedClientId,vm.selectedClient?.id,vm.currentClient?.id];
+      for(const value of directCandidates){
+        const text=String(value??'');
+        if(text&&text!=='0'&&text.toUpperCase()!=='ALL')return text;
+      }
+    }
+    if(isAccountAssetPage()){
+      const explicitAssetsClientId=vm.selectedAssetsClientId;
+      const explicitAssetsClientText=String(explicitAssetsClientId??'');
+      if(explicitAssetsClientText==='0'||explicitAssetsClientText.toUpperCase()==='ALL')return '';
+      if(explicitAssetsClientId!==undefined&&explicitAssetsClientId!==null&&explicitAssetsClientText!=='')return explicitAssetsClientText;
+      const visibleClientId=resolveVisibleClientId();
+      if(visibleClientId)return visibleClientId;
+      for(const key of ['selectedAssetClientId','assetClientId','clientAssetClientId']){
+        const value=vm[key];
+        if(value!==undefined&&value!==null&&String(value)!=='')return String(value);
+      }
+      for(const key of ['assetClient','currentClient','selectedClient']){
+        const value=vm[key];
+        if(value&&value.id!==undefined&&value.id!==null&&String(value.id)!=='')return String(value.id);
+      }
+    }
+    for(const key of ['selectedAssetClientId','assetClientId','clientAssetClientId']){
+      const value=vm[key];
+      if(value!==undefined&&value!==null&&String(value)!=='')return String(value);
+    }
+    for(const key of ['selectedClient','currentClient','assetClient']){
+      const value=vm[key];
+      if(value&&value.id!==undefined&&value.id!==null&&String(value.id)!=='')return String(value.id);
+    }
+    const visibleClientId=resolveVisibleClientId();
+    if(visibleClientId)return visibleClientId;
+    if(vm.selectedClientId!==undefined&&vm.selectedClientId!==null&&String(vm.selectedClientId)!=='')return String(vm.selectedClientId);
+    return '';
+  };
+'''
+replace_block(
+    '  const resolveCredentialClientId=()=>{',
+    '  function clearReveal(){',
+    resolver_block,
+    'credential client resolver',
+)
+
 platform_block = r'''  const platformForCard=card=>{
     let node=card||null;
     for(let i=0;node&&i<9;i+=1,node=node.parentElement){
@@ -137,7 +187,7 @@ for forbidden in (
 SECURITY.write_text(security, encoding='utf-8')
 print(
     'CREDENTIAL_FORM_SAVED_STATUS_FINALIZE_OK: '
-    'context=client-form+detail+assets; form-inputs=mutation-only; '
-    'safe-summary=sibling-status; per-account-card=nearest-pair; '
-    'security=' + hashlib.sha256(SECURITY.read_bytes()).hexdigest()
+    'context=client-form+detail+assets; client-form-id=before-asset-sentinel; '
+    'form-inputs=mutation-only; safe-summary=sibling-status; '
+    'per-account-card=nearest-pair; security=' + hashlib.sha256(SECURITY.read_bytes()).hexdigest()
 )
