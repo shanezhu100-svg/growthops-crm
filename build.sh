@@ -85,6 +85,11 @@ python3 test_module_home_navigation_output.py
 # markers that suppress the v5 scalar reveal control.
 python3 credential_eye_self_heal_finalize.py
 python3 test_credential_eye_self_heal_output.py
+# Client edit forms keep credential inputs mutation-only. Render persisted Vault
+# status in sibling DOM hosts so reopening a client shows saved account/secret
+# state without hydrating plaintext back into Vue/browser form state.
+python3 credential_form_saved_status_finalize.py
+python3 test_credential_form_saved_status_output.py
 python3 admin_password_byte_cap_finalize.py
 python3 test_admin_password_byte_cap_output.py
 # Public deployment guidance must describe the actual server-authenticated runtime
@@ -155,6 +160,7 @@ python3 test_p5_sensitive_rpc_revocation.py
 python3 test_p5_group2_legacy_status_candidate.py
 python3 test_p5_group2_legacy_status_revocation.py
 python3 test_p5_group3_admin_user_mgmt_candidate.py
+node test_p5_group3_admin_user_mgmt_bff.mjs
 python3 test_p5_group3_admin_user_mgmt_revocation.py
 python3 test_p5_group4_safe_summary_candidate.py
 node test_p5_group4_safe_summary_bff.mjs
