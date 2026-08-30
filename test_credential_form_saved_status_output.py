@@ -45,6 +45,7 @@ for marker in (
     "control.insertAdjacentElement('afterend',host)",
     "host.className='growthops-credential-inline'",
     "position:'absolute'",
+    "overflow:kind==='secret'?'visible':'hidden'",
     "host.style.left=`${Math.max(0,controlRect.left-parentRect.left+14)}px`",
     "host.style.height=`${Math.max(1,controlRect.height)}px`",
     "host.__growthOpsCredentialFormControl=control",
@@ -53,7 +54,13 @@ for marker in (
     "control.addEventListener('focus',sync)",
     "control.addEventListener('input',sync)",
     "control.addEventListener('blur',()=>queueMicrotask(sync))",
+    "const editing=String(control.value||'')!==''",
     "control.setAttribute('placeholder',visible?'':original)",
+    "button[aria-label=\"显示密码和 2FA\"],button[aria-label=\"隐藏密码和 2FA\"]",
+    "display:'inline-flex'",
+    "flex:'0 0 auto'",
+    "minWidth:'26px'",
+    "minHeight:'26px'",
     "formStatus=row.accountCell.getAttribute('data-growthops-credential-form-status')==='account'",
     "row.accountCell.textContent=formStatus?(login||''):(login||'未录入')",
     "row.accountCell.__growthOpsCredentialFormSync?.()",
@@ -66,6 +73,13 @@ for marker in (
     "cloud.rpc('crm_reveal_client_secret_value_v5'",
 ):
     require(marker in security, 'saved credential form behavior missing: ' + marker)
+
+# Focus alone must never be interpreted as mutation. This exact old expression is
+# the regression that made the saved account disappear immediately on click.
+require(
+    "document.activeElement===control||String(control.value||'')!==''" not in security,
+    'focus is still incorrectly treated as credential edit',
+)
 
 # The old below-input presentation and `已保存：` prefix must be gone.
 for forbidden in (
@@ -103,7 +117,7 @@ require('navigator.clipboard' not in security, 'credential UI must not auto-copy
 print(
     'CREDENTIAL_FORM_SAVED_STATUS_OUTPUT_OK: '
     'client-form=safe-summary-enabled+direct-client-id-before-asset-sentinel; '
-    'login=input-overlay; password-2fa=input-overlay+masked+scalar-eye; '
-    'focus-edit=hides-overlay; empty-form-status=original-placeholder; '
+    'login=input-overlay+focus-preserved; password-2fa=input-overlay+masked+visible-eye-hit-target; '
+    'typing=mutation-handoff; empty-form-status=original-placeholder; '
     'form-inputs=mutation-only; plaintext-hydration=none; multi-account-card=nearest-pair'
 )
