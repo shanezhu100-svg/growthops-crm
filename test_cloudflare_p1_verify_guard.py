@@ -14,7 +14,8 @@ EXPECTED_PINS = {
     'app/app-style-02.css': '01ed16d03067a8879b877440574fbc6d98af53e0909685e1a23271169c149997',
     'app/app-style-03.css': '64bd5db676657f40c7962080ce62f3b74125865c3f084a67ce21d0fc77ed00b6',
     'app/app-style-04.css': '59de39d8388f561c5229cfa39f7d4c5299b34997c21e3c142d9ced067850a11e',
-    'vendor/vue-3.5.41.global.js': '14625269265de97b5c344b8fcfb7136c0c9ab09f7dbadc909a4967d14eca05fb',
+    'vendor/vue-3.5.41.runtime.global.js': '45c904194aaf24112c8f4fc4386b87e107a32eede80c410ce93be459ebdee088',
+    'vendor/vue-3.5.41.renders.js': '8406eb412573ef3093b6190ba8ee0a3764bda2c7cba0f8c94484098bdb801d3d',
     'vendor/xlsx-0.18.5.full.min.js': 'c9506197caf809a075b6dee1da0d36fb19da7158ffe8a88e7b0c96c5d8623c99',
     'vendor/fontawesome/css/all.min.css': '5ceaaba22d75b58e04150311f596306562a3e595e27ed4b1dfa451b82dda9e50',
     'vendor/fontawesome/webfonts/fa-brands-400.ttf': 'e28096fa75a96ac77020155ea3a6dd7312983e84115366d4cf49a0c312ec6d51',
@@ -42,13 +43,12 @@ required_verify_markers = (
     "DIST / '404.html'", "DIST / '_headers'", "headers.startswith('/*\\n')",
     'Content-Security-Policy:', 'X-Frame-Options:', 'X-Content-Type-Options:',
     'Referrer-Policy:', 'Permissions-Policy:', 'Cross-Origin-Opener-Policy:',
-    'Cross-Origin-Resource-Policy: same-origin',
-    'X-Robots-Tag: noindex, nofollow, noarchive',
+    'Cross-Origin-Resource-Policy: same-origin', 'X-Robots-Tag: noindex, nofollow, noarchive',
     'noindex,nofollow,noarchive', "'<script'", "'<form'", "'<iframe'", "'fetch('",
     "'xmlhttprequest'", '/api/crm', 'sb_secret_', 'growthops_supabase', 'document.cookie',
     'localstorage', 'sessionstorage', "re.search(r'\\b(?:src|href|action)\\s*='",
     'same-origin-app-js=hash-pinned', 'same-origin-app-css=hash-pinned',
-    'same-origin-vendor-js=hash-pinned', 'vue-compiler-global=hash-pinned',
+    'same-origin-vendor-js=hash-pinned', 'vue-runtime+renders=hash-pinned',
     'same-origin-fontawesome=hash-pinned', 'same-origin-inter=hash-pinned',
     'corp=same-origin', 'robots=noindex+nofollow+noarchive', 'failopen_404=guarded', 'static_headers=guarded',
 )
@@ -61,5 +61,7 @@ if BUILD.count(call) != 1:
     raise SystemExit('CLOUDFLARE_P1_VERIFY_GUARD_TEST_FAILED static verifier gate not wired exactly once')
 if BUILD.index(call) < BUILD.index('python3 test_cloudflare_failopen_404.py'):
     raise SystemExit('CLOUDFLARE_P1_VERIFY_GUARD_TEST_FAILED verifier gate runs before 404 build test')
+if BUILD.count('python3 vue_runtime_only_finalize.py') != 1 or BUILD.count('python3 test_vue_runtime_only_output.py') != 1:
+    raise SystemExit('CLOUDFLARE_P1_VERIFY_GUARD_TEST_FAILED runtime-only Vue final build gate missing')
 
-print('CLOUDFLARE_P1_VERIFY_GUARD_TESTS_OK: production-pins=27-synchronized; static-tailwind+app-js+app-css+vendor-js+vue-compiler+fontawesome+inter=hash-pinned; browser-mount-gate=required; final-404-check=required; wildcard-static-headers=8-required; corp=same-origin; robots=noindex+nofollow+noarchive; active-material-deny=required')
+print('CLOUDFLARE_P1_VERIFY_GUARD_TESTS_OK: production-pins=28-synchronized; static-tailwind+app-js+app-css+vendor-js+vue-runtime+renders+fontawesome+inter=hash-pinned; runtime-only-vue-gate=required; browser-mount-gate=required; final-404-check=required; wildcard-static-headers=8-required; corp=same-origin; robots=noindex+nofollow+noarchive; active-material-deny=required')
