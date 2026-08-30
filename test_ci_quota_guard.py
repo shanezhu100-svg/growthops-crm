@@ -6,6 +6,7 @@ vercel = json.loads((root / 'vercel.json').read_text(encoding='utf-8'))
 workflow = (root / '.github/workflows/crm-build.yml').read_text(encoding='utf-8')
 build = (root / 'build.sh').read_text(encoding='utf-8')
 ignore_script = (root / 'vercel-ignore-build.sh').read_text(encoding='utf-8')
+browser_smoke_source = (root / 'test_browser_mount_smoke.py').read_text(encoding='utf-8')
 
 
 def require(ok, message):
@@ -74,4 +75,26 @@ require(
     'CI order must be build -> browser mount -> client-form credential browser regression -> final verifier',
 )
 
-print('CI_QUOTA_GUARD_OK: vercel-git=main-only; non-main=globstar-deployment-disabled; nonruntime-main=ignored-conservatively; slash-branches=covered; pr-ci=github-actions; runner=ubuntu-24.04; secrets=none; permissions=contents-read; actions=sha-pinned; node=24.x; canonical-build=sh-build.sh; browser-mount+credential-regression=github-only')
+# Preserve the real-browser semantic assertions while making Chrome process
+# lifecycle deterministic on hosted runners. Only process launch/exit can retry;
+# mounted-DOM assertions still execute once against the successful browser result.
+for marker in (
+    'BROWSER_ATTEMPT_TIMEOUT_SECONDS = 20',
+    'MAX_BROWSER_ATTEMPTS = 2',
+    'tempfile.TemporaryDirectory',
+    'start_new_session=True',
+    'os.killpg(proc.pid, signal.SIGKILL)',
+    "'--virtual-time-budget=6000'",
+    "if 'v-cloak' in app_tag",
+    "if '{{ currentuser' in dom.lower() or 'v-if=\"!loggedin\"' in dom.lower()",
+    "if len(text) < 40",
+):
+    require(marker in browser_smoke_source, f'browser mount reliability/semantic marker missing: {marker}')
+require(
+    browser_smoke_source.index('for attempt in range(1, MAX_BROWSER_ATTEMPTS + 1)')
+    < browser_smoke_source.index("if len(dom) < 1000")
+    < browser_smoke_source.index("if 'v-cloak' in app_tag"),
+    'browser retry must wrap process completion only; DOM semantic assertions must remain outside retry loop',
+)
+
+print('CI_QUOTA_GUARD_OK: vercel-git=main-only; non-main=globstar-deployment-disabled; nonruntime-main=ignored-conservatively; slash-branches=covered; pr-ci=github-actions; runner=ubuntu-24.04; secrets=none; permissions=contents-read; actions=sha-pinned; node=24.x; canonical-build=sh-build.sh; browser-mount+credential-regression=github-only; browser-smoke=fresh-profile+process-group+bounded-retry')
