@@ -55,13 +55,18 @@ def patch_actual(source: str) -> str:
 
 
 def patch_breakdown(source: str) -> str:
-    # All three references participate in the same mode-dependent breakdown
-    # (currency inventory + displayed cost + formatted cost). Apply one identical
-    # basis everywhere so the visible formula cannot disagree with the net value.
-    if not re.match(r'financeProfitBreakdownRows\(mode(?:=[^)]*)?\)\s*\{', source):
-        fail('financeProfitBreakdownRows mode parameter drifted')
+    # All three references participate in the same breakdown (currency inventory +
+    # displayed cost + formatted cost). Derive the method's first parameter instead
+    # of assuming its spelling, then apply one identical ACTUAL/ALL basis everywhere.
+    signature = re.match(r'financeProfitBreakdownRows\(([^)]*)\)\s*\{', source)
+    if not signature:
+        fail('financeProfitBreakdownRows signature drifted')
+    params = signature.group(1).strip()
+    first_param = params.split(',', 1)[0].split('=', 1)[0].strip() if params else ''
+    if not re.fullmatch(r'[A-Za-z_$][A-Za-z0-9_$]*', first_param):
+        fail(f'financeProfitBreakdownRows first parameter is not a simple identifier: {first_param!r}')
     old = 'this.financeCostGroups'
-    new = "(mode==='ACTUAL'&&this.financeClientFilter==='ALL'?this.financeCompanyNonClientCostGroups:this.financeCostGroups)"
+    new = f"({first_param}==='ACTUAL'&&this.financeClientFilter==='ALL'?this.financeCompanyNonClientCostGroups:this.financeCostGroups)"
     count = source.count(old)
     if count != 3:
         fail(f'financeProfitBreakdownRows expected three cost-group references, found {count}')
