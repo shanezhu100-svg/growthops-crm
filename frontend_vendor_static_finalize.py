@@ -1,6 +1,7 @@
 from pathlib import Path
 import hashlib
 import os
+import time
 import urllib.parse
 import urllib.request
 
@@ -8,6 +9,7 @@ ROOT = Path(__file__).resolve().parent
 DIST = ROOT / 'dist'
 INDEX = DIST / 'index.html'
 VENDOR_DIR = DIST / 'vendor'
+DOWNLOAD_ATTEMPTS = 3
 
 # Browser vendors are fetched only from exact versioned resources, verified against
 # CI-probed SHA-256 authority, then copied into same-origin deploy output. A CDN
@@ -55,17 +57,34 @@ for vendor in VENDORS:
     if html.count(source_tag) != 1:
         fail(f"{vendor['name']} expected source tag exactly once, found {html.count(source_tag)}")
 
-    request = urllib.request.Request(url, headers={'User-Agent': 'growthops-crm-build/1'})
-    try:
-        with urllib.request.urlopen(request, timeout=90) as response:
-            final_url = response.geturl()
-            if final_url != url:
-                fail(f"{vendor['name']} unexpected redirect: {final_url}")
-            data = response.read()
-    except SystemExit:
-        raise
-    except Exception as exc:
-        fail(f"{vendor['name']} download failed: {type(exc).__name__}")
+    # Retry only transport failures against the same exact versioned URL. Redirect,
+    # content-shape, marker, and digest validation remain fail-closed and are never
+    # retried as a way to accept different bytes.
+    data = None
+    last_error = None
+    for attempt in range(1, DOWNLOAD_ATTEMPTS + 1):
+        request = urllib.request.Request(url, headers={'User-Agent': 'growthops-crm-build/1'})
+        try:
+            with urllib.request.urlopen(request, timeout=90) as response:
+                final_url = response.geturl()
+                if final_url != url:
+                    fail(f"{vendor['name']} unexpected redirect: {final_url}")
+                data = response.read()
+        except SystemExit:
+            raise
+        except Exception as exc:
+            last_error = exc
+            if attempt < DOWNLOAD_ATTEMPTS:
+                time.sleep(attempt)
+                continue
+            fail(
+                f"{vendor['name']} download failed after {DOWNLOAD_ATTEMPTS} attempts: "
+                f"{type(exc).__name__}"
+            )
+        last_error = None
+        break
+    if last_error is not None or data is None:
+        fail(f"{vendor['name']} download retry loop exited unexpectedly")
 
     actual = digest(data)
     if len(data) < vendor['min_bytes']:
@@ -98,5 +117,5 @@ for vendor, actual, size, local_tag in downloaded:
 print(
     'FRONTEND_VENDOR_STATIC_FINALIZE_OK: '
     + '; '.join(f"{v['name']}={sha}/{size}B->/vendor/{v['output']}" for v, sha, size, _ in downloaded)
-    + '; browser-external-js=removed'
+    + f'; browser-external-js=removed; download-attempts<={DOWNLOAD_ATTEMPTS}'
 )
