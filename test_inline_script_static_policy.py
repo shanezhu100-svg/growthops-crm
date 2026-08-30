@@ -36,9 +36,9 @@ if positions != sorted(positions):
 csp_line = next((line for line in VERCEL.splitlines() if 'Content-Security-Policy' in line), '')
 script_part = csp_line.split('script-src ', 1)[1].split(';', 1)[0] if 'script-src ' in csp_line else ''
 tokens = script_part.split()
-if tokens != ["'self'", "'unsafe-eval'"]:
-    raise SystemExit('INLINE_SCRIPT_STATIC_POLICY_FAILED: script-src must be same-origin plus Vue compiler eval only')
-if "'unsafe-inline'" in script_part:
-    raise SystemExit('INLINE_SCRIPT_STATIC_POLICY_FAILED: script-src unsafe-inline returned')
+if tokens != ["'self'"]:
+    raise SystemExit('INLINE_SCRIPT_STATIC_POLICY_FAILED: script-src must be same-origin only')
+if "'unsafe-inline'" in script_part or "'unsafe-eval'" in script_part:
+    raise SystemExit('INLINE_SCRIPT_STATIC_POLICY_FAILED: unsafe script capability returned')
 
-print('INLINE_SCRIPT_STATIC_POLICY_OK: expected=3; attrs=executable-only; currentScript=denied; order=readiness>policy>finalize>output>vue; script=self+vue-eval; unsafe-inline=absent')
+print('INLINE_SCRIPT_STATIC_POLICY_OK: expected=3; attrs=executable-only; currentScript=denied; order=readiness>policy>finalize>output>vue; script=self-only; unsafe-inline+unsafe-eval=absent')
