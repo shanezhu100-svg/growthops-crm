@@ -40,11 +40,12 @@ for marker in (
     "syncUiRouteState();",
     "setInterval(()=>{syncDetailClientPager();install()},250)",
     "vm.resetAssetPager('detail')",
+    "const CLIENT_DETAIL_RETURN_KEY='growthops_client_detail_return_page'",
 ):
     require(marker in BRIDGE, 'refresh/detail-state marker missing: ' + marker)
 
 route_start = BRIDGE.find("const UI_ROUTE_STATE_KEY")
-route_end = BRIDGE.find("const finalizeClientListNavigation", route_start)
+route_end = BRIDGE.find("const CLIENT_DETAIL_RETURN_KEY", route_start)
 require(route_start >= 0 and route_end > route_start, 'unable to bound route-state implementation')
 route_region = BRIDGE[route_start:route_end].lower()
 for forbidden in ('token_key', 'loginaccount', 'loginpassword', 'password', 'twofa', 'credential', 'accountsafe', 'vault'):
