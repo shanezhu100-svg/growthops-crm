@@ -17,21 +17,15 @@ def replace_block(text: str, start_marker: str, end_marker: str, replacement: st
     start = text.find(start_marker)
     end = text.find(end_marker, start + len(start_marker))
     if start < 0 or end < 0 or end <= start:
-        candidates = []
-        for line in text.splitlines():
-            stripped = line.strip()
-            if any(term in stripped for term in ('summaryFor', 'SafeSummary', 'safeSummary', 'AccountSafe', 'accountSafe', 'CredentialRow')):
-                candidates.append(stripped[:300])
-        fail('unable to locate ' + label + '; marker-inventory=' + repr(candidates[:40]))
+        fail('unable to locate ' + label)
     return text[:start] + replacement + text[end:]
 
 
 # Safe-summary rows must follow the account that is actually visible/edited. The
 # older FB/TK path used one platform-level summary, which is ambiguous as soon as a
 # client has multiple accounts. Prefer per-account arrays + exact ID matching and
-# fail closed when a multi-account row cannot be identified. Anchor only on the
-# stable summary function because earlier credential-form finalizers may reorganize
-# helper functions around it.
+# fail closed when a multi-account row cannot be identified. Anchor on the stable
+# summary function and the consolidated v5 renderer alias.
 summary_block = r'''  const credentialClientForContext=()=>{
     const directId=String(vm.selectedClientId??'');
     if(vm.currentPage==='client-detail'||vm.currentPage==='client-form'){
@@ -97,7 +91,7 @@ summary_block = r'''  const credentialClientForContext=()=>{
 security = replace_block(
     security,
     '  const summaryForCredentialRow=row=>{',
-    '  const applyAccountSafeSummaryToCards=()=>{',
+    '  const applyAccountSafeSummaryToCards=credentialUiV5Render;',
     summary_block,
     'safe-summary account correspondence block',
 )
