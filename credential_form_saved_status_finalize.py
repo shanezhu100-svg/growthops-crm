@@ -165,11 +165,23 @@ replace_block(
 old_login = "        row.accountCell.textContent=login||'未录入';\n"
 new_login = (
     "        const formStatus=row.accountCell.getAttribute('data-growthops-credential-form-status')==='account';\n"
-    "        row.accountCell.textContent=formStatus?(login?`已保存：${login}`:'未录入'):(login||'未录入');\n"
+    "        row.accountCell.textContent=formStatus?(login?`已保存：${login}`:''):(login||'未录入');\n"
 )
 if security.count(old_login) != 1:
     fail(f'unexpected login summary assignment count: {security.count(old_login)}')
 security = security.replace(old_login, new_login, 1)
+
+# Empty edit-form credential state should stay visually blank. Read-only/detail
+# credential cells retain the historical `未录入` text. Saved secrets still render
+# the v5 masked scalar eye control and are never hydrated into mutation inputs.
+old_secret_empty = "        row.passwordCell.textContent='未录入';\n"
+new_secret_empty = (
+    "        const formSecretStatus=row.passwordCell.getAttribute('data-growthops-credential-form-status')==='secret';\n"
+    "        row.passwordCell.textContent=formSecretStatus?'':'未录入';\n"
+)
+if security.count(old_secret_empty) != 1:
+    fail(f'unexpected empty secret summary assignment count: {security.count(old_secret_empty)}')
+security = security.replace(old_secret_empty, new_secret_empty, 1)
 
 # A mutation observer already re-runs the credential scanner. This status host is
 # disposable Vue-adjacent DOM: if Vue re-renders the form, it will be recreated
@@ -188,6 +200,6 @@ SECURITY.write_text(security, encoding='utf-8')
 print(
     'CREDENTIAL_FORM_SAVED_STATUS_FINALIZE_OK: '
     'context=client-form+detail+assets; client-form-id=before-asset-sentinel; '
-    'form-inputs=mutation-only; safe-summary=sibling-status; '
+    'form-inputs=mutation-only; safe-summary=sibling-status; empty-form-status=blank; '
     'per-account-card=nearest-pair; security=' + hashlib.sha256(SECURITY.read_bytes()).hexdigest()
 )
