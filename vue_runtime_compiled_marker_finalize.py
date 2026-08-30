@@ -126,3 +126,8 @@ print(
     f'output={out_sha}/{len(out)}B; renders=5; _rc=true; '
     'runtime-compiled-proxy=vue-3.5.41-compatible; withProxy-cache=weakmap; dynamic-code=0'
 )
+
+# Apply the narrowly scoped finance correction only after the final application
+# runtime has been materialized, so downstream output/business gates inspect the
+# exact bytes that will ship.
+import finance_confirmed_profit_cost_finalize  # noqa: E402,F401
