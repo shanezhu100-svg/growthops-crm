@@ -30,7 +30,7 @@ EXPECTED_SHA256 = {
     'vendor/inter/inter-latin.woff2': '3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62',
     'vendor/inter/inter-latin-ext.woff2': '34b9c504cab7a73e37b746343a449132e56cf7b5481af2cb81dc74dcff25c956',
     'cloud-adapter.js': '9713943a80008f625000d6fac2440fb9395f9e6e2c1fd09e820a399c5c34379f',
-    'cloud-security-hotfix.js': '2b8763844a1fda68fe98a9aa1c307f5793945a219df3deb69aabcdda19252423',
+    'cloud-security-hotfix.js': 'f14060e749572e909409d7ed17e70b093f3f152578e588d281afb85d6d9fc86c',
     'cloud-p1-overrides.js': 'e50e05322a0d56e78bf112a52be08ff54263f4ce88cb0b9b91f6613722b8ccab',
     'cloud-ui-action-bridge.js': 'b15e0b792e2f0ba6e99bef53fea96dde78b647b5528ae199311c4be9b37027a7',
 }
