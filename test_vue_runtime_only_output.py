@@ -13,7 +13,7 @@ RUNTIME=DIST/'vendor'/'vue-3.5.41.runtime.global.js'
 REGISTRY=DIST/'vendor'/'vue-3.5.41.renders.js'
 COMPILER=DIST/'vendor'/'vue-3.5.41.global.js'
 RUNTIME_SHA='45c904194aaf24112c8f4fc4386b87e107a32eede80c410ce93be459ebdee088'; RUNTIME_BYTES=414799
-REGISTRY_SHA='3f21f6b5ae5f01a9c70fed66465921463c41ddbcc66fa7e8a2ac10ec7040da1b'; REGISTRY_BYTES=1185967
+REGISTRY_SHA='a958722d8a7ddbe16c0533f6f463c91f011f2595c3a59b267ff1ddbc39fcf2ee'; REGISTRY_BYTES=1187627
 
 def fail(m): raise SystemExit('VUE_RUNTIME_ONLY_OUTPUT_FAILED: '+m)
 def digest(p): return hashlib.sha256(p.read_bytes()).hexdigest()
@@ -27,8 +27,18 @@ for marker in ('function compileToFunction(','const compile = compileToFunction'
  if marker in runtime: fail('compiler marker in runtime asset: '+marker)
 for marker in ('new Function(','eval(','setTimeout("',"setTimeout('"):
  if marker in registry: fail('dynamic-code marker in registry: '+marker)
-if registry.count("Object.defineProperty(render, '_rc'") != 1:
- fail('compiled-render _rc compatibility marker drift')
+for marker in (
+ '__GrowthOpsVueRuntimeGlobals', '__GrowthOpsVueWithProxyCache',
+ '__GrowthOpsVueRuntimeCompiledProxyHandlers', '__GrowthOpsVueWrapRuntimeCompiled',
+ "Object.defineProperty(wrapped, '_rc'", 'key[0] !==', 'Symbol.unscopables',
+):
+ if marker not in registry: fail('runtime-compiled proxy compatibility marker missing: '+marker)
+for global_name in (
+ 'Infinity','undefined','NaN','isFinite','isNaN','parseFloat','parseInt','decodeURI',
+ 'decodeURIComponent','encodeURI','encodeURIComponent','Math','Number','Date','Array',
+ 'Object','Boolean','String','RegExp','Map','Set','JSON','Intl','BigInt','console','Error','Symbol',
+):
+ if f'"{global_name}"' not in registry: fail('Vue 3.5.41 globally-allowed marker missing: '+global_name)
 
 html=INDEX.read_text(encoding='utf-8')
 class ScriptInventory(HTMLParser):
@@ -119,8 +129,8 @@ script=csp.split('script-src ',1)[1].split(';',1)[0].split() if 'script-src ' in
 if script != ["'self'"] or "'unsafe-eval'" in csp or "'unsafe-inline'" in csp: fail('final CSP is not same-origin/eval-free')
 
 smoke_js=r'''
-const fs=require('fs'),vm=require('vm');const input=JSON.parse(fs.readFileSync(0,'utf8'));const sandbox={console:{log(){},info(){},warn(){},error(){}},setTimeout,clearTimeout,setInterval,clearInterval};vm.createContext(sandbox);vm.runInContext(input.runtime,sandbox,{timeout:10000});sandbox.Function=function(){throw Error('dynamic Function forbidden');};vm.runInContext(input.registry,sandbox,{timeout:10000});const r=sandbox.GrowthOpsVueRenders;if(!r||!Object.isFrozen(r)||typeof r.root!=='function')throw Error('registry invalid');for(const k of ['component01','component02','component03','component04'])if(typeof r[k]!=='function')throw Error(k+' missing');const app=sandbox.Vue.createApp({render:r.root});if(!app||typeof app.mount!=='function')throw Error('runtime createApp failed');process.stdout.write('ok');
+const fs=require('fs'),vm=require('vm');const input=JSON.parse(fs.readFileSync(0,'utf8'));const sandbox={console:{log(){},info(){},warn(){},error(){}},setTimeout,clearTimeout,setInterval,clearInterval};vm.createContext(sandbox);vm.runInContext(input.runtime,sandbox,{timeout:10000});sandbox.Function=function(){throw Error('dynamic Function forbidden');};vm.runInContext(input.registry,sandbox,{timeout:10000});const r=sandbox.GrowthOpsVueRenders;if(!r||!Object.isFrozen(r)||typeof r.root!=='function')throw Error('registry invalid');for(const k of ['component01','component02','component03','component04'])if(typeof r[k]!=='function')throw Error(k+' missing');for(const k of ['root','component01','component02','component03','component04'])if(r[k]._rc!==true)throw Error(k+' _rc missing');const app=sandbox.Vue.createApp({render:r.root});if(!app||typeof app.mount!=='function')throw Error('runtime createApp failed');process.stdout.write('ok');
 '''
 smoke=subprocess.run(['node','-e',smoke_js],input=json.dumps({'runtime':runtime,'registry':registry}),text=True,capture_output=True,timeout=30,check=False)
 if smoke.returncode!=0 or smoke.stdout!='ok': fail('runtime-only VM smoke failed: '+re.sub(r'\s+',' ',smoke.stderr.strip())[:400])
-print(f'VUE_RUNTIME_ONLY_OUTPUT_OK: runtime={RUNTIME_SHA}/{RUNTIME_BYTES}B; registry={REGISTRY_SHA}/{REGISTRY_BYTES}B; renders=5; compiled-marker=_rc; template-options=0; compiler=absent; CSP=self-only+eval-free; inline-scripts=0; browser-external-subresources=0; html-resource-refs={resources.resource_count}; css-url-refs={css_urls}; vm-smoke=pass')
+print(f'VUE_RUNTIME_ONLY_OUTPUT_OK: runtime={RUNTIME_SHA}/{RUNTIME_BYTES}B; registry={REGISTRY_SHA}/{REGISTRY_BYTES}B; renders=5; compiled-marker=_rc; runtime-compiled-proxy=vue-3.5.41-compatible; template-options=0; compiler=absent; CSP=self-only+eval-free; inline-scripts=0; browser-external-subresources=0; html-resource-refs={resources.resource_count}; css-url-refs={css_urls}; vm-smoke=pass')
