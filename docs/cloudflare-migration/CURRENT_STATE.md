@@ -47,7 +47,7 @@ Do not restore `anon` CRM RPC execution, broad service-role relation/function ac
 - wider-public fingerprint: `225 / b89328f5548d4787a650b7f079bc1843125cc7c1b550d959a8cb4df2b2df04f2`
 - effective CRM function EXECUTE `anon / authenticated / service_role`: `0 / 0 / 12`
 
-The immediately preceding 51-migration checkpoint remains historical Recovery Bundle v3 evidence: primary `200 / 77ba3a7c646cf2ea04f41d20ceb1dd02aa9f041db7cbd2a0ad0386ddedbfba65`, guard `9 / 2a6c96fe5c2290cd30ee5b29800dcb47d9f1686d48b51344486c2c7780030140`, wider-public `225 / a0078c5da6c5844a6d02c96e5c486d3fd8b13cbacc6032ab`. It must not be rewritten as though the accepted v3 artifact already contained migration 52.
+The immediately preceding 51-migration checkpoint remains historical Recovery Bundle v3 evidence: primary `200 / 77ba3a7c646cf2ea04f41d20ceb1dd02aa9f041db7cbd2a0ad0386ddedbfba65`, guard `9 / 2a6c96fe5c2290cd30ee5b29800dcb47d9f1686d48b51344486c2c7780030140`, wider-public `225 / a0078c5da6c5844a6d02c96e5c486d3fd8b13bb859a640073fb13cbacc6032ab`. It must not be rewritten as though the accepted v3 artifact already contained migration 52.
 
 `P0_MIGRATION_LEDGER.md` is now the consolidated current remote migration-history and repository-mapping authority through `20260830071649 / client_account_safe_summary_correspondence`. Historical 2026-08-13/14 SQL gaps remain explicitly unresolved rather than reconstructed from guesses. `P0_MIGRATION_LEDGER_20260825_APPENDIX.md` remains point-in-time acceptance evidence and is not a second current migration-head authority.
 
@@ -133,7 +133,7 @@ Cloudflare Preview must not silently use Production Supabase. Standard Preview h
 
 Historical fail-closed evidence is retained: on 2026-08-25 Vercel Preview deployment `dpl_HfSpEkWs9D34A1a28WLiaCMrCnKY` failed with `PREVIEW_SECRET_BOUNDARY_FAILED` while a Production server secret was still present in Preview. The guard did not print the secret. This is historical evidence that the boundary worked, not evidence that cleanup remains open.
 
-**Preview Production-secret cleanup accepted on 2026-08-27.** Cloudflare Preview no longer carries `GROWTHOPS_SUPABASE_SECRET_KEY`; Cloudflare Production retains its encrypted Production binding. Vercel Preview was also independently accepted with no project environment variables while Production retained its hidden Production-only server identity. Issue #92 remains closed / completed.
+**Preview Production-secret cleanup accepted on 2026-08-27.** Cloudflare Preview no longer carries `GROWTHOPS_SUPABASE_SECRET_KEY`; Cloudflare Production retains its encrypted Production binding. `Vercel Preview: no project environment variables`; Production retained its hidden Production-only server identity. Issue #92 remains closed / completed.
 
 ## Historical / maintenance rules
 
