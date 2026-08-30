@@ -55,14 +55,19 @@ def patch_actual(source: str) -> str:
 
 
 def patch_breakdown(source: str) -> str:
+    # All three references participate in the same mode-dependent breakdown
+    # (currency inventory + displayed cost + formatted cost). Apply one identical
+    # basis everywhere so the visible formula cannot disagree with the net value.
+    if not re.match(r'financeProfitBreakdownRows\(mode(?:=[^)]*)?\)\s*\{', source):
+        fail('financeProfitBreakdownRows mode parameter drifted')
     old = 'this.financeCostGroups'
     new = "(mode==='ACTUAL'&&this.financeClientFilter==='ALL'?this.financeCompanyNonClientCostGroups:this.financeCostGroups)"
     count = source.count(old)
-    if count != 1:
-        fail(f'financeProfitBreakdownRows expected one cost-group reference, found {count}')
+    if count != 3:
+        fail(f'financeProfitBreakdownRows expected three cost-group references, found {count}')
     if 'financeCompanyNonClientCostGroups' in source:
         fail('financeProfitBreakdownRows already contains non-client cost authority')
-    return source.replace(old, new, 1)
+    return source.replace(old, new)
 
 
 def patch_snapshot(source: str) -> str:
