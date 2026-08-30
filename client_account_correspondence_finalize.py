@@ -17,7 +17,12 @@ def replace_block(text: str, start_marker: str, end_marker: str, replacement: st
     start = text.find(start_marker)
     end = text.find(end_marker, start + len(start_marker))
     if start < 0 or end < 0 or end <= start:
-        fail('unable to locate ' + label)
+        candidates = []
+        for line in text.splitlines():
+            stripped = line.strip()
+            if any(term in stripped for term in ('summaryFor', 'SafeSummary', 'safeSummary', 'AccountSafe', 'accountSafe', 'CredentialRow')):
+                candidates.append(stripped[:300])
+        fail('unable to locate ' + label + '; marker-inventory=' + repr(candidates[:40]))
     return text[:start] + replacement + text[end:]
 
 
