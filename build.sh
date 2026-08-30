@@ -136,6 +136,14 @@ python3 style_attr_cssom_finalize.py
 python3 test_style_attr_cssom_output.py
 # Final Vue/HTML structural gate: no tag may retain duplicate attribute names.
 python3 test_vue_duplicate_attribute_output.py
+# The final templates are now byte-stable. Re-run the #176 precompile authority at
+# this exact stage, then replace the browser compiler with runtime-only Vue plus the
+# deterministic render registry. The temporary pin probe intentionally fails until
+# the post-_rc registry digest is reviewed and committed.
+python3 test_vue_runtime_final_stage_probe.py
+python3 vue_runtime_only_finalize.py
+python3 vue_runtime_compiled_marker_finalize.py
+python3 test_vue_runtime_cutover_pin_probe.py
 # Browser liveness is verified by the required GitHub CI after this portable
 # build completes. Hosting builds must not depend on a Chromium executable.
 # Business-semantic regression gates execute the final shipped application logic,
