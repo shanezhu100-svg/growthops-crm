@@ -84,7 +84,7 @@ require('database-specific override' in current_db,
         'current DB authority must explicitly override older database checkpoint text')
 for fragment in (
     predecessor_version, predecessor_name, predecessor_primary, predecessor_wider,
-    'Recovery Bundle v3', '51-migration recovery base', latest_file,
+    'Recovery Bundle v3', 'base through 51 migrations', latest_file,
     'future-object default-privilege hardening',
 ):
     require(fragment in current_db, f'current DB authority missing continuity marker: {fragment}')
