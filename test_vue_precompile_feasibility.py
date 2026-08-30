@@ -12,13 +12,13 @@ VUE_ASSET = ROOT / 'dist' / 'vendor' / 'vue-3.5.41.global.js'
 
 EXPECTED = {
     'root': {
-        'templateHash': 'b1a23cfb9eee70764c61821d8ee4a6c5db91d4399d4e4e2eb581540ba68d387b',
-        'templateBytes': 355202,
+        'templateHash': 'd2566fed4fbaa5307236f5a5856033f79f8945f2b5657c10616befa1b278c530',
+        'templateBytes': 355196,
         'renderHash': '304ab977bf92a167fcd823bf9153df27a4f660c798ccf7633ce69839efa23ba6',
         'renderBytes': 958344,
         'factoryHash': '51cca92d97aaacfe925d7e8d54fc33fcf265ffdec549062d091282f9220b050d',
         'factoryBytes': 1095421,
-        'functionCalls': 2159,
+        'functionCalls': 2158,
     },
     'component-01': {
         'templateHash': '2f51f5b5ec5ef5bbe12bac62b317a4ad4154cb545779ef8cecb908d016642088',
