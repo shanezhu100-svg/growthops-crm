@@ -3,13 +3,16 @@ import http.server
 import os
 import re
 import shutil
+import signal
 import socket
 import subprocess
+import tempfile
 import threading
-import time
 
 ROOT = Path(__file__).resolve().parent
 DIST = ROOT / 'dist'
+BROWSER_ATTEMPT_TIMEOUT_SECONDS = 20
+MAX_BROWSER_ATTEMPTS = 2
 
 
 def fail(message: str) -> None:
@@ -65,13 +68,14 @@ thread = threading.Thread(target=server.serve_forever, daemon=True)
 thread.start()
 
 url = f'http://127.0.0.1:{port}/'
-cmd = [
+base_cmd = [
     browser,
     '--headless=new',
     '--no-sandbox',
     '--disable-gpu',
     '--disable-dev-shm-usage',
     '--disable-background-networking',
+    '--disable-component-update',
     '--disable-default-apps',
     '--disable-extensions',
     '--disable-sync',
@@ -84,17 +88,72 @@ cmd = [
     url,
 ]
 
+
+def run_browser_attempt(attempt: int):
+    # Give every attempt a fresh Chrome profile and process group. A transient
+    # runner/Chrome shutdown hang must not leave descendants holding stdout/stderr
+    # pipes indefinitely. Semantic mount assertions below are never retried or
+    # weakened; only browser process launch/exit failures get one clean retry.
+    with tempfile.TemporaryDirectory(prefix=f'growthops-browser-smoke-{attempt}-') as profile:
+        cmd = [*base_cmd, f'--user-data-dir={profile}']
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=True,
+        )
+        try:
+            stdout, stderr = proc.communicate(timeout=BROWSER_ATTEMPT_TIMEOUT_SECONDS)
+            return proc.returncode, stdout or '', stderr or '', False
+        except subprocess.TimeoutExpired as exc:
+            partial_stdout = exc.stdout if isinstance(exc.stdout, str) else ''
+            partial_stderr = exc.stderr if isinstance(exc.stderr, str) else ''
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            try:
+                tail_stdout, tail_stderr = proc.communicate(timeout=5)
+            except subprocess.TimeoutExpired:
+                tail_stdout, tail_stderr = '', ''
+            return (
+                None,
+                partial_stdout + (tail_stdout or ''),
+                partial_stderr + (tail_stderr or ''),
+                True,
+            )
+
+
+proc_returncode = None
+dom = ''
+stderr = ''
+process_failures = []
 try:
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30, check=False)
+    for attempt in range(1, MAX_BROWSER_ATTEMPTS + 1):
+        returncode, stdout, raw_stderr, timed_out = run_browser_attempt(attempt)
+        normalized_stderr = re.sub(r'\s+', ' ', raw_stderr or '').strip()
+        if timed_out:
+            process_failures.append(
+                f'attempt={attempt}: timeout>{BROWSER_ATTEMPT_TIMEOUT_SECONDS}s; stderr={normalized_stderr[-800:]}'
+            )
+            continue
+        if returncode != 0:
+            process_failures.append(
+                f'attempt={attempt}: exit={returncode}; stderr={normalized_stderr[-800:]}'
+            )
+            continue
+        proc_returncode = returncode
+        dom = stdout
+        stderr = normalized_stderr
+        break
 finally:
     server.shutdown()
     server.server_close()
 
-stderr = re.sub(r'\s+', ' ', proc.stderr or '').strip()
-if proc.returncode != 0:
-    fail(f'Chromium exit={proc.returncode}; stderr={stderr[-1600:]}')
+if proc_returncode != 0:
+    fail('Chromium process did not complete cleanly after bounded retry: ' + ' | '.join(process_failures))
 
-dom = proc.stdout or ''
 if len(dom) < 1000:
     fail(f'dumped DOM unexpectedly small: {len(dom)} bytes; stderr={stderr[-1600:]}')
 
@@ -118,5 +177,7 @@ if len(text) < 40:
 
 print(
     'BROWSER_MOUNT_SMOKE_OK: '
-    f'browser={Path(browser).name}; v-cloak=removed; raw-template=consumed; dom-bytes={len(dom)}'
+    f'browser={Path(browser).name}; v-cloak=removed; raw-template=consumed; dom-bytes={len(dom)}; '
+    f'process-isolation=fresh-profile+process-group; attempts<={MAX_BROWSER_ATTEMPTS}; '
+    f'attempt-timeout={BROWSER_ATTEMPT_TIMEOUT_SECONDS}s'
 )
