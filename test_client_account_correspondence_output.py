@@ -12,7 +12,9 @@ def require(ok: bool, message: str) -> None:
 
 
 # Multi-account summary must resolve by the currently visible account ID and never
-# reuse one platform-level summary across multiple FB/TK cards.
+# reuse one platform-level summary across multiple FB/TK cards. Client edit is a
+# special case: internal IDs may not be rendered into the card at all, so after
+# exact token matching fails it may use the stable platform-local v-for order.
 for marker in (
     "facebook:{listKey:'fbAccounts',summaryKey:'facebookAccounts',pager:'FB',legacyKey:'facebook'}",
     "tiktok:{listKey:'tkAccounts',summaryKey:'tiktokAccounts',pager:'TK',legacyKey:'tiktok'}",
@@ -20,6 +22,10 @@ for marker in (
     "instagram:{listKey:'instagramAccounts',summaryKey:'instagramAccounts',pager:'INSTAGRAM',legacyKey:''}",
     "const currentId=String(current?.id??'')",
     "summaries.find(item=>String(item?.id??'')===currentId)",
+    "if(vm.currentPage==='client-form'&&list.length>1)",
+    "const platformRows=locateCredentialRows().filter(candidate=>candidate.platform===row.platform)",
+    "const rowIndex=platformRows.findIndex(candidate=>candidate.card===row.card)",
+    "if(rowIndex>=0&&rowIndex<list.length)return list[rowIndex]",
     "if(platformAccounts.length<=1)return accountSafeSummaryData?.[config.legacyKey]||null",
     "return null;",
 ):
@@ -27,6 +33,11 @@ for marker in (
 
 require("if(row.platform==='facebook'||row.platform==='tiktok')return accountSafeSummaryData?.[row.platform]||null" not in SECURITY,
         'legacy platform-level FB/TK summary path still present')
+
+# The ordinal fallback must stay confined to the edit form; detail/assets keep their
+# pager/token mapping and fail closed instead of guessing across multiple accounts.
+require(SECURITY.count("vm.currentPage==='client-form'&&list.length>1") == 1,
+        'client-form order fallback scope drifted')
 
 # Refresh persistence is metadata-only and waits for authenticated state before it
 # restores a protected route.
@@ -70,7 +81,7 @@ for forbidden_key in ("'loginPassword',", "'password',", "'2FA',", "'twoFactor',
 
 print(
     'CLIENT_ACCOUNT_CORRESPONDENCE_OUTPUT_OK: '
-    'login-account=direct-safe-summary+id-matched; multi-account=fail-closed; '
+    'login-account=direct-safe-summary+id-matched; multi-account=client-form-order-fallback+nonform-fail-closed; '
     'refresh=session-route+selection-metadata-only; detail-pager=client-isolated; '
     'db=fb+tk-per-account-summary+service-role-only'
 )
