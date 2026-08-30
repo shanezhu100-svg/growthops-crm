@@ -133,11 +133,11 @@ Current validated runtime/security checkpoint deployment:
 - merged-main CRM Build Gate #496: completed / success;
 - stable alias assigned successfully.
 
-The stable alias remains `https://growthops-crm.vercel.app`. The much older `dpl_JWXVvjCdjRF59gMrZycDUJEXYP7G` remains historical POST-200/server-secret-repair evidence, not the current frontend/runtime artifact authority. Documentation/test-only may exist without superseding this checkpoint; advance this runtime/security checkpoint only when a later runtime/security artifact is explicitly accepted.
+The stable alias remains `https://growthops-crm.vercel.app`. The much older `dpl_JWXVvjCdjRF59gMrZycDUJEXYP7G` remains historical POST-200/server-secret-repair evidence, not the current frontend/runtime artifact authority. documentation/test-only may exist without superseding this checkpoint; advance this runtime/security checkpoint only when a later runtime/security artifact is explicitly accepted.
 
 ### Cloudflare Pages
 
-Cloudflare Pages uses `main` as Production and the same canonical build/output contract. For `main@23f3bbd7e491357d2533a2c5e09c263592399fdb`, both merged-main required `build` and Cloudflare Pages main deployment completed successfully. The Cloudflare deployment/check identifier for this accepted main is `75b2bfbb-0cf6-467a-bd6b-e701e0bdb542`.
+Cloudflare Pages uses `main` as Production and the same canonical build/output contract. For `main@23f3bbd7e491357d2533a2c5e09c263592399fdb`, both merged-main required `build` and Cloudflare Pages main deployment completed successfully. The Cloudflare deployment/check identifier for this accepted main is `0d3de0fc-9ba7-42dc-8b33-f142b1185555`.
 
 Cloudflare Preview must not silently use Production Supabase. Standard Preview hosts require an explicit isolated staging Supabase URL when a server secret is active; otherwise runtime/build is expected to fail closed. Do not weaken this guard just to make Preview deploy.
 
