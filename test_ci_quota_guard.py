@@ -56,17 +56,22 @@ require('cancel-in-progress: true' in workflow, 'stale PR CI must be cancelled')
 require(build.count('python3 test_ci_quota_guard.py') == 1, 'canonical build must run quota/CI guard exactly once')
 require(build.count('python3 test_vercel_ignore_build.py') == 1, 'canonical build must run Vercel ignored-build regression exactly once')
 
-# Browser liveness needs a real Chromium binary. Keep the portable deploy build
-# independent of browser availability while making the protected GitHub `build`
-# context execute the smoke against the exact final dist before artifact parity.
-browser_call = 'python3 test_browser_mount_smoke.py'
+# Browser liveness and client-form credential DOM behavior need a real Chromium
+# binary. Keep the portable deploy build browser-independent while making the
+# protected GitHub build execute both probes against the exact final dist.
+browser_mount = 'python3 test_browser_mount_smoke.py'
+browser_credential = 'python3 test_browser_client_form_credential_status.py'
 cloudflare_verify = 'python3 cloudflare_p1_verify.py'
-require(workflow.count(browser_call) == 1, 'GitHub required build must run browser mount smoke exactly once')
-require(build.count(browser_call) == 0, 'portable build.sh must not require Chromium')
+for call, label in (
+    (browser_mount, 'browser mount smoke'),
+    (browser_credential, 'client-form credential browser regression'),
+):
+    require(workflow.count(call) == 1, f'GitHub required build must run {label} exactly once')
+    require(build.count(call) == 0, f'portable build.sh must not require Chromium for {label}')
 require(workflow.count(cloudflare_verify) == 1, 'GitHub required build must run Cloudflare final verifier exactly once')
 require(
-    workflow.index('sh build.sh') < workflow.index(browser_call) < workflow.index(cloudflare_verify),
-    'CI order must be build -> browser mount -> final verifier',
+    workflow.index('sh build.sh') < workflow.index(browser_mount) < workflow.index(browser_credential) < workflow.index(cloudflare_verify),
+    'CI order must be build -> browser mount -> client-form credential browser regression -> final verifier',
 )
 
-print('CI_QUOTA_GUARD_OK: vercel-git=main-only; non-main=globstar-deployment-disabled; nonruntime-main=ignored-conservatively; slash-branches=covered; pr-ci=github-actions; runner=ubuntu-24.04; secrets=none; permissions=contents-read; actions=sha-pinned; node=24.x; canonical-build=sh-build.sh; browser-mount=github-only')
+print('CI_QUOTA_GUARD_OK: vercel-git=main-only; non-main=globstar-deployment-disabled; nonruntime-main=ignored-conservatively; slash-branches=covered; pr-ci=github-actions; runner=ubuntu-24.04; secrets=none; permissions=contents-read; actions=sha-pinned; node=24.x; canonical-build=sh-build.sh; browser-mount+credential-regression=github-only')
