@@ -36,26 +36,44 @@ for marker in (
     "credentialLabelCount(node,'密码 / 2FA')===1",
     "const platformForCard=card=>{",
     "for(let i=0;node&&i<9;i+=1,node=node.parentElement)",
+    'configureCredentialFormOverlay',
     'credentialFormStatusHost',
     "data-growthops-credential-form-status",
+    "data-growthops-credential-form-input",
+    "data-growthops-credential-original-placeholder",
     "host.setAttribute('aria-live','polite')",
     "control.insertAdjacentElement('afterend',host)",
-    "host.className='growthops-credential-inline text-[11px] text-slate-500 mt-1'",
+    "host.className='growthops-credential-inline'",
+    "position:'absolute'",
+    "host.style.left=`${Math.max(0,controlRect.left-parentRect.left+14)}px`",
+    "host.style.height=`${Math.max(1,controlRect.height)}px`",
+    "host.__growthOpsCredentialFormControl=control",
+    "host.__growthOpsCredentialFormSync=sync",
+    "host.addEventListener('mousedown'",
+    "control.addEventListener('focus',sync)",
+    "control.addEventListener('input',sync)",
+    "control.addEventListener('blur',()=>queueMicrotask(sync))",
+    "control.setAttribute('placeholder',visible?'':original)",
     "formStatus=row.accountCell.getAttribute('data-growthops-credential-form-status')==='account'",
-    "login?`已保存：${login}`:''",
+    "row.accountCell.textContent=formStatus?(login||''):(login||'未录入')",
+    "row.accountCell.__growthOpsCredentialFormSync?.()",
     "formSecretStatus=row.passwordCell.getAttribute('data-growthops-credential-form-status')==='secret'",
     "row.passwordCell.textContent=formSecretStatus?'':'未录入'",
     "row.passwordCell.textContent='••••••••'",
+    "row.passwordCell.__growthOpsCredentialFormSync?.()",
     'installProtectedFieldControl(row,summary)',
     "cloud.rpc('crm_client_account_safe_summary'",
     "cloud.rpc('crm_reveal_client_secret_value_v5'",
 ):
     require(marker in security, 'saved credential form behavior missing: ' + marker)
 
-require(
-    "login?`已保存：${login}`:'未录入'" not in security,
-    'edit-form empty account status must not render 未录入',
-)
+# The old below-input presentation and `已保存：` prefix must be gone.
+for forbidden in (
+    "host.className='growthops-credential-inline text-[11px] text-slate-500 mt-1'",
+    "login?`已保存：${login}`",
+    "safe-summary=sibling-status",
+):
+    require(forbidden not in security, 'legacy below-input saved credential UI remains: ' + forbidden)
 
 # Multiple Facebook/TikTok accounts must resolve at the nearest card containing
 # exactly one credential-label pair; platform detection may climb to the section
@@ -67,7 +85,7 @@ require(
 )
 
 # Explicitly fail if any future change starts hydrating plaintext Vault values into
-# the edit controls or Vue account model. Reveal remains a sibling status surface.
+# the edit controls or Vue account model. The in-input visual is overlay-only.
 for forbidden in (
     '.value=login',
     '.value=password',
@@ -85,6 +103,7 @@ require('navigator.clipboard' not in security, 'credential UI must not auto-copy
 print(
     'CREDENTIAL_FORM_SAVED_STATUS_OUTPUT_OK: '
     'client-form=safe-summary-enabled+direct-client-id-before-asset-sentinel; '
-    'login=saved-status; password-2fa=masked+scalar-eye; empty-form-status=blank; '
+    'login=input-overlay; password-2fa=input-overlay+masked+scalar-eye; '
+    'focus-edit=hides-overlay; empty-form-status=original-placeholder; '
     'form-inputs=mutation-only; plaintext-hydration=none; multi-account-card=nearest-pair'
 )
