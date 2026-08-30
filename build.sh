@@ -120,7 +120,8 @@ python3 test_frontend_dependency_pin_output.py
 # security header authority blocks script attributes explicitly.
 python3 test_script_attr_csp_readiness.py
 # Move application-owned inline JS into same-origin static files so script-src no
-# longer needs unsafe-inline. Keep Vue compiler unsafe-eval as a separate boundary.
+# longer needs unsafe-inline. The target CSP is already eval-free; the compiler is
+# retained only as a trusted build-time input until the runtime cutover below.
 python3 test_inline_script_static_policy.py
 python3 inline_script_static_finalize.py
 python3 test_inline_script_static_output.py
@@ -136,13 +137,13 @@ python3 style_attr_cssom_finalize.py
 python3 test_style_attr_cssom_output.py
 # Final Vue/HTML structural gate: no tag may retain duplicate attribute names.
 python3 test_vue_duplicate_attribute_output.py
-# The final templates are now byte-stable. The runtime-only finalizer carries the
-# accepted #176 template/factory fingerprints and fails closed on drift; the more
-# expensive independent precompile proof stays GitHub-only. Replace the browser
-# compiler with runtime-only Vue plus the deterministic render registry here.
+# The final templates are byte-stable. The runtime-only finalizer carries the
+# accepted #176 template/factory fingerprints and fails closed on drift. Replace
+# the browser compiler with runtime-only Vue plus the deterministic render registry,
+# restore Vue's compiler-produced _rc metadata, then enforce the final eval-free output.
 python3 vue_runtime_only_finalize.py
 python3 vue_runtime_compiled_marker_finalize.py
-python3 test_vue_runtime_cutover_pin_probe.py
+python3 test_vue_runtime_only_output.py
 # Browser liveness is verified by the required GitHub CI after this portable
 # build completes. Hosting builds must not depend on a Chromium executable.
 # Business-semantic regression gates execute the final shipped application logic,
