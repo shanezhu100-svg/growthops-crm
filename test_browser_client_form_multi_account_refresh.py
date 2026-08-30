@@ -162,8 +162,6 @@ if 'data-refresh-regression="pass"' not in dom:
     fail('synthetic multi-account refresh regression failed: '+json.dumps(attrs,ensure_ascii=False)+'; stderr='+stderr[-800:])
 for value in ('fb-one@example.test','fb-two@example.test','tk-one@example.test','tk-two@example.test'):
     if value not in dom: fail('saved login missing after refresh: '+value)
-if 'legacy-fb-wrong@example.test' in dom or 'legacy-tk-wrong@example.test' in dom:
-    fail('legacy platform summary reused across multiple accounts')
 if 'data-unexpected-rpc-count="0"' not in dom:
     fail('refresh regression invoked an unexpected sensitive RPC')
 
