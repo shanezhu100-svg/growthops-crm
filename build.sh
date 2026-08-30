@@ -100,7 +100,7 @@ python3 test_admin_password_byte_cap_output.py
 # rather than the historical browser-local prototype.
 python3 production_auth_copy_finalize.py
 python3 test_production_auth_copy_output.py
-# Normalize the one reviewed duplicate Vue :class binding inherited from the
+# Normalize the reviewed duplicate Vue :class bindings inherited from the
 # immutable byte-sliced canonical source before strict compiler/tooling stages.
 python3 vue_duplicate_attribute_finalize.py
 # Convert browser dependencies to verified same-origin build artifacts. Prove first
@@ -119,8 +119,8 @@ python3 test_frontend_dependency_pin_output.py
 # Prove the final HTML contains no real on*= DOM event attributes before the
 # security header authority blocks script attributes explicitly.
 python3 test_script_attr_csp_readiness.py
-# Move application-owned inline JS into same-origin static files so script-src no
-# longer needs unsafe-inline. Keep Vue compiler unsafe-eval as a separate boundary.
+# Move application-owned inline JS into same-origin static files. The build-stage
+# compiler remains available only until the final runtime-only rewrite below.
 python3 test_inline_script_static_policy.py
 python3 inline_script_static_finalize.py
 python3 test_inline_script_static_output.py
@@ -136,6 +136,11 @@ python3 style_attr_cssom_finalize.py
 python3 test_style_attr_cssom_output.py
 # Final Vue/HTML structural gate: no tag may retain duplicate attribute names.
 python3 test_vue_duplicate_attribute_output.py
+# Compile the exact final normalized Vue templates during the trusted build, replace
+# template options with deterministic render functions, switch to the runtime-only
+# Vue asset, and prove the final deploy surface needs no dynamic-code CSP capability.
+python3 vue_runtime_only_finalize.py
+python3 test_vue_runtime_only_output.py
 # Browser liveness is verified by the required GitHub CI after this portable
 # build completes. Hosting builds must not depend on a Chromium executable.
 # Business-semantic regression gates execute the final shipped application logic,
