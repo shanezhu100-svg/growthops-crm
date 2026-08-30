@@ -31,6 +31,7 @@ The accepted Production privilege boundary remains:
 - browser roles remain blocked from sensitive credential/Vault internals
 - `rls_auto_enable()` is postgres-only for direct EXECUTE while postgres-owned `ensure_rls` remains active
 - `growthops_crm_acl_guard_ddl`, `growthops_crm_rls_guard_ddl`, and `growthops_public_noncrm_function_acl_guard_ddl` remain the reviewed GrowthOps DDL guards
+- guard inventory lines: `9`
 
 The accepted **future-object default-privilege hardening** boundary remains `20260825040850 / post_p5_public_default_privilege_guard`. Transaction-contained DDL probes have verified the fail-closed behavior and rollback-clean absence of synthetic probe objects.
 
