@@ -6,6 +6,8 @@ import time
 import urllib.parse
 import urllib.request
 
+from build_http_redirect_guard import NO_REDIRECT_OPENER, RedirectDenied
+
 ROOT = Path(__file__).resolve().parent
 DIST = ROOT / 'dist'
 INDEX = DIST / 'index.html'
@@ -47,13 +49,10 @@ def fetch_exact(url: str) -> bytes:
             },
         )
         try:
-            with urllib.request.urlopen(request, timeout=90) as response:
-                final_url = response.geturl()
-                if final_url != url:
-                    fail('unexpected redirect: ' + final_url)
+            with NO_REDIRECT_OPENER.open(request, timeout=90) as response:
                 return response.read()
-        except SystemExit:
-            raise
+        except RedirectDenied as exc:
+            fail(f'unexpected redirect denied before follow: status={exc.code}')
         except Exception as exc:
             if attempt < DOWNLOAD_ATTEMPTS:
                 time.sleep(attempt)
@@ -186,5 +185,5 @@ print(
     'INTER_STATIC_FINALIZE_OK: css-source='
     f'{CSS_SHA256}/{CSS_SIZE}B; weights=400+500+600+700+800; subsets=latin+latin-ext; '
     f'output-css={sha256(local_css)}/{len(local_css)}B; fonts=2-deduplicated; '
-    f'download-attempts<={DOWNLOAD_ATTEMPTS}; browser-google-fonts=removed'
+    f'redirects=pre-follow-denied; download-attempts<={DOWNLOAD_ATTEMPTS}; browser-google-fonts=removed'
 )

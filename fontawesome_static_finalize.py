@@ -6,6 +6,8 @@ import time
 import urllib.parse
 import urllib.request
 
+from build_http_redirect_guard import NO_REDIRECT_OPENER, RedirectDenied
+
 ROOT = Path(__file__).resolve().parent
 DIST = ROOT / 'dist'
 INDEX = DIST / 'index.html'
@@ -39,13 +41,10 @@ def fetch_exact(url: str) -> bytes:
     for attempt in range(1, DOWNLOAD_ATTEMPTS + 1):
         request = urllib.request.Request(url, headers={'User-Agent': 'growthops-crm-build/1'})
         try:
-            with urllib.request.urlopen(request, timeout=90) as response:
-                final_url = response.geturl()
-                if final_url != url:
-                    fail('unexpected redirect: ' + final_url)
+            with NO_REDIRECT_OPENER.open(request, timeout=90) as response:
                 return response.read()
-        except SystemExit:
-            raise
+        except RedirectDenied as exc:
+            fail(f'unexpected redirect denied before follow: status={exc.code}')
         except Exception as exc:
             if attempt < DOWNLOAD_ATTEMPTS:
                 time.sleep(attempt)
@@ -119,5 +118,6 @@ for name, (expected_sha, _) in EXPECTED_FONTS.items():
 print(
     'FONTAWESOME_STATIC_FINALIZE_OK: version=6.5.2; '
     f'css={CSS_SHA256}/{CSS_SIZE}B; webfonts={len(EXPECTED_FONTS)}; '
-    f'download-attempts<={DOWNLOAD_ATTEMPTS}; output=/vendor/fontawesome; browser-cdnjs-fontawesome=removed'
+    f'redirects=pre-follow-denied; download-attempts<={DOWNLOAD_ATTEMPTS}; '
+    'output=/vendor/fontawesome; browser-cdnjs-fontawesome=removed'
 )
