@@ -42,13 +42,20 @@ for marker in (
     "control.insertAdjacentElement('afterend',host)",
     "host.className='growthops-credential-inline text-[11px] text-slate-500 mt-1'",
     "formStatus=row.accountCell.getAttribute('data-growthops-credential-form-status')==='account'",
-    "login?`已保存：${login}`:'未录入'",
+    "login?`已保存：${login}`:''",
+    "formSecretStatus=row.passwordCell.getAttribute('data-growthops-credential-form-status')==='secret'",
+    "row.passwordCell.textContent=formSecretStatus?'':'未录入'",
     "row.passwordCell.textContent='••••••••'",
     'installProtectedFieldControl(row,summary)',
     "cloud.rpc('crm_client_account_safe_summary'",
     "cloud.rpc('crm_reveal_client_secret_value_v5'",
 ):
     require(marker in security, 'saved credential form behavior missing: ' + marker)
+
+require(
+    "login?`已保存：${login}`:'未录入'" not in security,
+    'edit-form empty account status must not render 未录入',
+)
 
 # Multiple Facebook/TikTok accounts must resolve at the nearest card containing
 # exactly one credential-label pair; platform detection may climb to the section
@@ -78,6 +85,6 @@ require('navigator.clipboard' not in security, 'credential UI must not auto-copy
 print(
     'CREDENTIAL_FORM_SAVED_STATUS_OUTPUT_OK: '
     'client-form=safe-summary-enabled+direct-client-id-before-asset-sentinel; '
-    'login=saved-status; password-2fa=masked+scalar-eye; '
+    'login=saved-status; password-2fa=masked+scalar-eye; empty-form-status=blank; '
     'form-inputs=mutation-only; plaintext-hydration=none; multi-account-card=nearest-pair'
 )
