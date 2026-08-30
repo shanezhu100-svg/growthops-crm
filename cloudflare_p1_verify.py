@@ -15,7 +15,8 @@ EXPECTED_SHA256 = {
     'app/app-style-02.css': '01ed16d03067a8879b877440574fbc6d98af53e0909685e1a23271169c149997',
     'app/app-style-03.css': '64bd5db676657f40c7962080ce62f3b74125865c3f084a67ce21d0fc77ed00b6',
     'app/app-style-04.css': '59de39d8388f561c5229cfa39f7d4c5299b34997c21e3c142d9ced067850a11e',
-    'vendor/vue-3.5.41.global.js': '14625269265de97b5c344b8fcfb7136c0c9ab09f7dbadc909a4967d14eca05fb',
+    'vendor/vue-3.5.41.runtime.global.js': '45c904194aaf24112c8f4fc4386b87e107a32eede80c410ce93be459ebdee088',
+    'vendor/vue-3.5.41.renders.js': '8406eb412573ef3093b6190ba8ee0a3764bda2c7cba0f8c94484098bdb801d3d',
     'vendor/xlsx-0.18.5.full.min.js': 'c9506197caf809a075b6dee1da0d36fb19da7158ffe8a88e7b0c96c5d8623c99',
     'vendor/fontawesome/css/all.min.css': '5ceaaba22d75b58e04150311f596306562a3e595e27ed4b1dfa451b82dda9e50',
     'vendor/fontawesome/webfonts/fa-brands-400.ttf': 'e28096fa75a96ac77020155ea3a6dd7312983e84115366d4cf49a0c312ec6d51',
@@ -53,49 +54,36 @@ def sha256(path: Path) -> str:
 def fail(message: str) -> None:
     raise SystemExit('CLOUDFLARE_P1_VERIFY_FAILED: ' + message)
 
-if not DIST.is_dir():
-    fail('dist/ missing; run sh build.sh first')
+if not DIST.is_dir(): fail('dist/ missing; run sh build.sh first')
 drift = []
 for name, expected in EXPECTED_SHA256.items():
     path = DIST / name
-    if not path.is_file():
-        drift.append(f'missing dist/{name}')
-        continue
+    if not path.is_file(): drift.append(f'missing dist/{name}'); continue
     actual = sha256(path)
-    if actual != expected:
-        drift.append(f'dist/{name} hash drift; expected={expected}; actual={actual}')
-if drift:
-    fail(' | '.join(drift))
+    if actual != expected: drift.append(f'dist/{name} hash drift; expected={expected}; actual={actual}')
+if drift: fail(' | '.join(drift))
 
 not_found = DIST / '404.html'
-if not not_found.is_file():
-    fail('missing dist/404.html fail-open guard')
-not_found_html = not_found.read_text(encoding='utf-8')
-not_found_low = not_found_html.lower()
+if not not_found.is_file(): fail('missing dist/404.html fail-open guard')
+not_found_html = not_found.read_text(encoding='utf-8'); not_found_low = not_found_html.lower()
 for marker in ('<!doctype html>', '<title>404 · not found</title>', '<h1>404</h1>', 'the requested resource was not found.', 'noindex,nofollow,noarchive'):
-    if marker not in not_found_low:
-        fail(f'dist/404.html missing inert marker: {marker}')
+    if marker not in not_found_low: fail(f'dist/404.html missing inert marker: {marker}')
 for marker in FORBIDDEN_404_MARKERS:
-    if marker in not_found_low:
-        fail(f'dist/404.html contains active/application material: {marker}')
-if re.search(r'\b(?:src|href|action)\s*=', not_found_html, flags=re.I):
-    fail('dist/404.html contains a network-bearing attribute')
+    if marker in not_found_low: fail(f'dist/404.html contains active/application material: {marker}')
+if re.search(r'\b(?:src|href|action)\s*=', not_found_html, flags=re.I): fail('dist/404.html contains a network-bearing attribute')
 
 headers_path = DIST / '_headers'
-if not headers_path.is_file():
-    fail('missing dist/_headers')
+if not headers_path.is_file(): fail('missing dist/_headers')
 headers = headers_path.read_text(encoding='utf-8')
-if not headers.startswith('/*\n'):
-    fail('dist/_headers does not start with the wildcard /* rule')
+if not headers.startswith('/*\n'): fail('dist/_headers does not start with the wildcard /* rule')
 missing_headers = [name for name in REQUIRED_STATIC_HEADERS if name not in headers]
-if missing_headers:
-    fail('dist/_headers missing security headers: ' + ', '.join(missing_headers))
+if missing_headers: fail('dist/_headers missing security headers: ' + ', '.join(missing_headers))
 
 print(
     'CLOUDFLARE_P1_OUTPUT_PARITY_OK: '
     f'dist=present; key_artifacts={len(EXPECTED_SHA256)}; production_hashes=match; '
     'same-origin-app-js=hash-pinned; same-origin-app-css=hash-pinned; '
-    'same-origin-vendor-js=hash-pinned; vue-compiler-global=hash-pinned; '
+    'same-origin-vendor-js=hash-pinned; vue-runtime+renders=hash-pinned; '
     'same-origin-fontawesome=hash-pinned; same-origin-inter=hash-pinned; '
     'corp=same-origin; robots=noindex+nofollow+noarchive; failopen_404=guarded; static_headers=guarded'
 )
