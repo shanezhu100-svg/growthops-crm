@@ -13,20 +13,25 @@ def fail(message: str) -> None:
     raise SystemExit('CLIENT_ACCOUNT_CORRESPONDENCE_FINALIZE_FAILED: ' + message)
 
 
-def replace_block(text: str, start_marker: str, end_marker: str, replacement: str, label: str) -> str:
-    start = text.find(start_marker)
-    end = text.find(end_marker, start + len(start_marker))
-    if start < 0 or end < 0 or end <= start:
-        fail('unable to locate ' + label)
-    return text[:start] + replacement + text[end:]
-
-
 # Safe-summary rows must follow the account that is actually visible/edited. The
 # older FB/TK path used one platform-level summary, which is ambiguous as soon as a
-# client has multiple accounts. Prefer per-account arrays + exact ID matching and
-# fail closed when a multi-account row cannot be identified. Anchor on the stable
-# summary function and the consolidated v5 renderer alias.
-summary_block = r'''  const credentialClientForContext=()=>{
+# client has multiple accounts. Replace ONLY the old resolver so the consolidated
+# credentialUiV5 renderer and all of its surrounding scope remain untouched.
+old_summary = r'''  const summaryForCredentialRow=row=>{
+    if(!accountSafeSummaryData)return null;
+    if(row.platform==='facebook'||row.platform==='tiktok')return accountSafeSummaryData?.[row.platform]||null;
+    const list=row.platform==='google'?accountSafeSummaryData?.googleAccounts:accountSafeSummaryData?.instagramAccounts;
+    if(!Array.isArray(list)||!list.length)return null;
+    const current=currentExternalAssetAccount(row.platform);
+    const currentId=String(current?.id??'');
+    if(currentId){
+      const match=list.find(item=>String(item?.id??'')===currentId);
+      if(match)return match;
+    }
+    return list.length===1?list[0]:null;
+  };
+'''
+new_summary = r'''  const credentialClientForContext=()=>{
     const directId=String(vm.selectedClientId??'');
     if(vm.currentPage==='client-detail'||vm.currentPage==='client-form'){
       if(vm.selectedClient&&String(vm.selectedClient?.id??'')===directId)return vm.selectedClient;
@@ -88,13 +93,9 @@ summary_block = r'''  const credentialClientForContext=()=>{
     return null;
   };
 '''
-security = replace_block(
-    security,
-    '  const summaryForCredentialRow=row=>{',
-    '  const applyAccountSafeSummaryToCards=credentialUiV5Render;',
-    summary_block,
-    'safe-summary account correspondence block',
-)
+if security.count(old_summary) != 1:
+    fail(f'unexpected legacy safe-summary resolver count: {security.count(old_summary)}')
+security = security.replace(old_summary, new_summary, 1)
 
 # Route persistence is deliberately metadata-only. Never persist login identifiers,
 # passwords, session tokens, Vault data, forms, or whole client objects. Restore is
