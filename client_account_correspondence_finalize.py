@@ -69,6 +69,16 @@ new_summary = r'''  const credentialClientForContext=()=>{
       return identifiers.some(value=>tokens.includes(value));
     });
     if(tokenMatches.length===1)return tokenMatches[0];
+    // Client edit renders every account in the same stable v-for order as the
+    // underlying platform array. Internal account IDs are intentionally not shown
+    // in the form, so a card can have no safe visible identity token at all. In that
+    // exact edit-only case, use the platform-local DOM ordinal as a deterministic
+    // correspondence fallback. Detail/assets keep the stricter fail-closed path.
+    if(vm.currentPage==='client-form'&&list.length>1){
+      const platformRows=locateCredentialRows().filter(candidate=>candidate.platform===row.platform);
+      const rowIndex=platformRows.findIndex(candidate=>candidate.card===row.card);
+      if(rowIndex>=0&&rowIndex<list.length)return list[rowIndex];
+    }
     return list.length===1?list[0]:null;
   };
   const summaryForCredentialRow=row=>{
@@ -222,7 +232,7 @@ SECURITY.write_text(security, encoding='utf-8')
 BRIDGE.write_text(bridge, encoding='utf-8')
 print(
     'CLIENT_ACCOUNT_CORRESPONDENCE_FINALIZE_OK: '
-    'safe-summary=account-id-correspondence+multi-account-fail-closed; '
+    'safe-summary=account-id-correspondence+client-form-order-fallback+multi-account-fail-closed; '
     'refresh=session-route-restore+selection-metadata-only; detail-client=pager-reset; '
     'security=' + hashlib.sha256(SECURITY.read_bytes()).hexdigest() + '; '
     'bridge=' + hashlib.sha256(BRIDGE.read_bytes()).hexdigest()
