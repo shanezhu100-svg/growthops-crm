@@ -5,6 +5,8 @@ import time
 import urllib.parse
 import urllib.request
 
+from build_http_redirect_guard import NO_REDIRECT_OPENER, RedirectDenied
+
 ROOT = Path(__file__).resolve().parent
 DIST = ROOT / 'dist'
 INDEX = DIST / 'index.html'
@@ -57,21 +59,19 @@ for vendor in VENDORS:
     if html.count(source_tag) != 1:
         fail(f"{vendor['name']} expected source tag exactly once, found {html.count(source_tag)}")
 
-    # Retry only transport failures against the same exact versioned URL. Redirect,
-    # content-shape, marker, and digest validation remain fail-closed and are never
+    # Retry only transport failures against the same exact versioned URL. The
+    # shared opener rejects 30x before urllib can request the Location target.
+    # Content-shape, marker, and digest validation remain fail-closed and are never
     # retried as a way to accept different bytes.
     data = None
     last_error = None
     for attempt in range(1, DOWNLOAD_ATTEMPTS + 1):
         request = urllib.request.Request(url, headers={'User-Agent': 'growthops-crm-build/1'})
         try:
-            with urllib.request.urlopen(request, timeout=90) as response:
-                final_url = response.geturl()
-                if final_url != url:
-                    fail(f"{vendor['name']} unexpected redirect: {final_url}")
+            with NO_REDIRECT_OPENER.open(request, timeout=90) as response:
                 data = response.read()
-        except SystemExit:
-            raise
+        except RedirectDenied as exc:
+            fail(f"{vendor['name']} unexpected redirect denied before follow: status={exc.code}")
         except Exception as exc:
             last_error = exc
             if attempt < DOWNLOAD_ATTEMPTS:
@@ -117,5 +117,5 @@ for vendor, actual, size, local_tag in downloaded:
 print(
     'FRONTEND_VENDOR_STATIC_FINALIZE_OK: '
     + '; '.join(f"{v['name']}={sha}/{size}B->/vendor/{v['output']}" for v, sha, size, _ in downloaded)
-    + f'; browser-external-js=removed; download-attempts<={DOWNLOAD_ATTEMPTS}'
+    + f'; browser-external-js=removed; redirects=pre-follow-denied; download-attempts<={DOWNLOAD_ATTEMPTS}'
 )
