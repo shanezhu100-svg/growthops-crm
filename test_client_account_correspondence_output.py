@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 ROOT = Path(__file__).resolve().parent
 SECURITY = (ROOT / 'dist' / 'cloud-security-hotfix.js').read_text(encoding='utf-8')
@@ -11,11 +12,30 @@ def require(ok: bool, message: str) -> None:
         raise SystemExit('CLIENT_ACCOUNT_CORRESPONDENCE_OUTPUT_FAILED: ' + message)
 
 
+# Validate the four-platform safe-summary mapping semantically inside the bounded
+# credentialPlatformConfig region. Do not couple the gate to whitespace/formatting,
+# but keep every list/summary/pager/legacy association fail-closed.
+config_start = SECURITY.find('const credentialPlatformConfig=platform=>({')
+config_end = SECURITY.find('}[platform]||null);', config_start)
+require(config_start >= 0 and config_end > config_start, 'unable to bound credentialPlatformConfig')
+config_region = SECURITY[config_start:config_end]
+expected_config = {
+    'facebook': {'listKey': 'fbAccounts', 'summaryKey': 'facebookAccounts', 'pager': 'FB', 'legacyKey': 'facebook'},
+    'tiktok': {'listKey': 'tkAccounts', 'summaryKey': 'tiktokAccounts', 'pager': 'TK', 'legacyKey': 'tiktok'},
+    'google': {'listKey': 'googleAccounts', 'summaryKey': 'googleAccounts', 'pager': 'GOOGLE', 'legacyKey': ''},
+    'instagram': {'listKey': 'instagramAccounts', 'summaryKey': 'instagramAccounts', 'pager': 'INSTAGRAM', 'legacyKey': ''},
+}
+for platform, expected in expected_config.items():
+    match = re.search(rf'\b{re.escape(platform)}\s*:\s*\{{([^}}]*)\}}', config_region, re.DOTALL)
+    require(match is not None, 'platform config missing: ' + platform)
+    body = match.group(1)
+    for key, value in expected.items():
+        require(
+            re.search(rf'\b{re.escape(key)}\s*:\s*[\'\"]{re.escape(value)}[\'\"]', body) is not None,
+            f'platform config drift: {platform}.{key}={value!r}',
+        )
+
 for marker in (
-    "facebook:{listKey:'fbAccounts',summaryKey:'facebookAccounts',pager:'FB',legacyKey:'facebook'}",
-    "tiktok:{listKey:'tkAccounts',summaryKey:'tiktokAccounts',pager:'TK',legacyKey:'tiktok'}",
-    "google:{listKey:'googleAccounts',summaryKey:'googleAccounts',pager:'GOOGLE',legacyKey:''}",
-    "instagram:{listKey:'instagramAccounts',summaryKey:'instagramAccounts',pager:'INSTAGRAM',legacyKey:''}",
     "const currentId=String(current?.id??'')",
     "summaries.find(item=>String(item?.id??'')===currentId)",
     "if(vm.currentPage==='client-form'&&list.length>1)",
@@ -92,4 +112,4 @@ for marker in (
 for forbidden_key in ("'loginPassword',", "'password',", "'2FA',", "'twoFactor',"):
     require(forbidden_key not in MIGRATION, 'safe-summary response appears to expose secret key: ' + forbidden_key)
 
-print('CLIENT_ACCOUNT_CORRESPONDENCE_OUTPUT_OK: login-account=direct-safe-summary+id-matched+label-alias-resolved; multi-account=client-form-order-fallback+nonform-fail-closed; platform-card=facebook+tiktok+google+instagram; refresh=session-route+selection-metadata-only; detail-pager=client-isolated; db=facebook+tiktok+google+instagram-per-account-summary+service-role-only')
+print('CLIENT_ACCOUNT_CORRESPONDENCE_OUTPUT_OK: login-account=direct-safe-summary+id-matched+label-alias-resolved; multi-account=client-form-order-fallback+nonform-fail-closed; platform-card=facebook+tiktok+google+instagram; mapping=semantic-four-platform; refresh=session-route+selection-metadata-only; detail-pager=client-isolated; db=facebook+tiktok+google+instagram-per-account-summary+service-role-only')
