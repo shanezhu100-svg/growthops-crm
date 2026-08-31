@@ -79,3 +79,4 @@ await import('./test_business_ad_summary.mjs');
 await import('./test_business_finance_reconciliation_cost.mjs');
 await import('./test_business_finance_confirmed_profit_cost.mjs');
 await import('./test_business_client_module_home.mjs');
+await import('./probe_business_leads_inventory.mjs');
