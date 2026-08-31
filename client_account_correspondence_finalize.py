@@ -169,22 +169,22 @@ replace_security_block('  const locateCredentialRows=()=>{','  const prepareInli
 
 # The consolidated v5/v6 runtime replaced the historical applyAccountSafeSummaryToCards
 # body with credentialUiV5Render. Resolver rewrites above can span the old summary
-# helper, so re-establish the reviewed mapping immediately before the stable v5 reset/
+# helper, so re-establish the reviewed mapping immediately before the stable v5
 # render block. Refuse to delete unrelated helpers if the layout ever changes.
 if 'const credentialPlatformConfig=platform=>({' not in security:
-    reset_anchor = '  const credentialUiV5ResetCell=cell=>{'
-    reset_start = security.find(reset_anchor)
-    if reset_start < 0:
-        fail('credentialUiV5ResetCell renderer anchor missing after resolver rewrites')
-    stale_start = security.rfind('  const summaryForCredentialRow=row=>{', 0, reset_start)
+    render_anchor = '  const credentialUiV5Render=()=>{'
+    render_start = security.find(render_anchor)
+    if render_start < 0:
+        fail('credentialUiV5Render renderer anchor missing after resolver rewrites')
+    stale_start = security.rfind('  const summaryForCredentialRow=row=>{', 0, render_start)
     if stale_start >= 0:
-        stale_region = security[stale_start:reset_start]
+        stale_region = security[stale_start:render_start]
         extra_consts = [line.strip() for line in stale_region.splitlines() if line.startswith('  const ') and not line.startswith('  const summaryForCredentialRow=')]
         if extra_consts:
             fail('unexpected helpers between stale summary and v5 renderer: ' + ', '.join(extra_consts[:4]))
-        security = security[:stale_start] + new_summary + security[reset_start:]
+        security = security[:stale_start] + new_summary + security[render_start:]
     else:
-        security = security[:reset_start] + new_summary + security[reset_start:]
+        security = security[:render_start] + new_summary + security[render_start:]
 for marker in (
     'const credentialPlatformConfig=platform=>({',
     "facebook:{listKey:'fbAccounts',summaryKey:'facebookAccounts',pager:'FB',legacyKey:'facebook'}",
