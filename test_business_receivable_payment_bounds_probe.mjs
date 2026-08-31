@@ -28,6 +28,7 @@ let uid=0;
 let notifications=[];
 let persists=0;
 Object.assign(subject,{
+  clients:[{id:'c1',name:'Alpha'}],
   financeReceivables:[],
   paymentTargetReceivable:null,
   paymentForm:{date:'2026-08-31',amount:'',method:'银行转账',account:'acct',note:''},
@@ -36,6 +37,9 @@ Object.assign(subject,{
   persist(){persists+=1;return true;},
   logAudit(){},
   notify(message,type){notifications.push({message:String(message??''),type:String(type??'')});},
+  financeReceivableClientName(){return 'Alpha';},
+  financeIncomeTypeText(){return '投放服务费';},
+  formatMoney(value,currency){return `${currency||'USD'}:${Number(value)}`;},
 });
 
 function runCase(label,amount){
@@ -59,6 +63,7 @@ function runCase(label,amount){
   return {
     input:String(amount),
     paymentCount:Array.isArray(row.payments)?row.payments.length:-1,
+    paymentAmount:Array.isArray(row.payments)&&row.payments.length?String(row.payments[0]?.amount):'',
     paid:subject.financeReceivablePaid(row),
     unpaid:subject.financeReceivableUnpaid(row),
     persists,
