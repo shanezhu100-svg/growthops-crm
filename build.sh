@@ -140,6 +140,10 @@ python3 test_inline_style_static_output.py
 python3 test_style_attr_cssom_policy.py
 python3 style_attr_cssom_finalize.py
 python3 test_style_attr_cssom_output.py
+# Apply the reviewed finance cost basis to the final application methods before
+# Vue runtime-only compilation. At ALL/company scope expected and confirmed profit
+# deduct company/non-client costs only; selected-client profitability is unchanged.
+python3 finance_confirmed_profit_cost_finalize.py
 # Final Vue/HTML structural gate: no tag may retain duplicate attribute names.
 python3 test_vue_duplicate_attribute_output.py
 # The final templates are byte-stable. The runtime-only finalizer carries the
@@ -156,6 +160,9 @@ python3 test_vue_runtime_only_output.py
 node test_business_receivable_reminder_probe.mjs
 node test_business_receivable_payment_bounds_probe.mjs
 node test_business_ad_metrics.mjs
+node test_business_finance_confirmed_profit_cost.mjs
+node test_business_finance_profit_confirmation.mjs
+node test_business_finance_reconciliation_cost.mjs
 # Final server-side identity and input boundaries. Patch the two deployment BFFs
 # before syntax/runtime tests so canonical builds and deployed handlers are aligned.
 python3 preview_runtime_boundary_finalize.py
