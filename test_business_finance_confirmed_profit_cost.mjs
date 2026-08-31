@@ -91,6 +91,32 @@ cny=rows.find(row=>row.currency==='CNY');
 eq(cny.cost,2520,'selected-client confirmed breakdown still shows client cost');
 eq(cny.net,9480,'selected-client confirmed breakdown keeps client profitability');
 
+// Currency inventory regression: a company/public cost can exist in a currency with
+// no receivable/income. ALL confirmed profit must still carry that currency through
+// the aggregate and the breakdown as a negative net instead of silently dropping it.
+subject={
+  financeActiveSnapshotScope:null,
+  financeClientFilter:'ALL',
+  financeReceivableTotals:{expected:{CNY:12000}},
+  financeConfirmedActualRebateGroups:{},
+  financeTotals:{expected:{}},
+  financeCostGroups:{CNY:2520,USD:200},
+  financeCompanyNonClientCostGroups:{USD:200},
+  mergeSpendGroups,subtractSpendGroups,
+  formatMoney(value,currency){return `${currency}:${Number(value||0).toFixed(2)}`;},
+};
+const crossCurrencyActual=call('financeActualNetProfitGroups',subject);
+eq(crossCurrencyActual.CNY,12000,'cross-currency ALL confirmed keeps CNY income without client-cost double deduction');
+eq(crossCurrencyActual.USD,-200,'company-only USD cost survives as negative confirmed profit');
+subject.financeExpectedNetProfitGroups={CNY:9480,USD:-200};
+subject.financeActualNetProfitGroups=crossCurrencyActual;
+rows=call('financeProfitBreakdownRows',subject,'ACTUAL');
+const usd=rows.find(row=>row.currency==='USD');
+if(!usd)throw new Error('BUSINESS_FINANCE_CONFIRMED_PROFIT_COST_FAILED: company-only USD cost currency missing from ACTUAL breakdown');
+eq(usd.cost,200,'company-only USD cost remains visible in ACTUAL breakdown');
+eq(usd.net,-200,'company-only USD cost produces negative USD confirmed profit');
+eq(usd.costText,'USD:200.00','company-only USD formula formats the retained cost basis');
+
 // Future company/all-client month snapshots must use the same corrected cost basis.
 // Existing locked snapshots remain immutable because financeActualNetProfitGroups
 // still returns a stored snapshot value before entering live arithmetic.
@@ -100,4 +126,4 @@ const companyAnchor='actualNetProfitGroups=this.subtractSpendGroups(this.finance
 eq(snapshotSource.split(clientAnchor).length-1,1,'future snapshot preserves one client-level actual-profit cost deduction');
 eq(snapshotSource.split(companyAnchor).length-1,1,'future company snapshot excludes direct client costs from aggregate confirmed profit');
 
-console.log('BUSINESS_FINANCE_CONFIRMED_PROFIT_COST_OK: all-confirmed=company-cost-only; customer-cost=no-double-deduct; selected-client=unchanged; expected=unchanged; breakdown=aligned; future-snapshot=aligned');
+console.log('BUSINESS_FINANCE_CONFIRMED_PROFIT_COST_OK: all-confirmed=company-cost-only; customer-cost=no-double-deduct; selected-client=unchanged; expected=unchanged; breakdown=aligned; cross-currency-company-cost=retained; future-snapshot=aligned');
