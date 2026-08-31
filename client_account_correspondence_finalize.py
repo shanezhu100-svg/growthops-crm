@@ -13,12 +13,23 @@ def fail(message: str) -> None:
     raise SystemExit('CLIENT_ACCOUNT_CORRESPONDENCE_FINALIZE_FAILED: ' + message)
 
 
-def replace_security_block(start_marker: str, end_marker: str, replacement: str, label: str) -> None:
+def replace_security_function(start_marker: str, replacement: str, label: str) -> None:
+    """Replace one top-level two-space-indented const-arrow function only.
+
+    Credential UI finalizers intentionally insert additional helpers between these
+    functions. Bounding replacements by a later helper name can silently delete
+    unrelated safe-summary/overlay orchestration, so stop at this function's own
+    top-level `  };` terminator instead.
+    """
     global security
     start = security.find(start_marker)
-    end = security.find(end_marker, start + len(start_marker))
-    if start < 0 or end < 0 or end <= start:
+    if start < 0:
         fail('unable to locate ' + label)
+    terminator = '\n  };\n'
+    end = security.find(terminator, start + len(start_marker))
+    if end < 0:
+        fail('unable to bound ' + label)
+    end += len(terminator)
     security = security[:start] + replacement + security[end:]
 
 
@@ -103,6 +114,7 @@ new_summary = r'''  const credentialClientForContext=()=>{
 '''
 if security.count(old_summary) != 1:
     fail(f'unexpected legacy safe-summary resolver count: {security.count(old_summary)}')
+security = security.replace(old_summary, new_summary, 1)
 
 platform_block = r'''  const platformForCard=card=>{
     let node=card||null;
@@ -116,12 +128,19 @@ platform_block = r'''  const platformForCard=card=>{
     return '';
   };
 '''
-replace_security_block('  const platformForCard=card=>{','  const cardIdentityTokens=card=>{',platform_block,'four-platform card resolver')
+replace_security_function('  const platformForCard=card=>{', platform_block, 'four-platform card resolver')
 
-card_block = r'''  const credentialAccountLabelTexts=['登录账号','登录邮箱','登录邮箱 / 手机号'];
-  const credentialLabelCount=(root,label)=>[...root.querySelectorAll('*')].filter(el=>el.children.length===0&&cleanText(el)===label).length;
-  const credentialAccountLabelCount=root=>credentialAccountLabelTexts.reduce((count,label)=>count+credentialLabelCount(root,label),0);
-  const credentialCardForLabel=label=>{
+label_marker = "  const credentialLabelCount=(root,label)=>[...root.querySelectorAll('*')].filter(el=>el.children.length===0&&cleanText(el)===label).length;\n"
+if security.count(label_marker) != 1:
+    fail(f'unexpected credentialLabelCount marker count: {security.count(label_marker)}')
+label_helpers = (
+    label_marker
+    + "  const credentialAccountLabelTexts=['登录账号','登录邮箱','登录邮箱 / 手机号'];\n"
+    + "  const credentialAccountLabelCount=root=>credentialAccountLabelTexts.reduce((count,label)=>count+credentialLabelCount(root,label),0);\n"
+)
+security = security.replace(label_marker, label_helpers, 1)
+
+card_block = r'''  const credentialCardForLabel=label=>{
     let node=label?.parentElement||null;
     for(let i=0;node&&i<9;i+=1,node=node.parentElement){
       if(credentialAccountLabelCount(node)===1&&credentialLabelCount(node,'密码 / 2FA')===1)return node;
@@ -129,7 +148,7 @@ card_block = r'''  const credentialAccountLabelTexts=['登录账号','登录邮�
     return null;
   };
 '''
-replace_security_block('  const credentialLabelCount=','  const valueCellForLabel=label=>{',card_block,'credential card label resolver')
+replace_security_function('  const credentialCardForLabel=label=>{', card_block, 'credential card label resolver')
 
 value_block = r'''  const valueCellForLabel=label=>{
     const labelText=cleanText(label);
@@ -144,7 +163,7 @@ value_block = r'''  const valueCellForLabel=label=>{
     return children.length?children[children.length-1]:null;
   };
 '''
-replace_security_block('  const valueCellForLabel=label=>{','  const locateCredentialRows=()=>{',value_block,'credential value/status resolver')
+replace_security_function('  const valueCellForLabel=label=>{', value_block, 'credential value/status resolver')
 
 locate_block = r'''  const locateCredentialRows=()=>{
     const rows=[];
@@ -164,21 +183,7 @@ locate_block = r'''  const locateCredentialRows=()=>{
     return rows.filter(row=>row.platform&&(row.accountCell||row.passwordCell));
   };
 '''
-replace_security_block('  const locateCredentialRows=()=>{','  const prepareInlineCell=(cell,kind)=>{',locate_block,'credential row resolver')
-
-# The platform/card rewrite intentionally spans the historical summary helper.
-# Re-establish the reviewed account-correspondence resolver at a boundary owned by
-# this same resolver chain, rather than depending on renderer helper names that may
-# change when Vue/runtime implementation details are consolidated.
-prepare_anchor = '  const prepareInlineCell=(cell,kind)=>{'
-if security.count(prepare_anchor) != 1:
-    fail(f'unexpected prepareInlineCell resolver anchor count: {security.count(prepare_anchor)}')
-if '  const summaryForCredentialRow=row=>{' in security:
-    if security.count(old_summary) != 1:
-        fail('unexpected safe-summary resolver shape remains after resolver rewrites')
-    security = security.replace(old_summary, '', 1)
-prepare_start = security.find(prepare_anchor)
-security = security[:prepare_start] + new_summary + security[prepare_start:]
+replace_security_function('  const locateCredentialRows=()=>{', locate_block, 'credential row resolver')
 
 for marker in (
     'const credentialPlatformConfig=platform=>({',
@@ -188,10 +193,11 @@ for marker in (
     "instagram:{listKey:'instagramAccounts',summaryKey:'instagramAccounts',pager:'INSTAGRAM',legacyKey:''}",
     'const currentCredentialAccount=(row,config)=>{',
     'const config=credentialPlatformConfig(row.platform);',
-    'const prepareInlineCell=(cell,kind)=>{',
+    "cloud.rpc('crm_client_account_safe_summary'",
+    'const credentialFormStatusHost=(label,kind)=>{',
 ):
     if marker not in security:
-        fail('safe-summary authority missing after resolver rewrites: ' + marker)
+        fail('safe-summary/overlay authority missing after resolver rewrites: ' + marker)
 
 route_insert = r'''  const UI_ROUTE_STATE_KEY='growthops_ui_route_state_v1';
   const UI_ROUTE_PAGES=new Set(['dashboard','leads','clients','client-form','client-detail','assets','sop','analytics','ads','account-opening','finance','alerts','tools','system']);
@@ -300,9 +306,9 @@ SECURITY.write_text(security, encoding='utf-8')
 BRIDGE.write_text(bridge, encoding='utf-8')
 print(
     'CLIENT_ACCOUNT_CORRESPONDENCE_FINALIZE_OK: '
-    'safe-summary=account-id-correspondence+client-form-order-fallback+multi-account-fail-closed+resolver-chain-anchored; '
+    'safe-summary=account-id-correspondence+client-form-order-fallback+multi-account-fail-closed+single-function-rewrites; '
     'platform-card=facebook+tiktok+google+instagram; login-label=alias-resolved-per-card; '
-    'refresh=session-route-restore+selection-metadata-only; detail-client=pager-reset; '
+    'safe-summary-rpc+form-overlay=preserved; refresh=session-route-restore+selection-metadata-only; detail-client=pager-reset; '
     'security=' + hashlib.sha256(SECURITY.read_bytes()).hexdigest() + '; '
     'bridge=' + hashlib.sha256(BRIDGE.read_bytes()).hexdigest()
 )
