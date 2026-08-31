@@ -199,12 +199,16 @@ fixture = r'''<!doctype html>
     };
 
     const waitForIconFont=(attempt=0)=>{
+      // Force the hidden probe through layout before checking FontFaceSet. Once the
+      // font is ready, use a short timer rather than requestAnimationFrame: Chromium
+      // --dump-dom with virtual time does not guarantee a post-font RAF callback.
+      document.getElementById('font-load-probe')?.getBoundingClientRect();
       const fontReady=!document.fonts||document.fonts.check('900 16px "Font Awesome 6 Free"');
       if(!fontReady&&attempt<30){
         setTimeout(()=>waitForIconFont(attempt+1),100);
         return;
       }
-      requestAnimationFrame(()=>requestAnimationFrame(()=>evaluateRegression(fontReady)));
+      setTimeout(()=>evaluateRegression(fontReady),50);
     };
     setTimeout(()=>waitForIconFont(0),1400);
   </script>
@@ -278,7 +282,7 @@ cmd = [
     '--no-first-run',
     '--enable-logging=stderr',
     '--v=0',
-    '--virtual-time-budget=5000',
+    '--virtual-time-budget=6000',
     '--dump-dom',
     f'http://127.0.0.1:{port}/fixture.html',
 ]
@@ -330,6 +334,6 @@ print(
     'BROWSER_CLIENT_FORM_CREDENTIAL_STATUS_OK: '
     f'browser={Path(browser).name}; currentPage=client-form; stale-assets-id=0; '
     'safe-summary-client=client-1; facebook+tiktok=in-input-login+masked-eye; '
-    'font-readiness=polled; click=preserves-saved-account; typing=mutation-handoff; '
+    'font-readiness=polled+timer-settled; click=preserves-saved-account; typing=mutation-handoff; '
     'eye=visible+font-icon+hit-testable; initial-edit-values=blank; reveal-rpc=not-called'
 )
