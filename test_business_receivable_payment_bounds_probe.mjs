@@ -1,3 +1,4 @@
-// Compatibility entry retained to avoid unnecessary build.sh churn while this
-// finance fix lands. The authoritative regression lives in the focused test file.
+// Compatibility entry retained to avoid unnecessary build.sh churn while finance
+// payment regressions are expanded. Each focused test executes the final shipped code.
 import './test_business_receivable_payment_bounds.mjs';
+import './test_business_receivable_payment_date_probe.mjs';
