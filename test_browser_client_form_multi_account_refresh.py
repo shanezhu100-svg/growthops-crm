@@ -31,12 +31,11 @@ browser = next(
 if not browser:
     fail('no supported Chromium executable on CI runner')
 
-# Synthetic-only fixture for the reported edit/refresh bug. The four mutation inputs
-# start blank exactly as they do after a secure reload. Internal account IDs are not
-# rendered into the cards. The safe-summary response must still map each saved login
-# and saved-password presence back to the correct Facebook/TikTok card. This test does
-# not exercise reveal/eye-button behavior; that remains covered by the pre-existing
-# client-form credential interaction regression.
+# Synthetic-only fixture for the edit/refresh correspondence boundary. All mutation
+# inputs start blank exactly as they do after a secure reload. Internal account IDs
+# are deliberately absent from the rendered cards, so every multi-account platform
+# exercises the client-form platform-local ordinal fallback before matching the safe
+# summary by the underlying account ID. This test does not reveal secret values.
 fixture = r'''<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -60,6 +59,14 @@ fixture = r'''<!doctype html>
     <div class="account-card"><h3>电动叉车</h3><div class="field"><label>登录账号</label><input id="tk1-login" value="" placeholder="邮箱 / TikTok 账号"></div><div class="field"><label>密码 / 2FA</label><input id="tk1-secret" value="" placeholder="密码 / 2FA Token"></div></div>
     <div class="account-card"><h3>工程机械</h3><div class="field"><label>登录账号</label><input id="tk2-login" value="" placeholder="邮箱 / TikTok 账号"></div><div class="field"><label>密码 / 2FA</label><input id="tk2-secret" value="" placeholder="密码 / 2FA Token"></div></div>
   </section>
+  <section><h2>Google 资产</h2>
+    <div class="account-card"><h3>搜索广告</h3><div class="field"><label>登录账号</label><input id="gg1-login" value="" placeholder="Google 登录邮箱"></div><div class="field"><label>密码 / 2FA</label><input id="gg1-secret" value="" placeholder="密码 / 2FA Token"></div></div>
+    <div class="account-card"><h3>展示广告</h3><div class="field"><label>登录账号</label><input id="gg2-login" value="" placeholder="Google 登录邮箱"></div><div class="field"><label>密码 / 2FA</label><input id="gg2-secret" value="" placeholder="密码 / 2FA Token"></div></div>
+  </section>
+  <section><h2>Instagram 资产</h2>
+    <div class="account-card"><h3>品牌主页</h3><div class="field"><label>登录账号</label><input id="ig1-login" value="" placeholder="Instagram 登录账号"></div><div class="field"><label>密码 / 2FA</label><input id="ig1-secret" value="" placeholder="密码 / 2FA Token"></div></div>
+    <div class="account-card"><h3>产品主页</h3><div class="field"><label>登录账号</label><input id="ig2-login" value="" placeholder="Instagram 登录账号"></div><div class="field"><label>密码 / 2FA</label><input id="ig2-secret" value="" placeholder="密码 / 2FA Token"></div></div>
+  </section>
   <script>
     window.__growthOpsCredentialSummaryCalls=[];
     window.__growthOpsUnexpectedRpc=[];
@@ -68,7 +75,9 @@ fixture = r'''<!doctype html>
       currentUser:{id:'admin-1',role:'ADMIN'}, clients:[{id:'client-1',name:'Synthetic Client'}],
       selectedClient:{id:'client-1',name:'Synthetic Client',
         fbAccounts:[{id:'fb-internal-1'},{id:'fb-internal-2'}],
-        tkAccounts:[{id:'tk-internal-1'},{id:'tk-internal-2'}]},
+        tkAccounts:[{id:'tk-internal-1'},{id:'tk-internal-2'}],
+        googleAccounts:[{id:'gg-internal-1'},{id:'gg-internal-2'}],
+        instagramAccounts:[{id:'ig-internal-1'},{id:'ig-internal-2'}]},
       notify:()=>{}, persist:()=>{}, updateStorageUsage:()=>{}, logAudit:()=>{}
     };
     window.__growthOpsCloud={rpc:(name,args)=>{
@@ -81,6 +90,12 @@ fixture = r'''<!doctype html>
           tiktokAccounts:[
             {id:'tk-internal-1',loginAccount:'tk-one@example.test',hasPassword:true,has2FA:false},
             {id:'tk-internal-2',loginAccount:'tk-two@example.test',hasPassword:true,has2FA:true}],
+          googleAccounts:[
+            {id:'gg-internal-1',loginAccount:'google-one@example.test',hasPassword:true,has2FA:false},
+            {id:'gg-internal-2',loginAccount:'google-two@example.test',hasPassword:true,has2FA:true}],
+          instagramAccounts:[
+            {id:'ig-internal-1',loginAccount:'instagram-one@example.test',hasPassword:true,has2FA:true},
+            {id:'ig-internal-2',loginAccount:'instagram-two@example.test',hasPassword:true,has2FA:false}],
           facebook:{loginAccount:'legacy-fb-wrong@example.test',hasPassword:false,has2FA:false},
           tiktok:{loginAccount:'legacy-tk-wrong@example.test',hasPassword:false,has2FA:false}
         });
@@ -96,16 +111,26 @@ fixture = r'''<!doctype html>
       const secrets=[...document.querySelectorAll('[data-growthops-credential-form-status="secret"]')];
       const accountTexts=accounts.map(node=>String(node.textContent||'').trim());
       const secretTexts=secrets.map(node=>String(node.textContent||'').trim());
-      const expected=['fb-one@example.test','fb-two@example.test','tk-one@example.test','tk-two@example.test'];
-      const inputs=['fb1-login','fb1-secret','fb2-login','fb2-secret','tk1-login','tk1-secret','tk2-login','tk2-secret'].map(id=>document.getElementById(id));
+      const expected=[
+        'fb-one@example.test','fb-two@example.test',
+        'tk-one@example.test','tk-two@example.test',
+        'google-one@example.test','google-two@example.test',
+        'instagram-one@example.test','instagram-two@example.test'
+      ];
+      const inputs=[
+        'fb1-login','fb1-secret','fb2-login','fb2-secret',
+        'tk1-login','tk1-secret','tk2-login','tk2-secret',
+        'gg1-login','gg1-secret','gg2-login','gg2-secret',
+        'ig1-login','ig1-secret','ig2-login','ig2-secret'
+      ].map(id=>document.getElementById(id));
       const inputValues=inputs.map(node=>node?.value??'__missing__');
       const summaries=window.__growthOpsCredentialSummaryCalls||[];
       const unexpected=window.__growthOpsUnexpectedRpc||[];
       const exact=expected.every((value,index)=>accountTexts[index]===value);
-      const masked=secretTexts.length===4&&secretTexts.every(text=>text.includes('••••••••'));
+      const masked=secretTexts.length===8&&secretTexts.every(text=>text.includes('••••••••'));
       const noLegacy=accountTexts.every(text=>!text.includes('legacy-'));
       const blanks=inputValues.every(value=>value==='');
-      const pass=accounts.length===4&&secrets.length===4&&exact&&masked&&noLegacy&&blanks&&summaries.length===1&&String(summaries[0]?.p_client_id||'')==='client-1'&&unexpected.length===0;
+      const pass=accounts.length===8&&secrets.length===8&&exact&&masked&&noLegacy&&blanks&&summaries.length===1&&String(summaries[0]?.p_client_id||'')==='client-1'&&unexpected.length===0;
       document.body.setAttribute('data-refresh-regression',pass?'pass':'fail');
       document.body.setAttribute('data-account-texts',JSON.stringify(accountTexts));
       document.body.setAttribute('data-secret-texts',JSON.stringify(secretTexts));
@@ -160,9 +185,12 @@ if 'data-refresh-regression="pass"' not in dom:
     for name in ('data-refresh-regression','data-account-texts','data-secret-texts','data-input-values','data-summary-client-id','data-unexpected-rpc-count'):
         match=re.search(rf'{re.escape(name)}="([^"]*)"',dom); attrs[name]=match.group(1) if match else '__missing__'
     fail('synthetic multi-account refresh regression failed: '+json.dumps(attrs,ensure_ascii=False)+'; stderr='+stderr[-800:])
-for value in ('fb-one@example.test','fb-two@example.test','tk-one@example.test','tk-two@example.test'):
+for value in (
+    'fb-one@example.test','fb-two@example.test','tk-one@example.test','tk-two@example.test',
+    'google-one@example.test','google-two@example.test','instagram-one@example.test','instagram-two@example.test'
+):
     if value not in dom: fail('saved login missing after refresh: '+value)
 if 'data-unexpected-rpc-count="0"' not in dom:
     fail('refresh regression invoked an unexpected sensitive RPC')
 
-print('BROWSER_CLIENT_FORM_MULTI_ACCOUNT_REFRESH_OK: facebook=2+tiktok=2; saved-login=per-account; saved-password=masked-on-4; underlying-mutation-inputs=blank; legacy-summary=not-reused; reveal-rpc=not-called')
+print('BROWSER_CLIENT_FORM_MULTI_ACCOUNT_REFRESH_OK: facebook=2+tiktok=2+google=2+instagram=2; saved-login=per-account; saved-password=masked-on-8; underlying-mutation-inputs=blank; legacy-summary=not-reused; reveal-rpc=not-called')

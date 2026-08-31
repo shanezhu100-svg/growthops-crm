@@ -30,9 +30,9 @@ EXPECTED_PINS = {
     'vendor/inter/inter-latin.woff2': '3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62',
     'vendor/inter/inter-latin-ext.woff2': '34b9c504cab7a73e37b746343a449132e56cf7b5481af2cb81dc74dcff25c956',
     'cloud-adapter.js': '9713943a80008f625000d6fac2440fb9395f9e6e2c1fd09e820a399c5c34379f',
-    'cloud-security-hotfix.js': 'e601cdfb025d115fe3d978648f513491bf570d82e61472a2177ed03d77918857',
+    'cloud-security-hotfix.js': '9f4302aa5afc2674f2fd9072021ea0f41dc359b385640e036b0c68a3a712a9c1',
     'cloud-p1-overrides.js': 'e50e05322a0d56e78bf112a52be08ff54263f4ce88cb0b9b91f6613722b8ccab',
-    'cloud-ui-action-bridge.js': '017fe2b8c575353af5f01b6760d26598bf038eff95bd58d56c5901942b1be0fe',
+    'cloud-ui-action-bridge.js': '12258783b11b7ddb5193f20abedabc4234731b4f11c3f5f00016f9ae4483cb72',
 }
 for name, digest in EXPECTED_PINS.items():
     marker = repr(name) + ': ' + repr(digest)

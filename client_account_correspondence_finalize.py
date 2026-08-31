@@ -13,10 +13,26 @@ def fail(message: str) -> None:
     raise SystemExit('CLIENT_ACCOUNT_CORRESPONDENCE_FINALIZE_FAILED: ' + message)
 
 
-# Safe-summary rows must follow the account that is actually visible/edited. The
-# older FB/TK path used one platform-level summary, which is ambiguous as soon as a
-# client has multiple accounts. Replace ONLY the old resolver so the consolidated
-# credentialUiV5 renderer and all of its surrounding scope remain untouched.
+def replace_security_function(start_marker: str, replacement: str, label: str) -> None:
+    """Replace one top-level two-space-indented const-arrow function only.
+
+    Credential UI finalizers intentionally insert additional helpers between these
+    functions. Bounding replacements by a later helper name can silently delete
+    unrelated safe-summary/overlay orchestration, so stop at this function's own
+    top-level `  };` terminator instead.
+    """
+    global security
+    start = security.find(start_marker)
+    if start < 0:
+        fail('unable to locate ' + label)
+    terminator = '\n  };\n'
+    end = security.find(terminator, start + len(start_marker))
+    if end < 0:
+        fail('unable to bound ' + label)
+    end += len(terminator)
+    security = security[:start] + replacement + security[end:]
+
+
 old_summary = r'''  const summaryForCredentialRow=row=>{
     if(!accountSafeSummaryData)return null;
     if(row.platform==='facebook'||row.platform==='tiktok')return accountSafeSummaryData?.[row.platform]||null;
@@ -69,11 +85,6 @@ new_summary = r'''  const credentialClientForContext=()=>{
       return identifiers.some(value=>tokens.includes(value));
     });
     if(tokenMatches.length===1)return tokenMatches[0];
-    // Client edit renders every account in the same stable v-for order as the
-    // underlying platform array. Internal account IDs are intentionally not shown
-    // in the form, so a card can have no safe visible identity token at all. In that
-    // exact edit-only case, use the platform-local DOM ordinal as a deterministic
-    // correspondence fallback. Detail/assets keep the stricter fail-closed path.
     if(vm.currentPage==='client-form'&&list.length>1){
       const platformRows=locateCredentialRows().filter(candidate=>candidate.platform===row.platform);
       const rowIndex=platformRows.findIndex(candidate=>candidate.card===row.card);
@@ -93,8 +104,6 @@ new_summary = r'''  const credentialClientForContext=()=>{
       if(match)return match;
     }
     if(summaries.length===1)return summaries[0];
-    // Legacy single-account workspaces may only have the old top-level FB/TK fields.
-    // Never use that fallback when the visible client has multiple platform accounts.
     if(config.legacyKey){
       const client=credentialClientForContext();
       const platformAccounts=Array.isArray(client?.[config.listKey])?client[config.listKey]:[];
@@ -107,12 +116,89 @@ if security.count(old_summary) != 1:
     fail(f'unexpected legacy safe-summary resolver count: {security.count(old_summary)}')
 security = security.replace(old_summary, new_summary, 1)
 
-# Route persistence is deliberately metadata-only. Never persist login identifiers,
-# passwords, session tokens, Vault data, forms, or whole client objects. Restore is
-# gated on an authenticated vm.currentUser so refresh cannot expose an authenticated
-# route before session restoration finishes. It is inserted immediately before the
-# existing client-detail return authority so the two session route mechanisms remain
-# separate and deterministic.
+platform_block = r'''  const platformForCard=card=>{
+    let node=card||null;
+    for(let i=0;node&&i<9;i+=1,node=node.parentElement){
+      const value=String(node.textContent||'').toLowerCase();
+      if(value.includes('facebook'))return 'facebook';
+      if(value.includes('tiktok'))return 'tiktok';
+      if(value.includes('google'))return 'google';
+      if(value.includes('instagram'))return 'instagram';
+    }
+    return '';
+  };
+'''
+replace_security_function('  const platformForCard=card=>{', platform_block, 'four-platform card resolver')
+
+label_marker = "  const credentialLabelCount=(root,label)=>[...root.querySelectorAll('*')].filter(el=>el.children.length===0&&cleanText(el)===label).length;\n"
+if security.count(label_marker) != 1:
+    fail(f'unexpected credentialLabelCount marker count: {security.count(label_marker)}')
+label_helpers = (
+    label_marker
+    + "  const credentialAccountLabelTexts=['登录账号','登录邮箱','登录邮箱 / 手机号'];\n"
+    + "  const credentialAccountLabelCount=root=>credentialAccountLabelTexts.reduce((count,label)=>count+credentialLabelCount(root,label),0);\n"
+)
+security = security.replace(label_marker, label_helpers, 1)
+
+card_block = r'''  const credentialCardForLabel=label=>{
+    let node=label?.parentElement||null;
+    for(let i=0;node&&i<9;i+=1,node=node.parentElement){
+      if(credentialAccountLabelCount(node)===1&&credentialLabelCount(node,'密码 / 2FA')===1)return node;
+    }
+    return null;
+  };
+'''
+replace_security_function('  const credentialCardForLabel=label=>{', card_block, 'credential card label resolver')
+
+value_block = r'''  const valueCellForLabel=label=>{
+    const labelText=cleanText(label);
+    const kind=credentialAccountLabelTexts.includes(labelText)?'account':labelText==='密码 / 2FA'?'secret':'';
+    if(kind){
+      const host=credentialFormStatusHost(label,kind);
+      if(host)return host;
+    }
+    const row=label?.parentElement;
+    if(!row)return null;
+    const children=[...row.children].filter(el=>el!==label);
+    return children.length?children[children.length-1]:null;
+  };
+'''
+replace_security_function('  const valueCellForLabel=label=>{', value_block, 'credential value/status resolver')
+
+locate_block = r'''  const locateCredentialRows=()=>{
+    const rows=[];
+    const accountLabels=new Set(credentialAccountLabelTexts);
+    const labels=[...document.querySelectorAll('*')].filter(el=>el.children.length===0&&(accountLabels.has(cleanText(el))||cleanText(el)==='密码 / 2FA'));
+    const seen=new Set();
+    for(const label of labels){
+      const card=credentialCardForLabel(label);
+      if(!card||seen.has(card))continue;
+      const platform=platformForCard(card);
+      if(!platform)continue;
+      seen.add(card);
+      const accountLabel=credentialAccountLabelTexts.map(text=>exactLeaf(card,text)).find(Boolean)||null;
+      const passwordLabel=exactLeaf(card,'密码 / 2FA');
+      rows.push({card,platform,accountCell:valueCellForLabel(accountLabel),passwordCell:valueCellForLabel(passwordLabel)});
+    }
+    return rows.filter(row=>row.platform&&(row.accountCell||row.passwordCell));
+  };
+'''
+replace_security_function('  const locateCredentialRows=()=>{', locate_block, 'credential row resolver')
+
+for marker in (
+    'const credentialPlatformConfig=platform=>({',
+    "facebook:{listKey:'fbAccounts',summaryKey:'facebookAccounts',pager:'FB',legacyKey:'facebook'}",
+    "tiktok:{listKey:'tkAccounts',summaryKey:'tiktokAccounts',pager:'TK',legacyKey:'tiktok'}",
+    "google:{listKey:'googleAccounts',summaryKey:'googleAccounts',pager:'GOOGLE',legacyKey:''}",
+    "instagram:{listKey:'instagramAccounts',summaryKey:'instagramAccounts',pager:'INSTAGRAM',legacyKey:''}",
+    'const currentCredentialAccount=(row,config)=>{',
+    'const config=credentialPlatformConfig(row.platform);',
+    "cloud.rpc('crm_client_account_safe_summary'",
+    'const credentialFormStatusHost=(label,kind)=>{',
+):
+    if marker not in security:
+        fail('safe-summary/overlay authority missing after resolver rewrites: ' + marker)
+
 route_insert = r'''  const UI_ROUTE_STATE_KEY='growthops_ui_route_state_v1';
   const UI_ROUTE_PAGES=new Set(['dashboard','leads','clients','client-form','client-detail','assets','sop','analytics','ads','account-opening','finance','alerts','tools','system']);
   const UI_ROUTE_SELECTION_KEYS=['selectedClientId','selectedAssetsClientId','selectedAdsClientId','selectedAnalyticsClientId','selectedSopClientId','selectedSopAccountKey'];
@@ -174,17 +260,8 @@ route_insert = r'''  const UI_ROUTE_STATE_KEY='growthops_ui_route_state_v1';
     persistUiRouteState();
   };
   const syncUiRouteState=()=>{
-    if(vm.currentUser){
-      uiRouteHadAuthenticatedUser=true;
-      restoreUiRouteState();
-      persistUiRouteState();
-      return;
-    }
-    if(uiRouteHadAuthenticatedUser){
-      clearUiRouteState();
-      uiRouteStateRestored=false;
-      uiRouteHadAuthenticatedUser=false;
-    }
+    if(vm.currentUser){uiRouteHadAuthenticatedUser=true;restoreUiRouteState();persistUiRouteState();return;}
+    if(uiRouteHadAuthenticatedUser){clearUiRouteState();uiRouteStateRestored=false;uiRouteHadAuthenticatedUser=false;}
   };
 '''
 route_anchor = "  const CLIENT_DETAIL_RETURN_KEY='growthops_client_detail_return_page';\n"
@@ -197,8 +274,6 @@ if bridge.count(install_anchor) != 1:
     fail(f'unexpected bridge install anchor count: {bridge.count(install_anchor)}')
 bridge = bridge.replace(install_anchor, "    clearSessionRestoreCover();\n    syncUiRouteState();\n    observePageScroll();\n", 1)
 
-# Keep the selected client's detail pager isolated. openClientDetail() already resets
-# it; this watcher is defense-in-depth for any future direct selectedClientId mutation.
 watch_anchor = "  const observer=new MutationObserver(install);\n"
 watch_block = r'''  let lastDetailClientId=String(vm.selectedClientId??'');
   const syncDetailClientPager=()=>{
@@ -218,9 +293,8 @@ if bridge.count(interval_old) != 1:
     fail(f'unexpected bridge install interval count: {bridge.count(interval_old)}')
 bridge = bridge.replace(interval_old, interval_new, 1)
 
-# Explicitly fail closed if route persistence ever starts collecting sensitive state.
-route_region_start = bridge.find("const UI_ROUTE_STATE_KEY")
-route_region_end = bridge.find("const CLIENT_DETAIL_RETURN_KEY", route_region_start)
+route_region_start = bridge.find('const UI_ROUTE_STATE_KEY')
+route_region_end = bridge.find('const CLIENT_DETAIL_RETURN_KEY', route_region_start)
 if route_region_start < 0 or route_region_end <= route_region_start:
     fail('unable to bound route-state persistence region')
 route_region = bridge[route_region_start:route_region_end]
@@ -232,8 +306,9 @@ SECURITY.write_text(security, encoding='utf-8')
 BRIDGE.write_text(bridge, encoding='utf-8')
 print(
     'CLIENT_ACCOUNT_CORRESPONDENCE_FINALIZE_OK: '
-    'safe-summary=account-id-correspondence+client-form-order-fallback+multi-account-fail-closed; '
-    'refresh=session-route-restore+selection-metadata-only; detail-client=pager-reset; '
+    'safe-summary=account-id-correspondence+client-form-order-fallback+multi-account-fail-closed+single-function-rewrites; '
+    'platform-card=facebook+tiktok+google+instagram; login-label=alias-resolved-per-card; '
+    'safe-summary-rpc+form-overlay=preserved; refresh=session-route-restore+selection-metadata-only; detail-client=pager-reset; '
     'security=' + hashlib.sha256(SECURITY.read_bytes()).hexdigest() + '; '
     'bridge=' + hashlib.sha256(BRIDGE.read_bytes()).hexdigest()
 )

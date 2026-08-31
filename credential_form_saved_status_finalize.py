@@ -147,17 +147,11 @@ value_block = r'''  const configureCredentialFormOverlay=(host,control,kind)=>{
       const controlStyle=getComputedStyle(control);
       host.style.font=controlStyle.font;
       host.style.letterSpacing=controlStyle.letterSpacing;
-      // A saved login identifier is a real persisted value, not placeholder text.
-      // Present it with the same normal dark value color as adjacent ID fields while
-      // leaving the password / 2FA overlay styling untouched.
       host.style.color=kind==='account'?'#0f172a':controlStyle.color;
     };
     const sync=()=>{
       place();
       const hasSavedDisplay=String(host.textContent||'').trim()!=='';
-      // Focus alone is not an edit. Keep the saved identifier / masked secret visible
-      // when the user clicks into the field; hand off to the blank mutation input only
-      // after the user actually types a replacement value.
       const editing=String(control.value||'')!=='';
       const visible=hasSavedDisplay&&!editing;
       host.style.visibility=visible?'visible':'hidden';
@@ -233,9 +227,6 @@ replace_block(
     'credential value/status resolver',
 )
 
-# Show safe login identifiers inside the matching input chrome while keeping the
-# underlying mutation input value untouched. Read-only/detail cells retain their
-# previous exact rendering.
 old_login = "        row.accountCell.textContent=login||'未录入';\n"
 new_login = (
     "        const formStatus=row.accountCell.getAttribute('data-growthops-credential-form-status')==='account';\n"
@@ -246,8 +237,6 @@ if security.count(old_login) != 1:
     fail(f'unexpected login summary assignment count: {security.count(old_login)}')
 security = security.replace(old_login, new_login, 1)
 
-# Empty edit-form credential state stays visually blank so the original input
-# placeholder remains visible. Read-only/detail credential cells retain `未录入`.
 old_secret_empty = "        row.passwordCell.textContent='未录入';\n"
 new_secret_empty = (
     "        const formSecretStatus=row.passwordCell.getAttribute('data-growthops-credential-form-status')==='secret';\n"
@@ -258,8 +247,6 @@ if security.count(old_secret_empty) != 1:
     fail(f'unexpected empty secret summary assignment count: {security.count(old_secret_empty)}')
 security = security.replace(old_secret_empty, new_secret_empty, 1)
 
-# Saved password / 2FA stays masked in the input overlay; ADMIN reveal continues to
-# use the existing time-bounded scalar eye control inside the same overlay surface.
 old_secret_recorded = "        row.passwordCell.textContent='••••••••';\n"
 new_secret_recorded = (
     "        row.passwordCell.textContent='••••••••';\n"
@@ -269,9 +256,6 @@ if security.count(old_secret_recorded) != 1:
     fail(f'unexpected recorded secret summary assignment count: {security.count(old_secret_recorded)}')
 security = security.replace(old_secret_recorded, new_secret_recorded, 1)
 
-# Fail closed if any future change starts hydrating persisted credentials into form
-# values/model state. The overlay is visual-only; focus preserves saved state and
-# actual typed content hands control to the mutation input.
 for forbidden in (
     ".value=login",
     ".value=password",
