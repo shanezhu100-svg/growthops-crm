@@ -127,3 +127,4 @@ import receivable_reminder_close_finalize  # noqa: E402,F401
 import receivable_payment_amount_guard_finalize  # noqa: E402,F401
 import receivable_payment_date_guard_finalize  # noqa: E402,F401
 import lead_client_stale_edit_guard_finalize  # noqa: E402,F401
+import lead_client_financial_input_guard_finalize  # noqa: E402,F401
