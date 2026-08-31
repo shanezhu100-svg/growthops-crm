@@ -9,7 +9,7 @@ EXPECTED_PINS = {
     'tailwind.css': '082358f4ff9c6d67ccb8e628ed27669967e15cfa7908f2e4c36a1e89c0a3f7b6',
     'app/app-inline-01.js': '52ade14219e58afb7b9f4535440479add87f8a59a0404e7fe504cfde5f06c53e',
     'app/app-inline-02.js': 'dfb07b154ec1ab7c540dbf044164a0ea7445dee996f859504d22f673d247f26b',
-    'app/app-inline-03.js': '46d7a47b04004fe2470194e9a24cbed7df7eca62cff1fb2e5266305934504aa1',
+    'app/app-inline-03.js': '62c4fc2a7cbf3f34c0bb6b46e31c9fe7543d88be37f8e23b6d06778fcfffbf33',
     'app/app-style-01.css': '33a4a117d6b9e820b389e09d87a4ccb94242fb043e80ea087f72c17f46861a70',
     'app/app-style-02.css': '01ed16d03067a8879b877440574fbc6d98af53e0909685e1a23271169c149997',
     'app/app-style-03.css': '64bd5db676657f40c7962080ce62f3b74125865c3f084a67ce21d0fc77ed00b6',
