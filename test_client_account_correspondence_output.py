@@ -13,11 +13,12 @@ def require(ok: bool, message: str) -> None:
 
 
 # Validate the four-platform safe-summary mapping semantically inside the bounded
-# credentialPlatformConfig region. Do not couple the gate to whitespace/formatting,
-# but keep every list/summary/pager/legacy association fail-closed.
+# credentialPlatformConfig region. Bound it by the next named function instead of
+# punctuation so harmless formatter changes cannot weaken or break the gate.
 config_start = SECURITY.find('const credentialPlatformConfig=platform=>({')
-config_end = SECURITY.find('}[platform]||null);', config_start)
-require(config_start >= 0 and config_end > config_start, 'unable to bound credentialPlatformConfig')
+config_end = SECURITY.find('const currentCredentialAccount=(row,config)=>{', config_start)
+require(config_start >= 0, 'credentialPlatformConfig missing from final runtime')
+require(config_end > config_start, 'unable to bound credentialPlatformConfig by currentCredentialAccount')
 config_region = SECURITY[config_start:config_end]
 expected_config = {
     'facebook': {'listKey': 'fbAccounts', 'summaryKey': 'facebookAccounts', 'pager': 'FB', 'legacyKey': 'facebook'},
