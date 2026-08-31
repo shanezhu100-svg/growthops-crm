@@ -153,6 +153,7 @@ python3 test_vue_runtime_only_output.py
 # build completes. Hosting builds must not depend on a Chromium executable.
 # Business-semantic regression gates execute the final shipped application logic,
 # not a copied test implementation.
+node test_business_receivable_reminder_probe.mjs
 node test_business_ad_metrics.mjs
 # Final server-side identity and input boundaries. Patch the two deployment BFFs
 # before syntax/runtime tests so canonical builds and deployed handlers are aligned.
