@@ -103,7 +103,6 @@ new_summary = r'''  const credentialClientForContext=()=>{
 '''
 if security.count(old_summary) != 1:
     fail(f'unexpected legacy safe-summary resolver count: {security.count(old_summary)}')
-security = security.replace(old_summary, new_summary, 1)
 
 platform_block = r'''  const platformForCard=card=>{
     let node=card||null;
@@ -167,24 +166,20 @@ locate_block = r'''  const locateCredentialRows=()=>{
 '''
 replace_security_block('  const locateCredentialRows=()=>{','  const prepareInlineCell=(cell,kind)=>{',locate_block,'credential row resolver')
 
-# The consolidated v5/v6 runtime replaced the historical applyAccountSafeSummaryToCards
-# body with credentialUiV5Render. Resolver rewrites above can span the old summary
-# helper, so re-establish the reviewed mapping immediately before the stable v5
-# render block. Refuse to delete unrelated helpers if the layout ever changes.
-if 'const credentialPlatformConfig=platform=>({' not in security:
-    render_anchor = '  const credentialUiV5Render=()=>{'
-    render_start = security.find(render_anchor)
-    if render_start < 0:
-        fail('credentialUiV5Render renderer anchor missing after resolver rewrites')
-    stale_start = security.rfind('  const summaryForCredentialRow=row=>{', 0, render_start)
-    if stale_start >= 0:
-        stale_region = security[stale_start:render_start]
-        extra_consts = [line.strip() for line in stale_region.splitlines() if line.startswith('  const ') and not line.startswith('  const summaryForCredentialRow=')]
-        if extra_consts:
-            fail('unexpected helpers between stale summary and v5 renderer: ' + ', '.join(extra_consts[:4]))
-        security = security[:stale_start] + new_summary + security[render_start:]
-    else:
-        security = security[:render_start] + new_summary + security[render_start:]
+# The platform/card rewrite intentionally spans the historical summary helper.
+# Re-establish the reviewed account-correspondence resolver at a boundary owned by
+# this same resolver chain, rather than depending on renderer helper names that may
+# change when Vue/runtime implementation details are consolidated.
+prepare_anchor = '  const prepareInlineCell=(cell,kind)=>{'
+if security.count(prepare_anchor) != 1:
+    fail(f'unexpected prepareInlineCell resolver anchor count: {security.count(prepare_anchor)}')
+if '  const summaryForCredentialRow=row=>{' in security:
+    if security.count(old_summary) != 1:
+        fail('unexpected safe-summary resolver shape remains after resolver rewrites')
+    security = security.replace(old_summary, '', 1)
+prepare_start = security.find(prepare_anchor)
+security = security[:prepare_start] + new_summary + security[prepare_start:]
+
 for marker in (
     'const credentialPlatformConfig=platform=>({',
     "facebook:{listKey:'fbAccounts',summaryKey:'facebookAccounts',pager:'FB',legacyKey:'facebook'}",
@@ -193,7 +188,7 @@ for marker in (
     "instagram:{listKey:'instagramAccounts',summaryKey:'instagramAccounts',pager:'INSTAGRAM',legacyKey:''}",
     'const currentCredentialAccount=(row,config)=>{',
     'const config=credentialPlatformConfig(row.platform);',
-    'const credentialUiV5Render=()=>{',
+    'const prepareInlineCell=(cell,kind)=>{',
 ):
     if marker not in security:
         fail('safe-summary authority missing after resolver rewrites: ' + marker)
@@ -305,7 +300,7 @@ SECURITY.write_text(security, encoding='utf-8')
 BRIDGE.write_text(bridge, encoding='utf-8')
 print(
     'CLIENT_ACCOUNT_CORRESPONDENCE_FINALIZE_OK: '
-    'safe-summary=account-id-correspondence+client-form-order-fallback+multi-account-fail-closed+v5-renderer-anchored; '
+    'safe-summary=account-id-correspondence+client-form-order-fallback+multi-account-fail-closed+resolver-chain-anchored; '
     'platform-card=facebook+tiktok+google+instagram; login-label=alias-resolved-per-card; '
     'refresh=session-route-restore+selection-metadata-only; detail-client=pager-reset; '
     'security=' + hashlib.sha256(SECURITY.read_bytes()).hexdigest() + '; '
