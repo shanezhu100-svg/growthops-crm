@@ -120,6 +120,7 @@ print(
     + 'artifacts=' + ','.join(f'{name}:{sha[:12]}' for name, sha in changed_files)
 )
 
-# Keep the archived-client billing rule in the same pre-render finance correction
+# Keep narrowly scoped finance business guards in the same pre-render correction
 # stage so final browser/business regression tests execute the guarded shipped code.
 import archived_client_receivable_guard_finalize  # noqa: E402,F401
+import receivable_reminder_close_finalize  # noqa: E402,F401
