@@ -81,3 +81,4 @@ await import('./test_business_finance_confirmed_profit_cost.mjs');
 await import('./test_business_client_module_home.mjs');
 await import('./test_business_lead_lifecycle.mjs');
 await import('./test_business_financial_input_bounds.mjs');
+await import('./test_business_ad_input_inventory.mjs');
