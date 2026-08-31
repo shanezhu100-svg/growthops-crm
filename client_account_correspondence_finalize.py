@@ -107,6 +107,36 @@ if security.count(old_summary) != 1:
     fail(f'unexpected legacy safe-summary resolver count: {security.count(old_summary)}')
 security = security.replace(old_summary, new_summary, 1)
 
+# The client-form overlay resolver originally climbed ancestors only for Facebook and
+# TikTok. Google/Instagram cards were therefore discovered but received an empty
+# platform key, so their already-safe per-account summaries could never be selected.
+# Keep the ancestry behavior but recognize all four credential platforms.
+old_platform = r'''  const platformForCard=card=>{
+    let node=card||null;
+    for(let i=0;node&&i<9;i+=1,node=node.parentElement){
+      const value=String(node.textContent||'').toLowerCase();
+      if(value.includes('facebook'))return 'facebook';
+      if(value.includes('tiktok'))return 'tiktok';
+    }
+    return '';
+  };
+'''
+new_platform = r'''  const platformForCard=card=>{
+    let node=card||null;
+    for(let i=0;node&&i<9;i+=1,node=node.parentElement){
+      const value=String(node.textContent||'').toLowerCase();
+      if(value.includes('facebook'))return 'facebook';
+      if(value.includes('tiktok'))return 'tiktok';
+      if(value.includes('google'))return 'google';
+      if(value.includes('instagram'))return 'instagram';
+    }
+    return '';
+  };
+'''
+if security.count(old_platform) != 1:
+    fail(f'unexpected two-platform card resolver count: {security.count(old_platform)}')
+security = security.replace(old_platform, new_platform, 1)
+
 # Route persistence is deliberately metadata-only. Never persist login identifiers,
 # passwords, session tokens, Vault data, forms, or whole client objects. Restore is
 # gated on an authenticated vm.currentUser so refresh cannot expose an authenticated
@@ -233,6 +263,7 @@ BRIDGE.write_text(bridge, encoding='utf-8')
 print(
     'CLIENT_ACCOUNT_CORRESPONDENCE_FINALIZE_OK: '
     'safe-summary=account-id-correspondence+client-form-order-fallback+multi-account-fail-closed; '
+    'platform-card=facebook+tiktok+google+instagram; '
     'refresh=session-route-restore+selection-metadata-only; detail-client=pager-reset; '
     'security=' + hashlib.sha256(SECURITY.read_bytes()).hexdigest() + '; '
     'bridge=' + hashlib.sha256(BRIDGE.read_bytes()).hexdigest()
