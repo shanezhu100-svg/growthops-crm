@@ -18,7 +18,10 @@ function extractMethod(name){
   return tail.slice(0,next).replace(/,\s*$/,'').trim();
 }
 
-const targets=['defaultLeadForm','saveLead','convertLeadToClient','openConvertedLeadClient','deleteLead','leadStats','filteredLeads'];
+const targets=[
+  'defaultLeadForm','saveLead','convertLeadToClient','openConvertedLeadClient','deleteLead','leadStats','filteredLeads',
+  'normalizeClient','saveClient','ensureClientFirstReceivable','archiveClient','restoreClient','deleteClient'
+];
 for(const name of targets){
   const source=extractMethod(name);
   console.log(`BUSINESS_LEADS_METHOD_BEGIN:${name}`);
