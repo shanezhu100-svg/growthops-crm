@@ -81,4 +81,4 @@ const results={
   exact:runCase('exact','100'),
 };
 
-throw new Error('BUSINESS_RECEIVABLE_PAYMENT_BOUNDS_PROBE: '+JSON.stringify(results));
+throw new Error('BUSINESS_RECEIVABLE_PAYMENT_BOUNDS_PROBE: '+JSON.stringify(results)+'; SOURCE='+source.saveReceivablePayment);
