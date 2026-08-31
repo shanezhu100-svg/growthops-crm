@@ -101,7 +101,17 @@ fixture = r'''<!doctype html>
   </script>
   <script src="/cloud-security-hotfix.js"></script>
   <script>
-    setTimeout(()=>{
+    setTimeout(async()=>{
+      let fontReady=!document.fonts;
+      try{
+        if(document.fonts?.ready){
+          await document.fonts.ready;
+          const loaded=await document.fonts.load('900 16px "Font Awesome 6 Free"');
+          fontReady=loaded.length>0&&document.fonts.check('900 16px "Font Awesome 6 Free"');
+        }
+      }catch(_err){fontReady=false}
+      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+
       const accountHosts=[...document.querySelectorAll('[data-growthops-credential-form-status="account"]')];
       const secretHosts=[...document.querySelectorAll('[data-growthops-credential-form-status="secret"]')];
       const allHosts=[...accountHosts,...secretHosts];
@@ -167,6 +177,7 @@ fixture = r'''<!doctype html>
 
       const noSavedPrefix=accountTexts.every(text=>!text.includes('已保存：'));
       const pass=(
+        fontReady &&
         accountHosts.length===2 &&
         secretHosts.length===2 &&
         accountTexts.includes('fb-login@example.test') &&
@@ -184,6 +195,7 @@ fixture = r'''<!doctype html>
         unexpected.length===0
       );
       document.body.setAttribute('data-credential-regression',pass?'pass':'fail');
+      document.body.setAttribute('data-font-ready',String(fontReady));
       document.body.setAttribute('data-account-host-count',String(accountHosts.length));
       document.body.setAttribute('data-secret-host-count',String(secretHosts.length));
       document.body.setAttribute('data-initial-input-values',JSON.stringify(initialInputValues));
@@ -284,7 +296,8 @@ dom = proc.stdout or ''
 if 'data-credential-regression="pass"' not in dom:
     attrs = {}
     for name in (
-        'data-credential-regression', 'data-account-host-count', 'data-secret-host-count',
+        'data-credential-regression', 'data-font-ready',
+        'data-account-host-count', 'data-secret-host-count',
         'data-initial-input-values', 'data-overlays-inside', 'data-eye-integrity',
         'data-click-preserves-saved-account', 'data-typing-handoff',
         'data-summary-client-id', 'data-unexpected-rpc-count',
@@ -293,6 +306,8 @@ if 'data-credential-regression="pass"' not in dom:
         attrs[name] = match.group(1) if match else '__missing__'
     fail('synthetic client-form regression failed: ' + json.dumps(attrs, ensure_ascii=False) + '; stderr=' + stderr[-1200:])
 
+if 'data-font-ready="true"' not in dom:
+    fail('Font Awesome webfont was not ready before eye geometry assertion')
 if 'fb-login@example.test' not in dom or 'tk-login@example.test' not in dom:
     fail('safe login summary text missing from rendered input overlay')
 if '已保存：fb-login@example.test' in dom or '已保存：tk-login@example.test' in dom:
@@ -314,6 +329,6 @@ print(
     'BROWSER_CLIENT_FORM_CREDENTIAL_STATUS_OK: '
     f'browser={Path(browser).name}; currentPage=client-form; stale-assets-id=0; '
     'safe-summary-client=client-1; facebook+tiktok=in-input-login+masked-eye; '
-    'click=preserves-saved-account; typing=mutation-handoff; eye=visible+font-icon+hit-testable; '
-    'initial-edit-values=blank; reveal-rpc=not-called'
+    'font-readiness=awaited; click=preserves-saved-account; typing=mutation-handoff; '
+    'eye=visible+font-icon+hit-testable; initial-edit-values=blank; reveal-rpc=not-called'
 )
