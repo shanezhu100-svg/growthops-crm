@@ -87,12 +87,17 @@ replace_block(
     'credential client resolver',
 )
 
+# The edit form, detail page, and account-assets views all share one credential
+# renderer. Platform classification must therefore recognize all supported account
+# families before per-account safe-summary correspondence is attempted.
 platform_block = r'''  const platformForCard=card=>{
     let node=card||null;
     for(let i=0;node&&i<9;i+=1,node=node.parentElement){
       const value=String(node.textContent||'').toLowerCase();
       if(value.includes('facebook'))return 'facebook';
       if(value.includes('tiktok'))return 'tiktok';
+      if(value.includes('google'))return 'google';
+      if(value.includes('instagram'))return 'instagram';
     }
     return '';
   };
@@ -104,11 +109,17 @@ replace_block(
     'platform resolver',
 )
 
-card_block = r'''  const credentialLabelCount=(root,label)=>[...root.querySelectorAll('*')].filter(el=>el.children.length===0&&cleanText(el)===label).length;
+# Credential login labels are presentation aliases rather than platform identity.
+# Current client edit uses 登录账号 for all four platforms, while older/detail views
+# may still use 登录邮箱 or 登录邮箱 / 手机号. A card is valid only when it has exactly
+# one supported login label and one password / 2FA label.
+card_block = r'''  const credentialAccountLabelTexts=['登录账号','登录邮箱','登录邮箱 / 手机号'];
+  const credentialLabelCount=(root,label)=>[...root.querySelectorAll('*')].filter(el=>el.children.length===0&&cleanText(el)===label).length;
+  const credentialAccountLabelCount=root=>credentialAccountLabelTexts.reduce((count,label)=>count+credentialLabelCount(root,label),0);
   const credentialCardForLabel=label=>{
     let node=label?.parentElement||null;
     for(let i=0;node&&i<9;i+=1,node=node.parentElement){
-      if(credentialLabelCount(node,'登录账号')===1&&credentialLabelCount(node,'密码 / 2FA')===1)return node;
+      if(credentialAccountLabelCount(node)===1&&credentialLabelCount(node,'密码 / 2FA')===1)return node;
     }
     return null;
   };
@@ -215,7 +226,7 @@ value_block = r'''  const configureCredentialFormOverlay=(host,control,kind)=>{
   };
   const valueCellForLabel=label=>{
     const labelText=cleanText(label);
-    const kind=labelText==='登录账号'?'account':labelText==='密码 / 2FA'?'secret':'';
+    const kind=credentialAccountLabelTexts.includes(labelText)?'account':labelText==='密码 / 2FA'?'secret':'';
     if(kind){
       const host=credentialFormStatusHost(label,kind);
       if(host)return host;
@@ -231,6 +242,34 @@ replace_block(
     '  const locateCredentialRows=()=>{',
     value_block,
     'credential value/status resolver',
+)
+
+# Replace the inherited platform-specific login-label choice with an alias resolver.
+# This keeps mutation inputs untouched while ensuring Google/Instagram saved login
+# overlays are found when the edit form uses the common 登录账号 label.
+locate_block = r'''  const locateCredentialRows=()=>{
+    const rows=[];
+    const accountLabels=new Set(credentialAccountLabelTexts);
+    const labels=[...document.querySelectorAll('*')].filter(el=>el.children.length===0&&(accountLabels.has(cleanText(el))||cleanText(el)==='密码 / 2FA'));
+    const seen=new Set();
+    for(const label of labels){
+      const card=credentialCardForLabel(label);
+      if(!card||seen.has(card))continue;
+      const platform=platformForCard(card);
+      if(!platform)continue;
+      seen.add(card);
+      const accountLabel=credentialAccountLabelTexts.map(text=>exactLeaf(card,text)).find(Boolean)||null;
+      const passwordLabel=exactLeaf(card,'密码 / 2FA');
+      rows.push({card,platform,accountCell:valueCellForLabel(accountLabel),passwordCell:valueCellForLabel(passwordLabel)});
+    }
+    return rows.filter(row=>row.platform&&(row.accountCell||row.passwordCell));
+  };
+'''
+replace_block(
+    '  const locateCredentialRows=()=>{',
+    '  const prepareInlineCell=(cell,kind)=>{',
+    locate_block,
+    'four-platform credential row resolver',
 )
 
 # Show safe login identifiers inside the matching input chrome while keeping the
@@ -289,5 +328,6 @@ print(
     'form-inputs=mutation-only; safe-summary=input-overlay; focus=preserves-saved-state; '
     'typing=mutation-handoff; empty-form-status=placeholder; login=value-color; '
     'password=masked+visible-hit-target-eye-inside-input; per-account-card=nearest-pair; '
+    'platforms=facebook+tiktok+google+instagram; login-labels=alias-resolved; '
     'security=' + hashlib.sha256(SECURITY.read_bytes()).hexdigest()
 )
