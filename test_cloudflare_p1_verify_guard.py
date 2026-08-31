@@ -9,7 +9,7 @@ EXPECTED_PINS = {
     'tailwind.css': '082358f4ff9c6d67ccb8e628ed27669967e15cfa7908f2e4c36a1e89c0a3f7b6',
     'app/app-inline-01.js': '52ade14219e58afb7b9f4535440479add87f8a59a0404e7fe504cfde5f06c53e',
     'app/app-inline-02.js': 'dfb07b154ec1ab7c540dbf044164a0ea7445dee996f859504d22f673d247f26b',
-    'app/app-inline-03.js': 'f7b69ea5b5dec3cd84945fcf0c66044c59e9a0ea22900d6382f72a759fbabecd',
+    'app/app-inline-03.js': '187e0950b7098f0ccc839678ec92ed2af65cc739d1f4798f33d3a1a23b89bdeb',
     'app/app-style-01.css': '33a4a117d6b9e820b389e09d87a4ccb94242fb043e80ea087f72c17f46861a70',
     'app/app-style-02.css': '01ed16d03067a8879b877440574fbc6d98af53e0909685e1a23271169c149997',
     'app/app-style-03.css': '64bd5db676657f40c7962080ce62f3b74125865c3f084a67ce21d0fc77ed00b6',
@@ -39,8 +39,6 @@ for name, digest in EXPECTED_PINS.items():
     if marker not in VERIFY:
         raise SystemExit('CLOUDFLARE_P1_VERIFY_GUARD_TEST_FAILED production pin drift: ' + name)
 
-# The runtime-only migration is a removal boundary. Guard the final verifier itself
-# so an old compiler-inclusive Vue asset cannot silently return outside the pin map.
 required_verify_markers = (
     "DIST / '404.html'", "DIST / '_headers'", "headers.startswith('/*\\n')",
     "DIST / 'vendor' / 'vue-3.5.41.global.js'",
