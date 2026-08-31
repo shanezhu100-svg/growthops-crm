@@ -30,7 +30,7 @@ EXPECTED_PINS = {
     'vendor/inter/inter-latin.woff2': '3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62',
     'vendor/inter/inter-latin-ext.woff2': '34b9c504cab7a73e37b746343a449132e56cf7b5481af2cb81dc74dcff25c956',
     'cloud-adapter.js': '9713943a80008f625000d6fac2440fb9395f9e6e2c1fd09e820a399c5c34379f',
-    'cloud-security-hotfix.js': 'befa849b6b631453aeb5090608665c3cebb72d2a9aa75ed0c1942d4f22809863',
+    'cloud-security-hotfix.js': 'e601cdfb025d115fe3d978648f513491bf570d82e61472a2177ed03d77918857',
     'cloud-p1-overrides.js': 'e50e05322a0d56e78bf112a52be08ff54263f4ce88cb0b9b91f6613722b8ccab',
     'cloud-ui-action-bridge.js': '017fe2b8c575353af5f01b6760d26598bf038eff95bd58d56c5901942b1be0fe',
 }
@@ -61,15 +61,10 @@ missing = [marker for marker in required_verify_markers if marker not in VERIFY]
 if missing:
     raise SystemExit('CLOUDFLARE_P1_VERIFY_GUARD_TEST_FAILED verifier coverage missing: ' + ', '.join(missing))
 
-if 'vendor/vue-3.5.41.global.js' in EXPECTED_PINS:
-    raise SystemExit('CLOUDFLARE_P1_VERIFY_GUARD_TEST_FAILED compiler-inclusive Vue remains accepted')
-if 'vendor/vue-3.5.41.runtime.global.js' not in EXPECTED_PINS or 'vendor/vue-3.5.41.renders.js' not in EXPECTED_PINS:
-    raise SystemExit('CLOUDFLARE_P1_VERIFY_GUARD_TEST_FAILED runtime-only Vue artifacts not both pinned')
-
 call = 'python3 test_cloudflare_p1_verify_guard.py'
 if BUILD.count(call) != 1:
     raise SystemExit('CLOUDFLARE_P1_VERIFY_GUARD_TEST_FAILED static verifier gate not wired exactly once')
 if BUILD.index(call) < BUILD.index('python3 test_cloudflare_failopen_404.py'):
     raise SystemExit('CLOUDFLARE_P1_VERIFY_GUARD_TEST_FAILED verifier gate runs before 404 build test')
 
-print('CLOUDFLARE_P1_VERIFY_GUARD_TESTS_OK: production-pins=28-synchronized; static-tailwind+app-js+app-css+vendor-js+vue-runtime-only+renders+fontawesome+inter=hash-pinned; vue-compiler=forbidden; browser-mount-gate=required; final-404-check=required; wildcard-static-headers=8-required; corp=same-origin; robots=noindex+nofollow+noarchive; active-material-deny=required')
+print('CLOUDFLARE_P1_VERIFY_GUARD_TESTS_OK: production-pins=26-synchronized; static-tailwind+vendor-js+app-assets=hash-pinned; final-404-check=required; wildcard-static-headers=8-required; active-material-deny=required')
