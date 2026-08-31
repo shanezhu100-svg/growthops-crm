@@ -44,29 +44,31 @@ if not files:
     fail('no final app-inline JS artifacts found')
 
 
-def patch_actual(source: str) -> str:
+def patch_profit(source: str, name: str) -> str:
     old = 'return this.subtractSpendGroups(income,this.financeCostGroups)'
     new = "return this.subtractSpendGroups(income,this.financeClientFilter==='ALL'?this.financeCompanyNonClientCostGroups:this.financeCostGroups)"
     if source.count(old) != 1:
-        fail(f'financeActualNetProfitGroups expected one total-cost anchor, found {source.count(old)}')
+        fail(f'{name} expected one total-cost anchor, found {source.count(old)}')
     if 'financeCompanyNonClientCostGroups' in source:
-        fail('financeActualNetProfitGroups already contains non-client cost authority')
+        fail(f'{name} already contains non-client cost authority')
     return source.replace(old, new, 1)
 
 
+def patch_actual(source: str) -> str:
+    return patch_profit(source, 'financeActualNetProfitGroups')
+
+
+def patch_expected(source: str) -> str:
+    return patch_profit(source, 'financeExpectedNetProfitGroups')
+
+
 def patch_breakdown(source: str) -> str:
-    # All three references participate in the same breakdown (currency inventory +
-    # displayed cost + formatted cost). Derive the method's first parameter instead
-    # of assuming its spelling, then apply one identical ACTUAL/ALL basis everywhere.
-    signature = re.match(r'financeProfitBreakdownRows\(([^)]*)\)\s*\{', source)
-    if not signature:
-        fail('financeProfitBreakdownRows signature drifted')
-    params = signature.group(1).strip()
-    first_param = params.split(',', 1)[0].split('=', 1)[0].strip() if params else ''
-    if not re.fullmatch(r'[A-Za-z_$][A-Za-z0-9_$]*', first_param):
-        fail(f'financeProfitBreakdownRows first parameter is not a simple identifier: {first_param!r}')
+    # Every cost reference participates in the same breakdown (currency inventory,
+    # displayed cost, and formatted cost). At ALL/company scope BOTH EXPECTED and
+    # ACTUAL use company/non-client costs. A selected client keeps its existing
+    # financeCostGroups basis so client profitability semantics do not change.
     old = 'this.financeCostGroups'
-    new = f"({first_param}==='ACTUAL'&&this.financeClientFilter==='ALL'?this.financeCompanyNonClientCostGroups:this.financeCostGroups)"
+    new = "(this.financeClientFilter==='ALL'?this.financeCompanyNonClientCostGroups:this.financeCostGroups)"
     count = source.count(old)
     if count != 3:
         fail(f'financeProfitBreakdownRows expected three cost-group references, found {count}')
@@ -75,22 +77,32 @@ def patch_breakdown(source: str) -> str:
     return source.replace(old, new)
 
 
-def patch_snapshot(source: str) -> str:
-    # The method contains one client-row calculation and one company/all-clients
-    # calculation. Preserve the client calculation; only the final company snapshot
-    # excludes direct CLIENT costs that have already been attributed to clients.
-    old = 'actualNetProfitGroups=this.subtractSpendGroups(this.financeProfitGroups(receivableGroups,actualRebateGroups),costGroups)'
+def replace_last(source: str, old: str, new: str, label: str) -> str:
     if source.count(old) != 2:
-        fail(f'buildFinanceMonthSnapshot expected two actual-profit anchors, found {source.count(old)}')
-    new = 'actualNetProfitGroups=this.subtractSpendGroups(this.financeProfitGroups(receivableGroups,actualRebateGroups),this.subtractSpendGroups(costGroups,directClientCostGroups))'
+        fail(f'buildFinanceMonthSnapshot expected two {label} anchors, found {source.count(old)}')
     pos = source.rfind(old)
     if pos < 0:
-        fail('buildFinanceMonthSnapshot company actual-profit anchor missing')
+        fail(f'buildFinanceMonthSnapshot company {label} anchor missing')
     return source[:pos] + new + source[pos + len(old):]
+
+
+def patch_snapshot(source: str) -> str:
+    # The method contains one client-row calculation and one company/all-clients
+    # calculation for both expected and actual profit. Preserve client calculations;
+    # company snapshots exclude direct CLIENT costs from BOTH expected and actual
+    # net profit so future locked months use the same reviewed company cost basis.
+    expected_old = 'expectedNetProfitGroups=this.subtractSpendGroups(this.financeProfitGroups(receivableGroups,expectedRebateGroups),costGroups)'
+    expected_new = 'expectedNetProfitGroups=this.subtractSpendGroups(this.financeProfitGroups(receivableGroups,expectedRebateGroups),this.subtractSpendGroups(costGroups,directClientCostGroups))'
+    actual_old = 'actualNetProfitGroups=this.subtractSpendGroups(this.financeProfitGroups(receivableGroups,actualRebateGroups),costGroups)'
+    actual_new = 'actualNetProfitGroups=this.subtractSpendGroups(this.financeProfitGroups(receivableGroups,actualRebateGroups),this.subtractSpendGroups(costGroups,directClientCostGroups))'
+    source = replace_last(source, expected_old, expected_new, 'expected-profit')
+    source = replace_last(source, actual_old, actual_new, 'actual-profit')
+    return source
 
 
 patchers = {
     'financeActualNetProfitGroups': patch_actual,
+    'financeExpectedNetProfitGroups': patch_expected,
     'financeProfitBreakdownRows': patch_breakdown,
     'buildFinanceMonthSnapshot': patch_snapshot,
 }
@@ -115,8 +127,9 @@ if not changed_files:
 
 print(
     'FINANCE_CONFIRMED_PROFIT_COST_FINALIZE_OK: '
-    'scope=ALL-confirmed-only; client-direct-cost=excluded-from-aggregate; '
-    'selected-client-cost=preserved; expected-profit=unchanged; future-snapshot=aligned; '
+    'scope=ALL-expected+confirmed; client-direct-cost=excluded-from-company-profit; '
+    'selected-client-cost=preserved; breakdown=company-cost-only-at-ALL; '
+    'future-snapshot=expected+actual-aligned; '
     + 'artifacts=' + ','.join(f'{name}:{sha[:12]}' for name, sha in changed_files)
 )
 
