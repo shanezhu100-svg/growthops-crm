@@ -51,6 +51,7 @@ fixture = r'''<!doctype html>
 </head>
 <body>
   <h1>Synthetic Client</h1>
+  <i id="font-load-probe" class="fa-solid fa-eye" aria-hidden="true" style="position:absolute;left:-10000px;top:0"></i>
   <section id="facebook-section">
     <h2>Facebook 资产</h2>
     <div class="account-card" data-account="fb1">
@@ -101,17 +102,7 @@ fixture = r'''<!doctype html>
   </script>
   <script src="/cloud-security-hotfix.js"></script>
   <script>
-    setTimeout(async()=>{
-      let fontReady=!document.fonts;
-      try{
-        if(document.fonts?.ready){
-          await document.fonts.ready;
-          const loaded=await document.fonts.load('900 16px "Font Awesome 6 Free"');
-          fontReady=loaded.length>0&&document.fonts.check('900 16px "Font Awesome 6 Free"');
-        }
-      }catch(_err){fontReady=false}
-      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
-
+    const evaluateRegression=(fontReady)=>{
       const accountHosts=[...document.querySelectorAll('[data-growthops-credential-form-status="account"]')];
       const secretHosts=[...document.querySelectorAll('[data-growthops-credential-form-status="secret"]')];
       const allHosts=[...accountHosts,...secretHosts];
@@ -205,7 +196,17 @@ fixture = r'''<!doctype html>
       document.body.setAttribute('data-typing-handoff',String(typingHandsOffToMutation));
       document.body.setAttribute('data-summary-client-id',String(summaryCalls[0]?.p_client_id||''));
       document.body.setAttribute('data-unexpected-rpc-count',String(unexpected.length));
-    },1400);
+    };
+
+    const waitForIconFont=(attempt=0)=>{
+      const fontReady=!document.fonts||document.fonts.check('900 16px "Font Awesome 6 Free"');
+      if(!fontReady&&attempt<30){
+        setTimeout(()=>waitForIconFont(attempt+1),100);
+        return;
+      }
+      requestAnimationFrame(()=>requestAnimationFrame(()=>evaluateRegression(fontReady)));
+    };
+    setTimeout(()=>waitForIconFont(0),1400);
   </script>
 </body>
 </html>'''
@@ -329,6 +330,6 @@ print(
     'BROWSER_CLIENT_FORM_CREDENTIAL_STATUS_OK: '
     f'browser={Path(browser).name}; currentPage=client-form; stale-assets-id=0; '
     'safe-summary-client=client-1; facebook+tiktok=in-input-login+masked-eye; '
-    'font-readiness=awaited; click=preserves-saved-account; typing=mutation-handoff; '
+    'font-readiness=polled; click=preserves-saved-account; typing=mutation-handoff; '
     'eye=visible+font-icon+hit-testable; initial-edit-values=blank; reveal-rpc=not-called'
 )
