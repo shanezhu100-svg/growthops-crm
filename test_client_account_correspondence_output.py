@@ -12,9 +12,9 @@ def require(ok: bool, message: str) -> None:
 
 
 # Multi-account summary must resolve by the currently visible account ID and never
-# reuse one platform-level summary across multiple FB/TK cards. Client edit is a
-# special case: internal IDs may not be rendered into the card at all, so after
-# exact token matching fails it may use the stable platform-local v-for order.
+# reuse one platform-level summary across multiple cards. Client edit is a special
+# case: internal IDs may not be rendered into the card at all, so after exact token
+# matching fails it may use the stable platform-local v-for order.
 for marker in (
     "facebook:{listKey:'fbAccounts',summaryKey:'facebookAccounts',pager:'FB',legacyKey:'facebook'}",
     "tiktok:{listKey:'tkAccounts',summaryKey:'tiktokAccounts',pager:'TK',legacyKey:'tiktok'}",
@@ -62,13 +62,22 @@ route_region = BRIDGE[route_start:route_end].lower()
 for forbidden in ('token_key', 'loginaccount', 'loginpassword', 'password', 'twofa', 'credential', 'accountsafe', 'vault'):
     require(forbidden not in route_region, 'sensitive value entered refresh persistence: ' + forbidden)
 
-# DB package returns per-account safe arrays while preserving current service-only
-# execution boundary. Password/2FA may be inspected only to calculate booleans.
+# DB package must return the same id-keyed safe-array model for all four credential
+# platforms while preserving the service-only execution boundary. Password/2FA may
+# be inspected only to calculate booleans and must never enter the response payload.
 for marker in (
     "'facebookAccounts',v_facebook",
     "'tiktokAccounts',v_tiktok",
-    "from jsonb_array_elements(coalesce(v_client->'fbAccounts','[]'::jsonb))",
-    "from jsonb_array_elements(coalesce(v_client->'tkAccounts','[]'::jsonb))",
+    "'googleAccounts',v_google",
+    "'instagramAccounts',v_instagram",
+    "from jsonb_array_elements(coalesce(v_client->'fbAccounts','[]'::jsonb)) with ordinality",
+    "from jsonb_array_elements(coalesce(v_client->'tkAccounts','[]'::jsonb)) with ordinality",
+    "from jsonb_array_elements(coalesce(v_client->'googleAccounts','[]'::jsonb)) with ordinality",
+    "from jsonb_array_elements(coalesce(v_client->'instagramAccounts','[]'::jsonb)) with ordinality",
+    "into v_facebook",
+    "into v_tiktok",
+    "into v_google",
+    "into v_instagram",
     "'loginAccount',coalesce(e.value->>'loginAccount','')",
     "'hasPassword',public.crm_secret_value_nonempty(e.value->'loginPassword')",
     "revoke all on function public.crm_client_account_safe_summary(text,text) from public, anon, authenticated",
@@ -83,5 +92,5 @@ print(
     'CLIENT_ACCOUNT_CORRESPONDENCE_OUTPUT_OK: '
     'login-account=direct-safe-summary+id-matched; multi-account=client-form-order-fallback+nonform-fail-closed; '
     'refresh=session-route+selection-metadata-only; detail-pager=client-isolated; '
-    'db=fb+tk-per-account-summary+service-role-only'
+    'db=facebook+tiktok+google+instagram-per-account-summary+service-role-only'
 )
