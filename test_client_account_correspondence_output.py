@@ -34,6 +34,17 @@ for marker in (
 require("if(row.platform==='facebook'||row.platform==='tiktok')return accountSafeSummaryData?.[row.platform]||null" not in SECURITY,
         'legacy platform-level FB/TK summary path still present')
 
+# Every client-form credential section must classify to the same four platform keys
+# understood by credentialPlatformConfig. Otherwise overlays can render but remain
+# blank because summaryForCredentialRow receives an empty platform key.
+for marker in (
+    "if(value.includes('facebook'))return 'facebook';",
+    "if(value.includes('tiktok'))return 'tiktok';",
+    "if(value.includes('google'))return 'google';",
+    "if(value.includes('instagram'))return 'instagram';",
+):
+    require(marker in SECURITY, 'four-platform card ancestry resolver missing: ' + marker)
+
 # The ordinal fallback must stay confined to the edit form; detail/assets keep their
 # pager/token mapping and fail closed instead of guessing across multiple accounts.
 require(SECURITY.count("vm.currentPage==='client-form'&&list.length>1") == 1,
@@ -91,6 +102,7 @@ for forbidden_key in ("'loginPassword',", "'password',", "'2FA',", "'twoFactor',
 print(
     'CLIENT_ACCOUNT_CORRESPONDENCE_OUTPUT_OK: '
     'login-account=direct-safe-summary+id-matched; multi-account=client-form-order-fallback+nonform-fail-closed; '
+    'platform-card=facebook+tiktok+google+instagram; '
     'refresh=session-route+selection-metadata-only; detail-pager=client-isolated; '
     'db=facebook+tiktok+google+instagram-per-account-summary+service-role-only'
 )
