@@ -137,6 +137,55 @@ if security.count(old_platform) != 1:
     fail(f'unexpected two-platform card resolver count: {security.count(old_platform)}')
 security = security.replace(old_platform, new_platform, 1)
 
+# Login identifier labels evolved independently across the four account templates.
+# The old resolver hard-coded Google to "登录邮箱" and Instagram to
+# "登录邮箱 / 手机号", while the current edit form renders the common "登录账号"
+# label. That left accountCell null for those platforms even though passwordCell and
+# the safe-summary RPC were correct. Resolve the value cell from the supported safe
+# display-label aliases inside each already-classified credential card instead of
+# guessing one label from the platform name.
+old_rows = r'''  const locateCredentialRows=()=>{
+    const rows=[];
+    const accountLabels=new Set(['登录账号','登录邮箱','登录邮箱 / 手机号']);
+    const labels=[...document.querySelectorAll('*')].filter(el=>el.children.length===0&&(accountLabels.has(cleanText(el))||cleanText(el)==='密码 / 2FA'));
+    const seen=new Set();
+    for(const label of labels){
+      const card=credentialCardForLabel(label);
+      if(!card||seen.has(card))continue;
+      const platform=platformForCard(card);
+      if(!platform)continue;
+      seen.add(card);
+      const accountLabelText=platform==='google'?'登录邮箱':platform==='instagram'?'登录邮箱 / 手机号':'登录账号';
+      const accountLabel=exactLeaf(card,accountLabelText);
+      const passwordLabel=exactLeaf(card,'密码 / 2FA');
+      rows.push({card,platform,accountCell:valueCellForLabel(accountLabel),passwordCell:valueCellForLabel(passwordLabel)});
+    }
+    return rows.filter(row=>row.platform&&(row.accountCell||row.passwordCell));
+  };
+'''
+new_rows = r'''  const locateCredentialRows=()=>{
+    const rows=[];
+    const accountLabelTexts=['登录账号','登录邮箱','登录邮箱 / 手机号'];
+    const accountLabels=new Set(accountLabelTexts);
+    const labels=[...document.querySelectorAll('*')].filter(el=>el.children.length===0&&(accountLabels.has(cleanText(el))||cleanText(el)==='密码 / 2FA'));
+    const seen=new Set();
+    for(const label of labels){
+      const card=credentialCardForLabel(label);
+      if(!card||seen.has(card))continue;
+      const platform=platformForCard(card);
+      if(!platform)continue;
+      seen.add(card);
+      const accountLabel=accountLabelTexts.map(text=>exactLeaf(card,text)).find(Boolean)||null;
+      const passwordLabel=exactLeaf(card,'密码 / 2FA');
+      rows.push({card,platform,accountCell:valueCellForLabel(accountLabel),passwordCell:valueCellForLabel(passwordLabel)});
+    }
+    return rows.filter(row=>row.platform&&(row.accountCell||row.passwordCell));
+  };
+'''
+if security.count(old_rows) != 1:
+    fail(f'unexpected platform-specific credential-row resolver count: {security.count(old_rows)}')
+security = security.replace(old_rows, new_rows, 1)
+
 # Route persistence is deliberately metadata-only. Never persist login identifiers,
 # passwords, session tokens, Vault data, forms, or whole client objects. Restore is
 # gated on an authenticated vm.currentUser so refresh cannot expose an authenticated
@@ -263,7 +312,7 @@ BRIDGE.write_text(bridge, encoding='utf-8')
 print(
     'CLIENT_ACCOUNT_CORRESPONDENCE_FINALIZE_OK: '
     'safe-summary=account-id-correspondence+client-form-order-fallback+multi-account-fail-closed; '
-    'platform-card=facebook+tiktok+google+instagram; '
+    'platform-card=facebook+tiktok+google+instagram; login-label=alias-resolved-per-card; '
     'refresh=session-route-restore+selection-metadata-only; detail-client=pager-reset; '
     'security=' + hashlib.sha256(SECURITY.read_bytes()).hexdigest() + '; '
     'bridge=' + hashlib.sha256(BRIDGE.read_bytes()).hexdigest()
