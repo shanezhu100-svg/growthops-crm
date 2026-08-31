@@ -11,10 +11,6 @@ def require(ok: bool, message: str) -> None:
         raise SystemExit('CLIENT_ACCOUNT_CORRESPONDENCE_OUTPUT_FAILED: ' + message)
 
 
-# Multi-account summary must resolve by the currently visible account ID and never
-# reuse one platform-level summary across multiple cards. Client edit is a special
-# case: internal IDs may not be rendered into the card at all, so after exact token
-# matching fails it may use the stable platform-local v-for order.
 for marker in (
     "facebook:{listKey:'fbAccounts',summaryKey:'facebookAccounts',pager:'FB',legacyKey:'facebook'}",
     "tiktok:{listKey:'tkAccounts',summaryKey:'tiktokAccounts',pager:'TK',legacyKey:'tiktok'}",
@@ -34,9 +30,6 @@ for marker in (
 require("if(row.platform==='facebook'||row.platform==='tiktok')return accountSafeSummaryData?.[row.platform]||null" not in SECURITY,
         'legacy platform-level FB/TK summary path still present')
 
-# Every client-form credential section must classify to the same four platform keys
-# understood by credentialPlatformConfig. Otherwise overlays can render but remain
-# blank because summaryForCredentialRow receives an empty platform key.
 for marker in (
     "if(value.includes('facebook'))return 'facebook';",
     "if(value.includes('tiktok'))return 'tiktok';",
@@ -45,25 +38,19 @@ for marker in (
 ):
     require(marker in SECURITY, 'four-platform card ancestry resolver missing: ' + marker)
 
-# Account display labels are presentation aliases, not platform identity. Google and
-# Instagram must continue working when the current client-edit template uses the
-# common 登录账号 label instead of the older platform-specific login-email labels.
 for marker in (
-    "const accountLabelTexts=['登录账号','登录邮箱','登录邮箱 / 手机号']",
-    "const accountLabels=new Set(accountLabelTexts)",
-    "const accountLabel=accountLabelTexts.map(text=>exactLeaf(card,text)).find(Boolean)||null",
+    "const credentialAccountLabelTexts=['登录账号','登录邮箱','登录邮箱 / 手机号']",
+    "const accountLabels=new Set(credentialAccountLabelTexts)",
+    "const accountLabel=credentialAccountLabelTexts.map(text=>exactLeaf(card,text)).find(Boolean)||null",
+    "credentialAccountLabelTexts.includes(labelText)?'account'",
 ):
     require(marker in SECURITY, 'credential login label alias resolver missing: ' + marker)
 require("const accountLabelText=platform==='google'?'登录邮箱':platform==='instagram'?'登录邮箱 / 手机号':'登录账号'" not in SECURITY,
         'platform-specific login label hard-code still present')
 
-# The ordinal fallback must stay confined to the edit form; detail/assets keep their
-# pager/token mapping and fail closed instead of guessing across multiple accounts.
 require(SECURITY.count("vm.currentPage==='client-form'&&list.length>1") == 1,
         'client-form order fallback scope drifted')
 
-# Refresh persistence is metadata-only and waits for authenticated state before it
-# restores a protected route.
 for marker in (
     "const UI_ROUTE_STATE_KEY='growthops_ui_route_state_v1'",
     "const UI_ROUTE_SELECTION_KEYS=['selectedClientId','selectedAssetsClientId','selectedAdsClientId','selectedAnalyticsClientId','selectedSopClientId','selectedSopAccountKey']",
@@ -85,9 +72,6 @@ route_region = BRIDGE[route_start:route_end].lower()
 for forbidden in ('token_key', 'loginaccount', 'loginpassword', 'password', 'twofa', 'credential', 'accountsafe', 'vault'):
     require(forbidden not in route_region, 'sensitive value entered refresh persistence: ' + forbidden)
 
-# DB package must return the same id-keyed safe-array model for all four credential
-# platforms while preserving the service-only execution boundary. Password/2FA may
-# be inspected only to calculate booleans and must never enter the response payload.
 for marker in (
     "'facebookAccounts',v_facebook",
     "'tiktokAccounts',v_tiktok",
@@ -97,10 +81,7 @@ for marker in (
     "from jsonb_array_elements(coalesce(v_client->'tkAccounts','[]'::jsonb)) with ordinality",
     "from jsonb_array_elements(coalesce(v_client->'googleAccounts','[]'::jsonb)) with ordinality",
     "from jsonb_array_elements(coalesce(v_client->'instagramAccounts','[]'::jsonb)) with ordinality",
-    "into v_facebook",
-    "into v_tiktok",
-    "into v_google",
-    "into v_instagram",
+    "into v_facebook","into v_tiktok","into v_google","into v_instagram",
     "'loginAccount',coalesce(e.value->>'loginAccount','')",
     "'hasPassword',public.crm_secret_value_nonempty(e.value->'loginPassword')",
     "revoke all on function public.crm_client_account_safe_summary(text,text) from public, anon, authenticated",
@@ -111,10 +92,4 @@ for marker in (
 for forbidden_key in ("'loginPassword',", "'password',", "'2FA',", "'twoFactor',"):
     require(forbidden_key not in MIGRATION, 'safe-summary response appears to expose secret key: ' + forbidden_key)
 
-print(
-    'CLIENT_ACCOUNT_CORRESPONDENCE_OUTPUT_OK: '
-    'login-account=direct-safe-summary+id-matched+label-alias-resolved; multi-account=client-form-order-fallback+nonform-fail-closed; '
-    'platform-card=facebook+tiktok+google+instagram; '
-    'refresh=session-route+selection-metadata-only; detail-pager=client-isolated; '
-    'db=facebook+tiktok+google+instagram-per-account-summary+service-role-only'
-)
+print('CLIENT_ACCOUNT_CORRESPONDENCE_OUTPUT_OK: login-account=direct-safe-summary+id-matched+label-alias-resolved; multi-account=client-form-order-fallback+nonform-fail-closed; platform-card=facebook+tiktok+google+instagram; refresh=session-route+selection-metadata-only; detail-pager=client-isolated; db=facebook+tiktok+google+instagram-per-account-summary+service-role-only')
