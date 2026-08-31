@@ -6,13 +6,23 @@ if(!fs.existsSync(appDir))throw new Error('BUSINESS_LEADS_INVENTORY_PROBE_FAILED
 const files=fs.readdirSync(appDir).filter(name=>/^app-inline-\d+\.js$/.test(name)).sort();
 const bundle=files.map(name=>fs.readFileSync(path.join(appDir,name),'utf8')).join('\n');
 
-// Inventory only final shipped method names. Do not print method bodies or runtime data.
-const names=new Set();
-for(const match of bundle.matchAll(/(?:^|[,\n])\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*\([^)]*\)\s*\{/gm)){
-  const name=match[1];
-  if(/lead|prospect|convert|client/i.test(name))names.add(name);
+function extractMethod(name){
+  const signature=new RegExp(`(?:^|[,\\n])\\s*(${name}\\([^)]*\\)\\s*\\{)`,'m');
+  const match=signature.exec(bundle);
+  if(!match)throw new Error(`BUSINESS_LEADS_INVENTORY_PROBE_FAILED: ${name} not found`);
+  const start=match.index+match[0].indexOf(match[1]);
+  const tail=bundle.slice(start);
+  const defs=[...tail.matchAll(/(?:^|[,]\s*|\n\s*)([A-Za-z_$][A-Za-z0-9_$]*)\s*\([^)]*\)\s*\{/g)];
+  if(defs.length<2||defs[0][1]!==name)throw new Error(`BUSINESS_LEADS_INVENTORY_PROBE_FAILED: ${name} parser drifted`);
+  const next=defs[1].index+defs[1][0].indexOf(defs[1][1]);
+  return tail.slice(0,next).replace(/,\s*$/,'').trim();
 }
-const sorted=[...names].sort((a,b)=>a.localeCompare(b));
-console.log('BUSINESS_LEADS_INVENTORY_PROBE: '+sorted.join(','));
-if(!sorted.length)throw new Error('BUSINESS_LEADS_INVENTORY_PROBE_FAILED: no lead/client lifecycle methods discovered; parser drifted');
-throw new Error('BUSINESS_LEADS_INVENTORY_PROBE_PIN_REQUIRED: convert inventory into a reviewed executable regression gate before merge');
+
+const targets=['defaultLeadForm','saveLead','convertLeadToClient','openConvertedLeadClient','deleteLead','leadStats','filteredLeads'];
+for(const name of targets){
+  const source=extractMethod(name);
+  console.log(`BUSINESS_LEADS_METHOD_BEGIN:${name}`);
+  console.log(source);
+  console.log(`BUSINESS_LEADS_METHOD_END:${name}`);
+}
+throw new Error('BUSINESS_LEADS_INVENTORY_PROBE_PIN_REQUIRED: replace source probe with executable lifecycle assertions before merge');
