@@ -119,3 +119,7 @@ print(
     'selected-client-cost=preserved; expected-profit=unchanged; future-snapshot=aligned; '
     + 'artifacts=' + ','.join(f'{name}:{sha[:12]}' for name, sha in changed_files)
 )
+
+# Keep the archived-client billing rule in the same pre-render finance correction
+# stage so final browser/business regression tests execute the guarded shipped code.
+import archived_client_receivable_guard_finalize  # noqa: E402,F401
