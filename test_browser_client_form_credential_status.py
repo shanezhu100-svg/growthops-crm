@@ -51,6 +51,7 @@ fixture = r'''<!doctype html>
 </head>
 <body>
   <h1>Synthetic Client</h1>
+  <i id="font-load-probe" class="fa-solid fa-eye" aria-hidden="true" style="position:absolute;left:-10000px;top:0"></i>
   <section id="facebook-section">
     <h2>Facebook 资产</h2>
     <div class="account-card" data-account="fb1">
@@ -101,7 +102,7 @@ fixture = r'''<!doctype html>
   </script>
   <script src="/cloud-security-hotfix.js"></script>
   <script>
-    setTimeout(()=>{
+    const evaluateRegression=(fontReady)=>{
       const accountHosts=[...document.querySelectorAll('[data-growthops-credential-form-status="account"]')];
       const secretHosts=[...document.querySelectorAll('[data-growthops-credential-form-status="secret"]')];
       const allHosts=[...accountHosts,...secretHosts];
@@ -167,6 +168,7 @@ fixture = r'''<!doctype html>
 
       const noSavedPrefix=accountTexts.every(text=>!text.includes('已保存：'));
       const pass=(
+        fontReady &&
         accountHosts.length===2 &&
         secretHosts.length===2 &&
         accountTexts.includes('fb-login@example.test') &&
@@ -184,6 +186,7 @@ fixture = r'''<!doctype html>
         unexpected.length===0
       );
       document.body.setAttribute('data-credential-regression',pass?'pass':'fail');
+      document.body.setAttribute('data-font-ready',String(fontReady));
       document.body.setAttribute('data-account-host-count',String(accountHosts.length));
       document.body.setAttribute('data-secret-host-count',String(secretHosts.length));
       document.body.setAttribute('data-initial-input-values',JSON.stringify(initialInputValues));
@@ -193,7 +196,21 @@ fixture = r'''<!doctype html>
       document.body.setAttribute('data-typing-handoff',String(typingHandsOffToMutation));
       document.body.setAttribute('data-summary-client-id',String(summaryCalls[0]?.p_client_id||''));
       document.body.setAttribute('data-unexpected-rpc-count',String(unexpected.length));
-    },1400);
+    };
+
+    const waitForIconFont=(attempt=0)=>{
+      // Force the hidden probe through layout before checking FontFaceSet. Once the
+      // font is ready, use a short timer rather than requestAnimationFrame: Chromium
+      // --dump-dom with virtual time does not guarantee a post-font RAF callback.
+      document.getElementById('font-load-probe')?.getBoundingClientRect();
+      const fontReady=!document.fonts||document.fonts.check('900 16px "Font Awesome 6 Free"');
+      if(!fontReady&&attempt<30){
+        setTimeout(()=>waitForIconFont(attempt+1),100);
+        return;
+      }
+      setTimeout(()=>evaluateRegression(fontReady),50);
+    };
+    setTimeout(()=>waitForIconFont(0),1400);
   </script>
 </body>
 </html>'''
@@ -265,7 +282,7 @@ cmd = [
     '--no-first-run',
     '--enable-logging=stderr',
     '--v=0',
-    '--virtual-time-budget=5000',
+    '--virtual-time-budget=6000',
     '--dump-dom',
     f'http://127.0.0.1:{port}/fixture.html',
 ]
@@ -284,7 +301,8 @@ dom = proc.stdout or ''
 if 'data-credential-regression="pass"' not in dom:
     attrs = {}
     for name in (
-        'data-credential-regression', 'data-account-host-count', 'data-secret-host-count',
+        'data-credential-regression', 'data-font-ready',
+        'data-account-host-count', 'data-secret-host-count',
         'data-initial-input-values', 'data-overlays-inside', 'data-eye-integrity',
         'data-click-preserves-saved-account', 'data-typing-handoff',
         'data-summary-client-id', 'data-unexpected-rpc-count',
@@ -293,6 +311,8 @@ if 'data-credential-regression="pass"' not in dom:
         attrs[name] = match.group(1) if match else '__missing__'
     fail('synthetic client-form regression failed: ' + json.dumps(attrs, ensure_ascii=False) + '; stderr=' + stderr[-1200:])
 
+if 'data-font-ready="true"' not in dom:
+    fail('Font Awesome webfont was not ready before eye geometry assertion')
 if 'fb-login@example.test' not in dom or 'tk-login@example.test' not in dom:
     fail('safe login summary text missing from rendered input overlay')
 if '已保存：fb-login@example.test' in dom or '已保存：tk-login@example.test' in dom:
@@ -314,6 +334,6 @@ print(
     'BROWSER_CLIENT_FORM_CREDENTIAL_STATUS_OK: '
     f'browser={Path(browser).name}; currentPage=client-form; stale-assets-id=0; '
     'safe-summary-client=client-1; facebook+tiktok=in-input-login+masked-eye; '
-    'click=preserves-saved-account; typing=mutation-handoff; eye=visible+font-icon+hit-testable; '
-    'initial-edit-values=blank; reveal-rpc=not-called'
+    'font-readiness=polled+timer-settled; click=preserves-saved-account; typing=mutation-handoff; '
+    'eye=visible+font-icon+hit-testable; initial-edit-values=blank; reveal-rpc=not-called'
 )
