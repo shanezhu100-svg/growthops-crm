@@ -45,6 +45,18 @@ for marker in (
 ):
     require(marker in SECURITY, 'four-platform card ancestry resolver missing: ' + marker)
 
+# Account display labels are presentation aliases, not platform identity. Google and
+# Instagram must continue working when the current client-edit template uses the
+# common 登录账号 label instead of the older platform-specific login-email labels.
+for marker in (
+    "const accountLabelTexts=['登录账号','登录邮箱','登录邮箱 / 手机号']",
+    "const accountLabels=new Set(accountLabelTexts)",
+    "const accountLabel=accountLabelTexts.map(text=>exactLeaf(card,text)).find(Boolean)||null",
+):
+    require(marker in SECURITY, 'credential login label alias resolver missing: ' + marker)
+require("const accountLabelText=platform==='google'?'登录邮箱':platform==='instagram'?'登录邮箱 / 手机号':'登录账号'" not in SECURITY,
+        'platform-specific login label hard-code still present')
+
 # The ordinal fallback must stay confined to the edit form; detail/assets keep their
 # pager/token mapping and fail closed instead of guessing across multiple accounts.
 require(SECURITY.count("vm.currentPage==='client-form'&&list.length>1") == 1,
@@ -101,7 +113,7 @@ for forbidden_key in ("'loginPassword',", "'password',", "'2FA',", "'twoFactor',
 
 print(
     'CLIENT_ACCOUNT_CORRESPONDENCE_OUTPUT_OK: '
-    'login-account=direct-safe-summary+id-matched; multi-account=client-form-order-fallback+nonform-fail-closed; '
+    'login-account=direct-safe-summary+id-matched+label-alias-resolved; multi-account=client-form-order-fallback+nonform-fail-closed; '
     'platform-card=facebook+tiktok+google+instagram; '
     'refresh=session-route+selection-metadata-only; detail-pager=client-isolated; '
     'db=facebook+tiktok+google+instagram-per-account-summary+service-role-only'
