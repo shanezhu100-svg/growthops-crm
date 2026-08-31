@@ -119,8 +119,6 @@ platform_block = r'''  const platformForCard=card=>{
 '''
 replace_security_block('  const platformForCard=card=>{','  const cardIdentityTokens=card=>{',platform_block,'four-platform card resolver')
 
-# The final client-form presentation layer may have rewritten these helpers already,
-# so patch by function boundaries rather than depending on an intermediate body.
 card_block = r'''  const credentialAccountLabelTexts=['登录账号','登录邮箱','登录邮箱 / 手机号'];
   const credentialLabelCount=(root,label)=>[...root.querySelectorAll('*')].filter(el=>el.children.length===0&&cleanText(el)===label).length;
   const credentialAccountLabelCount=root=>credentialAccountLabelTexts.reduce((count,label)=>count+credentialLabelCount(root,label),0);
@@ -168,6 +166,33 @@ locate_block = r'''  const locateCredentialRows=()=>{
   };
 '''
 replace_security_block('  const locateCredentialRows=()=>{','  const prepareInlineCell=(cell,kind)=>{',locate_block,'credential row resolver')
+
+# Resolver rewrites above operate on the historical helper segment. Reassert the
+# safe-summary mapping after those rewrites so helper ordering cannot silently erase
+# the four-platform authority. If the old summary survived, replace it; if the whole
+# summary helper was swallowed, insert the reviewed mapping immediately before its
+# consumer. Then verify the runtime string before writing the file.
+if 'const credentialPlatformConfig=platform=>({' not in security:
+    apply_anchor = '  const applyAccountSafeSummaryToCards=()=>{'
+    apply_start = security.find(apply_anchor)
+    if apply_start < 0:
+        fail('safe-summary consumer missing after resolver rewrites')
+    stale_start = security.find('  const summaryForCredentialRow=row=>{')
+    if 0 <= stale_start < apply_start:
+        security = security[:stale_start] + new_summary + security[apply_start:]
+    else:
+        security = security[:apply_start] + new_summary + security[apply_start:]
+for marker in (
+    'const credentialPlatformConfig=platform=>({',
+    "facebook:{listKey:'fbAccounts',summaryKey:'facebookAccounts',pager:'FB',legacyKey:'facebook'}",
+    "tiktok:{listKey:'tkAccounts',summaryKey:'tiktokAccounts',pager:'TK',legacyKey:'tiktok'}",
+    "google:{listKey:'googleAccounts',summaryKey:'googleAccounts',pager:'GOOGLE',legacyKey:''}",
+    "instagram:{listKey:'instagramAccounts',summaryKey:'instagramAccounts',pager:'INSTAGRAM',legacyKey:''}",
+    'const currentCredentialAccount=(row,config)=>{',
+    'const config=credentialPlatformConfig(row.platform);',
+):
+    if marker not in security:
+        fail('safe-summary authority missing after resolver rewrites: ' + marker)
 
 route_insert = r'''  const UI_ROUTE_STATE_KEY='growthops_ui_route_state_v1';
   const UI_ROUTE_PAGES=new Set(['dashboard','leads','clients','client-form','client-detail','assets','sop','analytics','ads','account-opening','finance','alerts','tools','system']);
@@ -276,7 +301,7 @@ SECURITY.write_text(security, encoding='utf-8')
 BRIDGE.write_text(bridge, encoding='utf-8')
 print(
     'CLIENT_ACCOUNT_CORRESPONDENCE_FINALIZE_OK: '
-    'safe-summary=account-id-correspondence+client-form-order-fallback+multi-account-fail-closed; '
+    'safe-summary=account-id-correspondence+client-form-order-fallback+multi-account-fail-closed+reasserted-after-dom-rewrites; '
     'platform-card=facebook+tiktok+google+instagram; login-label=alias-resolved-per-card; '
     'refresh=session-route-restore+selection-metadata-only; detail-client=pager-reset; '
     'security=' + hashlib.sha256(SECURITY.read_bytes()).hexdigest() + '; '
