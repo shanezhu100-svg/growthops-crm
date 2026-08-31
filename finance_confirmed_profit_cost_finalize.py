@@ -124,3 +124,4 @@ print(
 # stage so final browser/business regression tests execute the guarded shipped code.
 import archived_client_receivable_guard_finalize  # noqa: E402,F401
 import receivable_reminder_close_finalize  # noqa: E402,F401
+import receivable_payment_amount_guard_finalize  # noqa: E402,F401
