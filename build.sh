@@ -94,6 +94,11 @@ python3 test_credential_form_saved_status_output.py
 # non-sensitive page/client selection metadata across a browser refresh.
 python3 client_account_correspondence_finalize.py
 python3 test_client_account_correspondence_output.py
+# v6 removed the retired boolean credential-status renderer. Remove the one
+# historical clearReveal() call that survived later form/correspondence patches,
+# then fail closed if that retired symbol ever re-enters the final runtime.
+python3 credential_clear_reveal_legacy_cleanup_finalize.py
+python3 test_credential_clear_reveal_legacy_cleanup_output.py
 python3 admin_password_byte_cap_finalize.py
 python3 test_admin_password_byte_cap_output.py
 # Public deployment guidance must describe the actual server-authenticated runtime
