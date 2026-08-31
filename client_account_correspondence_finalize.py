@@ -167,21 +167,24 @@ locate_block = r'''  const locateCredentialRows=()=>{
 '''
 replace_security_block('  const locateCredentialRows=()=>{','  const prepareInlineCell=(cell,kind)=>{',locate_block,'credential row resolver')
 
-# Resolver rewrites above operate on the historical helper segment. Reassert the
-# safe-summary mapping after those rewrites so helper ordering cannot silently erase
-# the four-platform authority. If the old summary survived, replace it; if the whole
-# summary helper was swallowed, insert the reviewed mapping immediately before its
-# consumer. Then verify the runtime string before writing the file.
+# The consolidated v5/v6 runtime replaced the historical applyAccountSafeSummaryToCards
+# body with credentialUiV5Render. Resolver rewrites above can span the old summary
+# helper, so re-establish the reviewed mapping immediately before the stable v5 reset/
+# render block. Refuse to delete unrelated helpers if the layout ever changes.
 if 'const credentialPlatformConfig=platform=>({' not in security:
-    apply_anchor = '  const applyAccountSafeSummaryToCards=()=>{'
-    apply_start = security.find(apply_anchor)
-    if apply_start < 0:
-        fail('safe-summary consumer missing after resolver rewrites')
-    stale_start = security.find('  const summaryForCredentialRow=row=>{')
-    if 0 <= stale_start < apply_start:
-        security = security[:stale_start] + new_summary + security[apply_start:]
+    reset_anchor = '  const credentialUiV5ResetCell=cell=>{'
+    reset_start = security.find(reset_anchor)
+    if reset_start < 0:
+        fail('credentialUiV5ResetCell renderer anchor missing after resolver rewrites')
+    stale_start = security.rfind('  const summaryForCredentialRow=row=>{', 0, reset_start)
+    if stale_start >= 0:
+        stale_region = security[stale_start:reset_start]
+        extra_consts = [line.strip() for line in stale_region.splitlines() if line.startswith('  const ') and not line.startswith('  const summaryForCredentialRow=')]
+        if extra_consts:
+            fail('unexpected helpers between stale summary and v5 renderer: ' + ', '.join(extra_consts[:4]))
+        security = security[:stale_start] + new_summary + security[reset_start:]
     else:
-        security = security[:apply_start] + new_summary + security[apply_start:]
+        security = security[:reset_start] + new_summary + security[reset_start:]
 for marker in (
     'const credentialPlatformConfig=platform=>({',
     "facebook:{listKey:'fbAccounts',summaryKey:'facebookAccounts',pager:'FB',legacyKey:'facebook'}",
@@ -190,6 +193,7 @@ for marker in (
     "instagram:{listKey:'instagramAccounts',summaryKey:'instagramAccounts',pager:'INSTAGRAM',legacyKey:''}",
     'const currentCredentialAccount=(row,config)=>{',
     'const config=credentialPlatformConfig(row.platform);',
+    'const credentialUiV5Render=()=>{',
 ):
     if marker not in security:
         fail('safe-summary authority missing after resolver rewrites: ' + marker)
@@ -301,7 +305,7 @@ SECURITY.write_text(security, encoding='utf-8')
 BRIDGE.write_text(bridge, encoding='utf-8')
 print(
     'CLIENT_ACCOUNT_CORRESPONDENCE_FINALIZE_OK: '
-    'safe-summary=account-id-correspondence+client-form-order-fallback+multi-account-fail-closed+reasserted-after-dom-rewrites; '
+    'safe-summary=account-id-correspondence+client-form-order-fallback+multi-account-fail-closed+v5-renderer-anchored; '
     'platform-card=facebook+tiktok+google+instagram; login-label=alias-resolved-per-card; '
     'refresh=session-route-restore+selection-metadata-only; detail-client=pager-reset; '
     'security=' + hashlib.sha256(SECURITY.read_bytes()).hexdigest() + '; '
