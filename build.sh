@@ -140,16 +140,11 @@ python3 test_inline_style_static_output.py
 python3 test_style_attr_cssom_policy.py
 python3 style_attr_cssom_finalize.py
 python3 test_style_attr_cssom_output.py
-# Apply the reviewed finance cost basis to the final application methods before
-# Vue runtime-only compilation. At ALL/company scope expected and confirmed profit
-# deduct company/non-client costs only; selected-client profitability is unchanged.
-python3 finance_confirmed_profit_cost_finalize.py
 # Final Vue/HTML structural gate: no tag may retain duplicate attribute names.
 python3 test_vue_duplicate_attribute_output.py
-# The final templates are byte-stable. The runtime-only finalizer carries the
-# accepted #176 template/factory fingerprints and fails closed on drift. Replace
-# the browser compiler with runtime-only Vue plus the deterministic render registry,
-# restore Vue's compiler-produced _rc metadata, then enforce the final eval-free output.
+# The final templates are byte-stable. The runtime-only finalizer imports the
+# reviewed finance correction before generating the final render registry, keeping
+# company/ALL expected+confirmed profit and the shipped Vue runtime on one authority.
 python3 vue_runtime_only_finalize.py
 python3 vue_runtime_compiled_marker_finalize.py
 python3 test_vue_runtime_only_output.py
