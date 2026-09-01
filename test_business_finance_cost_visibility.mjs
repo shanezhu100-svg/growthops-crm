@@ -91,9 +91,9 @@ eq(subject.financeCostClientName({clientId:'1'}),'Numeric Client','client lookup
 eq(subject.financeCostClientName({clientId:'missing'}),'客户已归档 / 删除','missing client uses archived fallback');
 eq(subject.financeCostClientName({}),'—','company cost has no client label');
 
-// Company/all-clients summary must derive from raw scoped cost records. The fixture
-// deliberately includes client and allocation costs as noise: only COMPANY 20 +
-// COMPANY_PROJECT 100 may contribute to the CNY 120 card.
+// The top-level total-cost card is company authority, not selected-client authority.
+// Client filtering may change the client-specific card/list, but must not make the
+// total card inherit client-owned or allocated costs.
 subject=makeSubject();
 subject.financeCosts=[
   {id:'company-public',date:'2026-09-01',scope:'COMPANY',amount:20,currency:'CNY'},
@@ -104,7 +104,9 @@ subject.financeCosts=[
 ];
 eq(subject.financeCostText(),'CNY:120','ALL total-cost card includes only public and project company costs');
 subject.financeClientFilter='c1';
-eq(subject.financeCostText(),'USD:12.5|CNY:420','selected-client cost text keeps scoped client cost authority');
+eq(subject.financeCostText(),'CNY:120','selected-client filter must not leak customer-specific cost into total-cost card');
+subject.financeClientFilter='c2';
+eq(subject.financeCostText(),'CNY:120','total-cost card must remain invariant across client filters');
 eq(subject.financeUnallocatedCompanyCostText(),'USD:3','unallocated company text delegates grouped authority');
 subject.financeClientFilter='ALL';
 eq(subject.financeVisibleCostAllocatedText({amount:100,currency:'USD'}),'USD:100.00','ALL view displays full cost amount');
@@ -123,5 +125,5 @@ const newSummaryCopy='仅统计公司公共成本 + 公司项目成本；详细�
 if(registry.includes(oldSummaryCopy))throw new Error('BUSINESS_FINANCE_COST_VISIBILITY_FAILED: company total-cost card still claims client-specific cost is included');
 if(registry.split(newSummaryCopy).length-1!==1)throw new Error('BUSINESS_FINANCE_COST_VISIBILITY_FAILED: reviewed strict company-only total-cost card copy missing or duplicated');
 
-console.log('BUSINESS_FINANCE_COST_VISIBILITY_OK: visible-filter+allocation+unallocated+scope-label+client-fallback+company-summary=company+project-only+display=executed');
+console.log('BUSINESS_FINANCE_COST_VISIBILITY_OK: visible-filter+allocation+unallocated+scope-label+client-fallback+company-summary=company+project-only+client-filter-invariant+display=executed');
 await import('./test_business_finance_profit_confirmation_probe.mjs');
