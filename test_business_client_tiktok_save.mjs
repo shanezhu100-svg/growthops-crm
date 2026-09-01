@@ -21,19 +21,39 @@ function extractMethod(name){
   return tail.slice(0,next).replace(/,\s*$/,'').trim();
 }
 
-const source=extractMethod('saveClient');
-let saveClient;
+// Execute saveClient together with the actual shipped pure helper chain it calls.
+// Only durable/external side effects are stubbed so this regression cannot bypass
+// cleanPlatformAccounts/normalizeClient and accidentally miss the original TikTok
+// persistence failure mode.
+const sideEffects=new Set([
+  'persist','logAudit','notify','navigateTo',
+  'ensureAutomaticAssetCosts','ensureAutomaticReceivables','ensureClientFirstReceivable',
+]);
+const methodSources=new Map();
+function collectMethod(name){
+  if(methodSources.has(name)||sideEffects.has(name))return;
+  const source=extractMethod(name);
+  methodSources.set(name,source);
+  for(const match of source.matchAll(/\bthis\.([A-Za-z_$][A-Za-z0-9_$]*)\s*\(/g)){
+    const child=match[1];
+    if(child!==name&&!sideEffects.has(child))collectMethod(child);
+  }
+}
+collectMethod('saveClient');
+
+let methods;
 try{
-  ({saveClient}=vm.runInNewContext(`({${source}})`,{
-    Date,Number,String,Object,Array,Math,JSON,Set,Map,Intl,
+  methods=vm.runInNewContext(`({${[...methodSources.values()].join(',\n')}})`,{
+    Date,Number,String,Object,Array,Math,JSON,Set,Map,Intl,RegExp,
     structuredClone:globalThis.structuredClone,
+    crypto:globalThis.crypto,
     setTimeout:(fn)=>{if(typeof fn==='function')fn();return 1;},
     clearTimeout:()=>{},
-  },{timeout:1000}));
+  },{timeout:1000});
 }catch(error){
-  throw new Error(`BUSINESS_CLIENT_TIKTOK_SAVE_FAILED: unable to compile shipped saveClient: ${error.message}`);
+  throw new Error(`BUSINESS_CLIENT_TIKTOK_SAVE_FAILED: unable to compile shipped saveClient helper closure: ${error.message}; helpers=${[...methodSources.keys()].sort().join(',')}`);
 }
-if(typeof saveClient!=='function')throw new Error('BUSINESS_CLIENT_TIKTOK_SAVE_FAILED: saveClient is not executable');
+if(typeof methods.saveClient!=='function')throw new Error('BUSINESS_CLIENT_TIKTOK_SAVE_FAILED: saveClient is not executable');
 
 const fail=message=>{throw new Error('BUSINESS_CLIENT_TIKTOK_SAVE_FAILED: '+message)};
 const eq=(actual,expected,label)=>{if(actual!==expected)fail(`${label}; expected=${expected}; actual=${actual}`)};
@@ -49,45 +69,38 @@ const syntheticTk={
   twofa:'',
 };
 const existing={
-  id:'client-save-1',name:'Before Save',archived:false,
+  id:'client-save-1',name:'Before Save',archived:false,status:'ACTIVE',platform:['TK'],
+  monthlyFee:0,currency:'USD',networkEnvironments:[],
   fbAccounts:[],tkAccounts:[{id:'old-tk',bcId:'old-bc',adAccountId:'old-ad',loginAccount:'old-login'}],
   googleAccounts:[],instagramAccounts:[],
 };
 let persisted=0,audited=0,notified=0;
 const calls=[];
 const target={
-  clients:[existing],
+  ...methods,
+  clients:[existing],leads:[],
   form:{
-    id:'client-save-1',name:'After Save',status:'ACTIVE',platform:['TK'],
+    ...existing,
+    name:'After Save',status:'ACTIVE',platform:['TK'],monthlyFee:0,currency:'USD',networkEnvironments:[],
     fbAccounts:[],tkAccounts:[syntheticTk],googleAccounts:[],instagramAccounts:[],
   },
-  clientForm:null,
-  editingClient:existing,
-  editingClientId:'client-save-1',
-  editClientId:'client-save-1',
-  selectedClientId:'client-save-1',
+  formDirty:true,
+  selectedClientId:'client-save-1',selectedAssetsClientId:'client-save-1',selectedAdsClientId:'client-save-1',
+  selectedAnalyticsClientId:'client-save-1',selectedSopClientId:'client-save-1',
   currentPage:'client-form',
   currentUser:{id:'synthetic-user',name:'Synthetic User',role:'ADMIN'},
   persist:()=>{persisted+=1;calls.push('persist')},
   logAudit:(...args)=>{audited+=1;calls.push(['audit',...args])},
   notify:()=>{notified+=1},
-  newId:()=> 'synthetic-generated-id',
-  generateId:()=> 'synthetic-generated-id',
-  uid:()=> 'synthetic-generated-id',
+  navigateTo:(...args)=>{calls.push(['navigateTo',...args])},
+  ensureAutomaticAssetCosts:(...args)=>{calls.push(['ensureAutomaticAssetCosts',...args])},
+  ensureAutomaticReceivables:(...args)=>{calls.push(['ensureAutomaticReceivables',...args])},
+  ensureClientFirstReceivable:(...args)=>{calls.push(['ensureClientFirstReceivable',...args])},
   $nextTick:fn=>{if(typeof fn==='function')fn()},
 };
-target.clientForm=target.form;
-
-const neutralHelpers=new Set([
-  'closeClientForm','resetClientForm','resetAssetPager','syncAnalyticsAccountSelection','syncAdsAccountSelection',
-  'syncSopAccountSelection','refreshAccountSafeSummary','refreshCredentialStatus','clearReveal','clearCredentialReveal',
-]);
-const identityHelpers=new Set(['normalizeClient','normalizeClientForm','sanitizeClient','sanitizeClientForm']);
 const subject=new Proxy(target,{
   get(obj,prop){
     if(prop in obj)return obj[prop];
-    if(typeof prop==='string'&&neutralHelpers.has(prop))return (...args)=>{calls.push([prop,...args]);};
-    if(typeof prop==='string'&&identityHelpers.has(prop))return value=>value;
     return undefined;
   },
   set(obj,prop,value){obj[prop]=value;return true;},
@@ -95,11 +108,11 @@ const subject=new Proxy(target,{
 
 let result;
 try{
-  result=saveClient.call(subject);
+  result=methods.saveClient.call(subject);
   if(result&&typeof result.then==='function')await result;
 }catch(error){
-  const refs=[...new Set([...source.matchAll(/\bthis\.([A-Za-z_$][A-Za-z0-9_$]*)/g)].map(match=>match[1]))].sort();
-  throw new Error(`BUSINESS_CLIENT_TIKTOK_SAVE_FAILED: shipped saveClient threw ${error?.name||'Error'}:${error?.message||error}; this-refs=${refs.join(',')}`);
+  const refs=[...new Set([...methodSources.values()].flatMap(source=>[...source.matchAll(/\bthis\.([A-Za-z_$][A-Za-z0-9_$]*)/g)].map(match=>match[1])))].sort();
+  throw new Error(`BUSINESS_CLIENT_TIKTOK_SAVE_FAILED: shipped saveClient/helper chain threw ${error?.name||'Error'}:${error?.message||error}; helpers=${[...methodSources.keys()].sort().join(',')}; this-refs=${refs.join(',')}`);
 }
 
 const saved=subject.clients.find(client=>
@@ -116,4 +129,4 @@ if(account.twofa&&String(account.twofa).trim())fail('synthetic blank TikTok 2FA 
 eq(persisted,1,'saveClient persists exactly once');
 eq(audited,1,'saveClient audits exactly once');
 
-console.log(`BUSINESS_CLIENT_TIKTOK_SAVE_OK: source=final-shipped-saveClient; tkAccounts=preserved; bcId+adAccountId+loginAccount=preserved; persist=${persisted}; audit=${audited}; notice=${notified}`);
+console.log(`BUSINESS_CLIENT_TIKTOK_SAVE_OK: source=final-shipped-saveClient+helpers; helpers=${[...methodSources.keys()].sort().join('+')}; tkAccounts=preserved; bcId+adAccountId+loginAccount=preserved; persist=${persisted}; audit=${audited}; notice=${notified}`);
