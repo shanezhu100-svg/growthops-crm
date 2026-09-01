@@ -9,15 +9,22 @@ const files=fs.readdirSync(appDir).filter(name=>/^app-inline-\d+\.js$/.test(name
 if(!files.length)throw new Error('BUSINESS_CLIENT_TIKTOK_SAVE_FAILED: no final app-inline JS artifacts');
 const bundle=files.map(name=>fs.readFileSync(path.join(appDir,name),'utf8')).join('\n');
 
+function escapeRegex(value){return value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}
 function extractMethod(name){
-  const signature=new RegExp(`(?:^|[,\\n])\\s*(${name}\\([^)]*\\)\\s*\\{)`,'m');
+  // Final Vue methods are emitted as object-literal members on their own lines.
+  // Boundaries must be detected at the same indentation as the requested member;
+  // scanning for any later `name(...) {` can accidentally stop at nested callbacks
+  // or helper-local method syntax and return a truncated, non-compilable function.
+  const signature=new RegExp(`^([ \\t]*)(${name}\\([^)]*\\)\\s*\\{)`,'m');
   const match=signature.exec(bundle);
   if(!match)throw new Error(`BUSINESS_CLIENT_TIKTOK_SAVE_FAILED: final runtime ${name} not found`);
-  const start=match.index+match[0].indexOf(match[1]);
+  const indent=match[1];
+  const start=match.index+indent.length;
   const tail=bundle.slice(start);
-  const defs=[...tail.matchAll(/(?:^|[,]\s*|\n\s*)([A-Za-z_$][A-Za-z0-9_$]*)\s*\([^)]*\)\s*\{/g)];
+  const peer=new RegExp(`^${escapeRegex(indent)}([A-Za-z_$][A-Za-z0-9_$]*)\\s*\\([^)]*\\)\\s*\\{`,'gm');
+  const defs=[...tail.matchAll(peer)];
   if(defs.length<2||defs[0][1]!==name)throw new Error(`BUSINESS_CLIENT_TIKTOK_SAVE_FAILED: ${name} parser drifted`);
-  const next=defs[1].index+defs[1][0].indexOf(defs[1][1]);
+  const next=defs[1].index+indent.length;
   return tail.slice(0,next).replace(/,\s*$/,'').trim();
 }
 
