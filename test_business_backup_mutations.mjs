@@ -46,46 +46,7 @@ function makeRuntime({role='ADMIN',confirm=true,backupSnapshots=[],payload=null}
   };
   let confirmPromise=Promise.resolve();
   let capturedBlob=null;
-  const subject={
-    currentUser:{id:'admin-current',name:'Current Admin',role,enabled:true},
-    currentPage:'system',
-    backupSnapshots:backupSnapshots.map(item=>structuredClone(item)),
-    clients:[{id:'client-before',name:'Before Client'}],
-    standaloneAlerts:[],reminderTypes:[],dismissedAlerts:[],leads:[],openingProviders:[],openingDeals:[],
-    financeActualRebates:[],financeReceivables:[],financeCosts:[],financeReconciliations:[],financeMonthLocks:{},financeMonthSnapshots:{},
-    auditLogs:[],mediaTools:[],authUsers:[{id:'admin-current'}],
-    defaultReminderTypes:()=>[{key:'RENEWAL',label:'Renewal'}],
-    collectBackupPayload:()=>structuredClone(basePayload),
-    normalizeClient:value=>({...value,normalizedClient:true}),
-    normalizeStandaloneAlert:value=>({...value,normalizedAlert:true}),
-    normalizeReminderTypes:value=>structuredClone(value),
-    normalizeOpeningProvider:value=>({...value,normalizedProvider:true}),
-    normalizeFinanceActualRebates:value=>structuredClone(value),
-    normalizeReceivable:value=>({...value,normalizedReceivable:true}),
-    normalizeFinanceCost:value=>({...value,normalizedCost:true}),
-    normalizeMediaTool:value=>({...value,normalizedTool:true}),
-    restoreSopProgress:value=>{subject.restoredSop=structuredClone(value);},
-    migrateLegacyAccountSpendRecords:()=>{},
-    migrateLegacyActualRebatesToReconciliations:()=>{},
-    ensureAutomaticReceivables:()=>{},
-    ensureAutomaticAssetCosts:()=>{},
-    ensureAutomaticOpeningFeeCosts:()=>{},
-    ensureReceivableLinkedCosts:()=>{},
-    ensureFinanceSnapshotsForLocks:()=>{},
-    syncAnalyticsAccountSelection:()=>{},syncAdsAccountSelection:()=>{},syncSopAccountSelection:()=>{},
-    canViewPage:()=>true,
-    localDateKey:()=> '2026-09-01',
-    accountUid:prefix=>`${prefix}-synthetic`,
-    roleLabel:value=>String(value||''),
-    logAudit:(...args)=>calls.audit.push(args),
-    notify:message=>calls.notify.push(String(message)),
-    updateStorageUsage:()=>{calls.storage+=1;},
-    askConfirm:(config,callback)=>{
-      calls.confirm.push(config);
-      if(confirm)confirmPromise=Promise.resolve().then(callback);
-    },
-  };
-  Object.defineProperty(subject,'activeClients',{get(){return subject.clients.filter(client=>!client.archived);}});
+  const subject={};
 
   const storage=new Map();
   const localStorage={
@@ -96,7 +57,7 @@ function makeRuntime({role='ADMIN',confirm=true,backupSnapshots=[],payload=null}
   const document={
     body:{appendChild:()=>{}},
     createElement(tag){
-      if(tag!=='a')throw new Error(`unexpected element ${tag}`);
+      if(tag!=='a')throw new Error(`BUSINESS_BACKUP_MUTATIONS_FAILED: unexpected element ${tag}`);
       return {href:'',download:'',click(){calls.click+=1;},remove(){calls.remove+=1;}};
     },
   };
@@ -111,14 +72,53 @@ function makeRuntime({role='ADMIN',confirm=true,backupSnapshots=[],payload=null}
   }
   const window={__growthOpsVm:subject,__GROWTHOPS_SUPABASE_URL__:'',__GROWTHOPS_SUPABASE_KEY__:'',location:{hash:'#system'}};
   const context={
-    window,document,localStorage,URL:URLMock,FileReader:FileReaderMock,Blob,TextEncoder,structuredClone,
+    window,document,localStorage,URL:URLMock,FileReader:FileReaderMock,Blob,TextEncoder,structuredClone,crypto,
     console,setTimeout,clearTimeout,Date,Math,JSON,String,Number,Object,Array,Promise,Error,
     fetch:async()=>{calls.fetch+=1;throw new Error('BUSINESS_BACKUP_MUTATIONS_FAILED: unexpected real/network fetch');},
   };
+  // Load the final shipped adapter first. It initializes cloud-managed state on mount,
+  // so synthetic business state must be injected only after this authoritative code runs.
   vm.runInNewContext(adapter,context,{timeout:1000});
-  // The adapter owns persist in Production, but backup mutation phase assertions need
-  // a synchronous observer instead of scheduling its unrelated cloud-save queue.
-  subject.persist=()=>{calls.persist+=1;return true;};
+
+  Object.assign(subject,{
+    currentUser:{id:'admin-current',name:'Current Admin',role,enabled:true},
+    currentPage:'system',
+    backupSnapshots:backupSnapshots.map(item=>structuredClone(item)),
+    clients:[{id:'client-before',name:'Before Client'}],
+    standaloneAlerts:[],reminderTypes:[],dismissedAlerts:[],leads:[],openingProviders:[],openingDeals:[],
+    financeActualRebates:[],financeReceivables:[],financeCosts:[],financeReconciliations:[],financeMonthLocks:{},financeMonthSnapshots:{},
+    sopProgress:{},auditLogs:[],mediaTools:[],authUsers:[{id:'admin-current'}],
+    defaultReminderTypes:()=>[{key:'RENEWAL',label:'Renewal'}],
+    collectBackupPayload:()=>structuredClone(basePayload),
+    normalizeClient:value=>({...value,normalizedClient:true}),
+    normalizeStandaloneAlert:value=>({...value,normalizedAlert:true}),
+    normalizeReminderTypes:value=>structuredClone(value),
+    normalizeOpeningProvider:value=>({...value,normalizedProvider:true}),
+    normalizeFinanceActualRebates:value=>structuredClone(value),
+    normalizeReceivable:value=>({...value,normalizedReceivable:true}),
+    normalizeFinanceCost:value=>({...value,normalizedCost:true}),
+    normalizeMediaTool:value=>({...value,normalizedTool:true}),
+    migrateLegacyAccountSpendRecords:()=>{},
+    migrateLegacyActualRebatesToReconciliations:()=>{},
+    ensureAutomaticReceivables:()=>{},
+    ensureAutomaticAssetCosts:()=>{},
+    ensureAutomaticOpeningFeeCosts:()=>{},
+    ensureReceivableLinkedCosts:()=>{},
+    ensureFinanceSnapshotsForLocks:()=>{},
+    syncAnalyticsAccountSelection:()=>{},syncAdsAccountSelection:()=>{},syncSopAccountSelection:()=>{},
+    canViewPage:()=>true,
+    localDateKey:()=> '2026-09-01',
+    roleLabel:value=>String(value||''),
+    logAudit:(...args)=>calls.audit.push(args),
+    notify:message=>calls.notify.push(String(message)),
+    updateStorageUsage:()=>{calls.storage+=1;},
+    persist:()=>{calls.persist+=1;return true;},
+    askConfirm:(config,callback)=>{
+      calls.confirm.push(config);
+      if(confirm)confirmPromise=Promise.resolve().then(callback);
+    },
+  });
+  Object.defineProperty(subject,'activeClients',{configurable:true,get(){return subject.clients.filter(client=>!client.archived);}});
   return {subject,calls,waitConfirm:()=>confirmPromise,getCapturedBlob:()=>capturedBlob};
 }
 
@@ -129,7 +129,8 @@ function makeRuntime({role='ADMIN',confirm=true,backupSnapshots=[],payload=null}
   const {subject,calls}=makeRuntime({backupSnapshots:old});
   const snap=subject.createBackupSnapshot(false);
   equal(subject.backupSnapshots.length,5,'snapshot retention cap');
-  equal(subject.backupSnapshots[0].id,'backup-synthetic','new snapshot must be first');
+  truthy(subject.backupSnapshots[0]===snap,'new snapshot must be first');
+  truthy(!old.some(item=>item.id===snap.id),'new snapshot id must not collide with retained history');
   equal(snap.backupDate,'2026-09-01','snapshot backupDate');
   equal(snap.payload.version,'growth-ops-cloud-backup-v2','snapshot payload version');
   truthy(!('authUsers' in snap.payload),'snapshot must exclude authUsers');
@@ -210,8 +211,9 @@ const restorePayload={
   equal(subject.clients[0].id,'client-restored','confirmed restore client state');
   equal(subject.clients[0].normalizedClient,true,'confirmed restore must use shipped normalizer');
   equal(subject.authUsers[0].id,'admin-current','restore must not import authUsers from business snapshot');
-  truthy(subject.backupSnapshots.some(item=>item.id==='backup-synthetic'),'restore must create protection snapshot before applying payload');
-  equal(subject.restoredSop.restored,true,'restore must apply SOP progress');
+  truthy(subject.backupSnapshots.length>=2,'restore must create a protection snapshot before applying payload');
+  truthy(subject.backupSnapshots.some(item=>item.id!=='restore-a'),'restore protection snapshot must be distinct from selected snapshot');
+  equal(subject.sopProgress.restored,true,'restore must apply SOP progress');
   equal(calls.audit.at(-1)[0],'恢复数据快照','restore audit action');
   equal(calls.notify.at(-1),'数据快照已恢复并同步云端','restore success notice');
   equal(calls.fetch,0,'restore must not directly call network');
@@ -273,7 +275,7 @@ const restorePayload={
   await waitConfirm();
   equal(subject.clients[0].id,'client-restored','confirmed import client state');
   equal(subject.authUsers[0].id,'admin-current','confirmed import must not overwrite auth users');
-  truthy(subject.backupSnapshots.some(item=>item.id==='backup-synthetic'),'confirmed import must create protection snapshot');
+  truthy(subject.backupSnapshots.length>=1,'confirmed import must create protection snapshot');
   equal(calls.audit.at(-1)[0],'导入全量备份','confirmed import audit action');
   equal(calls.audit.at(-1)[1],'backup.json','confirmed import audit filename');
   equal(calls.notify.at(-1),'备份已导入并同步云端','confirmed import success notice');
