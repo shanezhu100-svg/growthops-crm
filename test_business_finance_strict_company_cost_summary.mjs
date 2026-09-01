@@ -26,7 +26,7 @@ if(!strictSource.includes("['COMPANY','COMPANY_PROJECT']"))throw new Error('BUSI
 for(const forbidden of ['ALLOCATE_SERVICE','ALLOCATE_SPEND','financeCompanyNonClientCostGroups','financeActivePeriodSnapshot']){
   if(strictSource.includes(forbidden))throw new Error(`BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: strict authority contains forbidden dependency ${forbidden}`);
 }
-if(!textSource.includes('financeCompanySummaryCostGroups'))throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: ALL card does not use strict authority');
+if(!textSource.includes('financeCompanySummaryCostGroups()'))throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: ALL card does not invoke strict authority method');
 if(textSource.includes('financeCompanyNonClientCostGroups'))throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: ALL card still uses broad non-client authority');
 
 const strictMethod=vm.runInNewContext(`({${strictSource}})`,{Number,String,Object,Array},{timeout:1000}).financeCompanySummaryCostGroups;
@@ -47,8 +47,8 @@ const subject={
   financeDateMatch(date){return /^2026-09-/.test(String(date||''));},
   spendGroupsText(groups){return Object.entries(groups||{}).map(([cur,value])=>`${cur}:${value}`).join('|');},
 };
-Object.defineProperty(subject,'financeCompanySummaryCostGroups',{get(){return strictMethod.call(subject)}});
-const strict=subject.financeCompanySummaryCostGroups;
+subject.financeCompanySummaryCostGroups=function(){return strictMethod.call(subject);};
+const strict=subject.financeCompanySummaryCostGroups();
 if(JSON.stringify(strict)!==JSON.stringify({CNY:80}))throw new Error(`BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: strict total expected CNY 80, actual ${JSON.stringify(strict)}`);
 if(textMethod.call(subject)!=='CNY:80')throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: ALL card did not exclude client/allocation costs from 420 fixture');
 subject.financeClientFilter='c1';
