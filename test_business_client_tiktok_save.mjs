@@ -22,21 +22,21 @@ function extractMethod(name){
 }
 
 // Execute saveClient together with the actual shipped pure helper chain it calls.
-// Only durable/external side effects are stubbed so this regression cannot bypass
-// cleanPlatformAccounts/normalizeClient and accidentally miss the original TikTok
-// persistence failure mode.
+// Only durable/external side effects and the deterministic local-date clock are
+// stubbed so this regression cannot bypass cleanPlatformAccounts/normalizeClient.
 const sideEffects=new Set([
   'persist','logAudit','notify','navigateTo',
   'ensureAutomaticAssetCosts','ensureAutomaticReceivables','ensureClientFirstReceivable',
 ]);
+const pureStubs=new Set(['localDateKey']);
 const methodSources=new Map();
 function collectMethod(name){
-  if(methodSources.has(name)||sideEffects.has(name))return;
+  if(methodSources.has(name)||sideEffects.has(name)||pureStubs.has(name))return;
   const source=extractMethod(name);
   methodSources.set(name,source);
   for(const match of source.matchAll(/\bthis\.([A-Za-z_$][A-Za-z0-9_$]*)\s*\(/g)){
     const child=match[1];
-    if(child!==name&&!sideEffects.has(child))collectMethod(child);
+    if(child!==name&&!sideEffects.has(child)&&!pureStubs.has(child))collectMethod(child);
   }
 }
 collectMethod('saveClient');
@@ -89,6 +89,7 @@ const target={
   selectedAnalyticsClientId:'client-save-1',selectedSopClientId:'client-save-1',
   currentPage:'client-form',
   currentUser:{id:'synthetic-user',name:'Synthetic User',role:'ADMIN'},
+  localDateKey:()=> '2026-09-01',
   persist:()=>{persisted+=1;calls.push('persist')},
   logAudit:(...args)=>{audited+=1;calls.push(['audit',...args])},
   notify:()=>{notified+=1},
