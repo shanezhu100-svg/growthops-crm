@@ -13,7 +13,7 @@ RUNTIME=DIST/'vendor'/'vue-3.5.41.runtime.global.js'
 REGISTRY=DIST/'vendor'/'vue-3.5.41.renders.js'
 COMPILER=DIST/'vendor'/'vue-3.5.41.global.js'
 RUNTIME_SHA='45c904194aaf24112c8f4fc4386b87e107a32eede80c410ce93be459ebdee088'; RUNTIME_BYTES=414799
-REGISTRY_SHA='4cb017fe1999d8f8bea3954bc8b1bb25fe09e6985658594d508f309c1ad54366'; REGISTRY_BYTES=1187501
+REGISTRY_SHA='60eecdc86b5c3442d5899e41df120998b0c1aaf2609dd2263bb7b472ab0061d9'; REGISTRY_BYTES=1187507
 
 def fail(m): raise SystemExit('VUE_RUNTIME_ONLY_OUTPUT_FAILED: '+m)
 def digest(p): return hashlib.sha256(p.read_bytes()).hexdigest()
