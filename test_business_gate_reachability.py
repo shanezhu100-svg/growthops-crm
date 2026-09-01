@@ -31,10 +31,12 @@ static_import_re = re.compile(
     re.MULTILINE,
 )
 
+texts = {}
 edges = {}
 unknown_imports = set()
 for name, path in BUSINESS_FILES.items():
     text = path.read_text(encoding='utf-8')
+    texts[name] = text
     imports = dynamic_import_re.findall(text) + static_import_re.findall(text)
     imports = list(dict.fromkeys(imports))
     edges[name] = imports
@@ -60,7 +62,6 @@ def descendants(start):
 
 # Direct roots should be an antichain: if root B is already reachable through root A,
 # invoking B separately only repeats assertions and lengthens the protected build.
-# Fail closed instead of relying on people to remember the import graph.
 redundant_roots = []
 for root in roots:
     covered_by = [other for other in roots if other != root and root in descendants(other)]
@@ -88,8 +89,60 @@ if unreachable:
         + ', '.join(unreachable)
     )
 
+# Provenance gate: a permanent business regression must either execute the final
+# shipped application bundle or be a pure import shim/aggregator whose children do.
+# This prevents a self-contained reimplementation of product logic from going green
+# while the shipped runtime has drifted.
+block_comment_re = re.compile(r'/\*.*?\*/', re.DOTALL)
+line_comment_re = re.compile(r'//[^\n]*')
+static_import_stmt_re = re.compile(
+    r"(?:^|\n)\s*import(?:\s+[^'\"\n]+?\s+from\s+)?\s*['\"]\./test_business_[^'\"]+\.mjs['\"]\s*;?",
+    re.MULTILINE,
+)
+dynamic_import_stmt_re = re.compile(
+    r"(?:await\s+)?import\(\s*['\"]\./test_business_[^'\"]+\.mjs['\"]\s*\)\s*;?"
+)
+
+runtime_backed = []
+pure_shims = []
+invalid_provenance = []
+for name, text in texts.items():
+    # Runtime-backed tests consistently consume the generated app bundle under
+    # dist/app and enumerate app-inline-* files. Requiring both markers avoids
+    # accepting comments or unrelated references to `dist` as provenance.
+    has_dist_app = bool(re.search(r"['\"]dist['\"]\s*,\s*['\"]app['\"]|dist/app", text))
+    has_app_inline = 'app-inline-' in text
+    if has_dist_app and has_app_inline:
+        runtime_backed.append(name)
+        continue
+
+    # A shim may contain comments plus local business-test import statements only.
+    # It must actually import at least one child so an empty file cannot count as a
+    # protected test. Strip comments/imports and require no executable residue.
+    if not edges.get(name):
+        invalid_provenance.append(name)
+        continue
+    residue = block_comment_re.sub('', text)
+    residue = line_comment_re.sub('', residue)
+    residue = static_import_stmt_re.sub('\n', residue)
+    residue = dynamic_import_stmt_re.sub('', residue)
+    residue = re.sub(r'[;\s]+', '', residue)
+    if residue:
+        invalid_provenance.append(name)
+    else:
+        pure_shims.append(name)
+
+if invalid_provenance:
+    raise SystemExit(
+        'BUSINESS_GATE_REACHABILITY_FAILED: business tests are neither final-runtime-backed nor pure import shims: '
+        + ', '.join(sorted(invalid_provenance))
+    )
+if len(runtime_backed) + len(pure_shims) != len(BUSINESS_FILES):
+    raise SystemExit('BUSINESS_GATE_REACHABILITY_FAILED: provenance accounting mismatch')
+
 print(
     'BUSINESS_GATE_REACHABILITY_OK: '
     f'roots={len(roots)}; business-tests={len(BUSINESS_FILES)}; reachable={len(reachable)}; '
-    'imports=static+dynamic; redundant-roots=0; unreachable=0'
+    'imports=static+dynamic; redundant-roots=0; unreachable=0; '
+    f'runtime-backed={len(runtime_backed)}; pure-shims={len(pure_shims)}; provenance=guarded'
 )
