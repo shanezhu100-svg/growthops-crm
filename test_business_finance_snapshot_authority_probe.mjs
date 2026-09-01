@@ -22,16 +22,14 @@ function methodSources(){
 
 const methods=methodSources();
 const candidates=methods.filter(({name,source})=>
-  name.startsWith('finance') && (
-    source.includes('financeMonthSnapshots') ||
-    source.includes('companyProjectCostGroups') ||
-    source.includes('companyPublicCostGroups') ||
-    /snapshot/i.test(name)
-  )
+  source.includes('financeMonthSnapshots') ||
+  source.includes('companyProjectCostGroups') ||
+  source.includes('companyPublicCostGroups') ||
+  /snapshot/i.test(name)
 );
-if(!candidates.length)throw new Error('BUSINESS_FINANCE_SNAPSHOT_AUTHORITY_PROBE_FAILED: no finance month-snapshot candidates found');
+if(!candidates.length)throw new Error('BUSINESS_FINANCE_SNAPSHOT_AUTHORITY_PROBE_FAILED: no month-snapshot candidates found');
 for(const item of candidates){
   const compact=item.source.replace(/\s+/g,' ');
-  console.log(`FINANCE_SNAPSHOT_AUTHORITY_CANDIDATE ${item.name}: ${compact.slice(0,8000)}`);
+  console.log(`FINANCE_SNAPSHOT_AUTHORITY_CANDIDATE ${item.name}: ${compact.slice(0,10000)}`);
 }
-throw new Error('BUSINESS_FINANCE_SNAPSHOT_AUTHORITY_PROBE_EXPECTED_STOP: inspect month snapshot methods above, then remove this probe');
+throw new Error('BUSINESS_FINANCE_SNAPSHOT_AUTHORITY_PROBE_EXPECTED_STOP: inspect month snapshot readers/writers above, then remove this probe');
