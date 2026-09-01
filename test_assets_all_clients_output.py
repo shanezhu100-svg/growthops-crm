@@ -25,6 +25,24 @@ for marker in (
 ):
     require(marker in html,f'all-client asset UI marker missing: {marker}')
 
+# Regression for the customer-account TikTok bug: TikTok must remain a first-class
+# client platform in both the edit form and the selected-client detail/asset view.
+# These assertions read the final shipped HTML after all UI finalizers, so a future
+# refactor cannot silently remove the TikTok account surface while leaving only an
+# aggregate counter behind.
+for marker in (
+    '<option value="TK">TikTok</option>',
+    "form.platform.includes('TK')",
+    "addPlatformAccount('TK')",
+    'form.tkAccounts',
+    'selectedClient.tkAccounts',
+    'TikTok 资产',
+    'account.bcId',
+    'account.adAccountId',
+    'account.loginAccount',
+):
+    require(marker in html,f'TikTok client account surface missing: {marker}')
+
 for marker in (
     'const explicitAssetsClientId=vm.selectedAssetsClientId;',
     "if(explicitAssetsClientText==='0'||explicitAssetsClientText.toUpperCase()==='ALL')return '';",
@@ -43,4 +61,4 @@ all_block=html.split('<div v-if="selectedAssetsClientId===0" class="space-y-5">'
 require('openClientForm(selectedAssetsClient)' not in all_block,'aggregate asset view must not expose single-client editor')
 require('crm_reveal_client_secrets' not in all_block,'aggregate asset view must not embed reveal behavior')
 
-print('ASSETS_ALL_CLIENTS_OUTPUT_TESTS_OK: index='+hashlib.sha256(index_path.read_bytes()).hexdigest()+'; security='+hashlib.sha256(security_path.read_bytes()).hexdigest())
+print('ASSETS_ALL_CLIENTS_OUTPUT_TESTS_OK: index='+hashlib.sha256(index_path.read_bytes()).hexdigest()+'; security='+hashlib.sha256(security_path.read_bytes()).hexdigest()+'; tiktok-client-form+detail=guarded')
