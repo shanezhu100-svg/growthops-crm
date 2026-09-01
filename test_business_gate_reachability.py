@@ -89,10 +89,10 @@ if unreachable:
         + ', '.join(unreachable)
     )
 
-# Provenance gate: a permanent business regression must either execute the final
-# shipped application bundle or be a pure import shim/aggregator whose children do.
-# This prevents a self-contained reimplementation of product logic from going green
-# while the shipped runtime has drifted.
+# Provenance gate: a permanent business regression must either execute shipped JS
+# from dist/ or be a pure import shim/aggregator whose children do. This prevents a
+# self-contained reimplementation of product logic from going green while the actual
+# deployed CRM code has drifted.
 block_comment_re = re.compile(r'/\*.*?\*/', re.DOTALL)
 line_comment_re = re.compile(r'//[^\n]*')
 static_import_stmt_re = re.compile(
@@ -107,12 +107,19 @@ runtime_backed = []
 pure_shims = []
 invalid_provenance = []
 for name, text in texts.items():
-    # Runtime-backed tests consistently consume the generated app bundle under
-    # dist/app and enumerate app-inline-* files. Requiring both markers avoids
-    # accepting comments or unrelated references to `dist` as provenance.
+    # Most tests enumerate final app-inline-* JS under dist/app. A small number
+    # execute another deployed JS artifact (for example cloud-security-hotfix.js).
+    # Accept the latter only when the file is read from dist and then executed in a
+    # VM, not merely mentioned or inspected as text.
     has_dist_app = bool(re.search(r"['\"]dist['\"]\s*,\s*['\"]app['\"]|dist/app", text))
     has_app_inline = 'app-inline-' in text
-    if has_dist_app and has_app_inline:
+    app_bundle_backed = has_dist_app and has_app_inline
+
+    has_dist_path = bool(re.search(r"path\.join\(\s*process\.cwd\(\)\s*,\s*['\"]dist['\"]", text))
+    reads_dist_js = has_dist_path and 'fs.readFileSync' in text
+    executes_dist_js = reads_dist_js and ('vm.runInNewContext' in text or 'vm.runInContext' in text)
+
+    if app_bundle_backed or executes_dist_js:
         runtime_backed.append(name)
         continue
 
@@ -134,7 +141,7 @@ for name, text in texts.items():
 
 if invalid_provenance:
     raise SystemExit(
-        'BUSINESS_GATE_REACHABILITY_FAILED: business tests are neither final-runtime-backed nor pure import shims: '
+        'BUSINESS_GATE_REACHABILITY_FAILED: business tests are neither executed-shipped-runtime-backed nor pure import shims: '
         + ', '.join(sorted(invalid_provenance))
     )
 if len(runtime_backed) + len(pure_shims) != len(BUSINESS_FILES):
