@@ -41,17 +41,27 @@ function collectMethod(name){
 }
 collectMethod('saveClient');
 
-let methods;
-try{
-  methods=vm.runInNewContext(`({${[...methodSources.values()].join(',\n')}})`,{
-    Date,Number,String,Object,Array,Math,JSON,Set,Map,Intl,RegExp,
-    structuredClone:globalThis.structuredClone,
-    crypto:globalThis.crypto,
-    setTimeout:(fn)=>{if(typeof fn==='function')fn();return 1;},
-    clearTimeout:()=>{},
-  },{timeout:1000});
-}catch(error){
-  throw new Error(`BUSINESS_CLIENT_TIKTOK_SAVE_FAILED: unable to compile shipped saveClient helper closure: ${error.message}; helpers=${[...methodSources.keys()].sort().join(',')}`);
+// Compile each shipped method independently. Concatenating independently extracted
+// methods into one object literal is parser-fragile because neighboring method
+// boundaries can carry syntax that is valid alone but ambiguous after reassembly.
+// Independent compilation preserves each shipped method body and its runtime `this`
+// semantics while avoiding any test-owned reimplementation of the helper logic.
+const context={
+  Date,Number,String,Object,Array,Math,JSON,Set,Map,Intl,RegExp,
+  structuredClone:globalThis.structuredClone,
+  crypto:globalThis.crypto,
+  setTimeout:(fn)=>{if(typeof fn==='function')fn();return 1;},
+  clearTimeout:()=>{},
+};
+const methods={};
+for(const [name,source] of methodSources){
+  try{
+    const compiled=vm.runInNewContext(`({${source}})`,context,{timeout:1000});
+    if(typeof compiled[name]!=='function')throw new Error('compiled member is not a function');
+    methods[name]=compiled[name];
+  }catch(error){
+    throw new Error(`BUSINESS_CLIENT_TIKTOK_SAVE_FAILED: unable to compile shipped helper ${name}: ${error.message}; helpers=${[...methodSources.keys()].sort().join(',')}`);
+  }
 }
 if(typeof methods.saveClient!=='function')throw new Error('BUSINESS_CLIENT_TIKTOK_SAVE_FAILED: saveClient is not executable');
 
