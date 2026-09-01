@@ -26,24 +26,20 @@ function extractMethod(name){
   throw new Error(`BUSINESS_AUTH_USER_MUTATION_PROBE_FAILED: ${name} boundary not found`);
 }
 
+function props(source,root){
+  return [...new Set([...source.matchAll(new RegExp(`\\b${root}(?:\\?\\.)?\\.([A-Za-z_$][A-Za-z0-9_$]*)`,'g'))].map(m=>m[1]))].sort();
+}
 function summarize(name){
   const source=extractMethod(name);
-  const thisRefs=[...new Set([...source.matchAll(/\bthis\.([A-Za-z_$][A-Za-z0-9_$]*)/g)].map(m=>m[1]))].sort();
+  const thisRefs=props(source,'this');
   const calls=[...new Set([...source.matchAll(/\bthis\.([A-Za-z_$][A-Za-z0-9_$]*)\s*\(/g)].map(m=>m[1]))].sort();
   const params=(source.match(new RegExp(`^(?:async\\s+)?${name}\\s*\\(([^)]*)\\)`))?.[1]??'').replace(/\s+/g,' ').trim();
-  const features={
-    async:/^async\s/.test(source),
-    confirm:/\b(?:window\.)?confirm\s*\(/.test(source),
-    persist:/\bthis\.persist\s*\(/.test(source),
-    audit:/\bthis\.logAudit\s*\(/.test(source),
-    splice:/\.splice\s*\(/.test(source),
-    push:/\.push\s*\(/.test(source),
-    assignment:/\bthis\.[A-Za-z_$][A-Za-z0-9_$]*\s*=/.test(source),
-  };
-  return `${name}:params=${params||'-'}; refs=${thisRefs.join(',')||'-'}; calls=${calls.join(',')||'-'}; features=${Object.entries(features).filter(([,v])=>v).map(([k])=>k).join(',')||'-'}`;
+  const userParam=params.split(',')[0]?.trim()||'user';
+  const formFields=props(source,'this\\.userForm');
+  const currentFields=props(source,'this\\.currentUser');
+  const userFields=userParam&&/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(userParam)?props(source,userParam):[];
+  const features={persist:/\bthis\.persist\s*\(/.test(source),audit:/\bthis\.logAudit\s*\(/.test(source),push:/\.push\s*\(/.test(source),splice:/\.splice\s*\(/.test(source),filter:/\.filter\s*\(/.test(source),findIndex:/\.findIndex\s*\(/.test(source)};
+  return `${name}:params=${params||'-'}; refs=${thisRefs.join(',')||'-'}; calls=${calls.join(',')||'-'}; form=${formFields.join(',')||'-'}; current=${currentFields.join(',')||'-'}; user=${userFields.join(',')||'-'}; features=${Object.entries(features).filter(([,v])=>v).map(([k])=>k).join(',')||'-'}`;
 }
 
-throw new Error('BUSINESS_AUTH_USER_MUTATION_PROBE_RESULT: '+[
-  summarize('saveAuthUser'),
-  summarize('deleteAuthUser'),
-].join(' | '));
+throw new Error('BUSINESS_AUTH_USER_MUTATION_PROBE_RESULT: '+[summarize('saveAuthUser'),summarize('deleteAuthUser')].join(' | '));
