@@ -20,36 +20,56 @@ function extractMethod(name){
   return tail.slice(0,next).replace(/,\s*$/,'').trim();
 }
 
-const names=['financeReceivablePaid','financeReceivableUnpaid','saveReceivablePayment'];
+const names=['financeReceivablePaid','financeReceivableUnpaid','saveReceivablePayment','deleteReceivablePayment','deleteReceivable'];
 const source=Object.fromEntries(names.map(name=>[name,extractMethod(name)]));
 const subject=vm.runInNewContext(`({${names.map(name=>source[name]).join(',')}})`,{Number,String,Object,Array,Math,Date},{timeout:1000});
 
 let uid=0;
 let notifications=[];
 let persists=0;
+let audits=[];
+let confirms=0;
+let unlocked=true;
+let lockedCostMonths=new Set();
 Object.assign(subject,{
   clients:[{id:'c1',name:'Alpha'}],
   financeReceivables:[],
+  financeCosts:[],
+  receivableForm:null,
   paymentTargetReceivable:null,
   paymentForm:{date:'2026-08-31',amount:'',method:'银行转账',account:'acct',note:''},
-  assertMonthUnlocked(){return true;},
+  assertMonthUnlocked(){return unlocked;},
+  isMonthLocked(month){return lockedCostMonths.has(String(month||''));},
   accountUid(prefix){uid+=1;return `${prefix}-${uid}`;},
   persist(){persists+=1;return true;},
-  logAudit(){},
+  logAudit(action,detail){audits.push({action:String(action??''),detail:String(detail??'')});},
+  askConfirm(_options,callback){confirms+=1;callback();},
   notify(message,type){notifications.push({message:String(message??''),type:String(type??'')});},
   financeReceivableClientName(){return 'Alpha';},
   financeIncomeTypeText(){return '投放服务费';},
   formatMoney(value,currency){return `${currency||'USD'}:${Number(value)}`;},
+  normalizeReceivable(row){return {...row};},
+  receivableLinkedCost(row){return this.financeCosts.find(cost=>cost.sourceType==='RECEIVABLE_ITEM'&&String(cost.sourceId)===String(row?.id))||null;},
 });
 
 const eq=(actual,expected,label)=>{if(actual!==expected)throw new Error(`BUSINESS_RECEIVABLE_PAYMENT_BOUNDS_FAILED: ${label}; expected=${expected}; actual=${actual}`);};
 const includes=(actual,fragment,label)=>{if(!String(actual).includes(fragment))throw new Error(`BUSINESS_RECEIVABLE_PAYMENT_BOUNDS_FAILED: ${label}; expected fragment=${fragment}; actual=${actual}`);};
 
-function runCase(label,amount){
+function resetMutationState(){
   notifications=[];
   persists=0;
+  audits=[];
+  confirms=0;
+  unlocked=true;
+  lockedCostMonths=new Set();
+  subject.receivableForm=null;
+}
+
+function runCase(label,amount){
+  resetMutationState();
   const row={id:`r-${label}`,clientId:'c1',amount:100,payments:[],currency:'USD',settlementMonth:'2026-08',dueDate:'2026-08-31',incomeType:'SERVICE_FEE'};
   subject.financeReceivables=[row];
+  subject.financeCosts=[];
   subject.paymentTargetReceivable=row;
   subject.paymentForm={date:'2026-08-31',amount,method:'银行转账',account:'acct',note:''};
   subject.saveReceivablePayment();
@@ -96,4 +116,94 @@ eq(result.unpaid,0,'exact payment settles receivable');
 eq(result.persists,1,'exact payment persists once');
 includes(result.notifications,'回款流水已保存','exact payment success notification preserved');
 
-console.log('BUSINESS_RECEIVABLE_PAYMENT_BOUNDS_OK: finite-positive=required; zero+negative+nan+infinity=denied; overpayment=denied; partial+exact=preserved');
+// Deleting one payment must recalculate paidAmount from the surviving ledger and
+// persist exactly once. The edit form, when open on the same receivable, must be
+// refreshed from the canonical row instead of retaining stale paid state.
+resetMutationState();
+let deleteRow={id:'r-delete-payment',clientId:'c1',amount:100,currency:'USD',settlementMonth:'2026-08',incomeType:'SERVICE_FEE',payments:[
+  {id:'pay-a',date:'2026-08-31',amount:40},{id:'pay-b',date:'2026-08-30',amount:20},
+],paidAmount:60};
+subject.financeReceivables=[deleteRow];
+subject.financeCosts=[];
+subject.receivableForm={id:deleteRow.id,paidAmount:999};
+subject.deleteReceivablePayment(deleteRow,deleteRow.payments[0]);
+eq(deleteRow.payments.length,1,'payment delete removes exactly one ledger row');
+eq(deleteRow.payments[0].id,'pay-b','payment delete preserves unrelated ledger row');
+eq(deleteRow.paidAmount,20,'payment delete recomputes paidAmount from surviving ledger');
+eq(subject.receivableForm.paidAmount,20,'open receivable form refreshes after payment delete');
+eq(confirms,1,'payment delete requires one confirmation');
+eq(persists,1,'payment delete persists once');
+eq(audits.length,1,'payment delete audits once');
+includes(notifications.map(item=>item.message).join('|'),'回款流水已删除','payment delete success notification preserved');
+
+resetMutationState();
+deleteRow={id:'r-delete-payment-locked',clientId:'c1',amount:100,currency:'USD',settlementMonth:'2026-08',incomeType:'SERVICE_FEE',payments:[{id:'pay-lock',date:'2026-08-31',amount:25}],paidAmount:25};
+subject.financeReceivables=[deleteRow];
+unlocked=false;
+subject.deleteReceivablePayment(deleteRow,deleteRow.payments[0]);
+eq(deleteRow.payments.length,1,'locked payment month must preserve ledger');
+eq(deleteRow.paidAmount,25,'locked payment month must preserve paidAmount');
+eq(confirms,0,'locked payment delete must not open confirmation');
+eq(persists,0,'locked payment delete must not persist');
+
+// Receivables with any payment history are intentionally non-deletable. This is
+// distinct from paidAmount compatibility: the canonical payment-ledger helper is
+// authoritative and must block deletion before confirmation or cost cleanup.
+resetMutationState();
+let receivable={id:'r-with-payment',clientId:'c1',amount:100,currency:'USD',settlementMonth:'2026-08',incomeType:'SERVICE_FEE',projectName:'August',payments:[{id:'p1',date:'2026-08-31',amount:1}]};
+subject.financeReceivables=[receivable];
+subject.financeCosts=[{id:'linked-keep',sourceType:'RECEIVABLE_ITEM',sourceId:receivable.id,date:'2026-08-01',amount:10}];
+subject.deleteReceivable(receivable);
+eq(subject.financeReceivables.length,1,'receivable with payment history must remain');
+eq(subject.financeCosts.length,1,'blocked receivable delete must preserve linked cost');
+eq(confirms,0,'receivable with payment history must not confirm deletion');
+eq(persists,0,'receivable with payment history must not persist');
+includes(notifications.map(item=>item.message).join('|'),'已有回款流水','payment-history delete block notification preserved');
+
+// A linked project cost in a locked accounting month independently blocks the
+// receivable deletion even when the receivable itself has no payments.
+resetMutationState();
+receivable={id:'r-linked-cost-locked',clientId:'c1',amount:100,currency:'USD',settlementMonth:'2026-08',incomeType:'SERVICE_FEE',projectName:'August',payments:[]};
+subject.financeReceivables=[receivable];
+subject.financeCosts=[{id:'linked-lock',sourceType:'RECEIVABLE_ITEM',sourceId:receivable.id,date:'2026-07-15',amount:10}];
+lockedCostMonths.add('2026-07');
+subject.deleteReceivable(receivable);
+eq(subject.financeReceivables.length,1,'locked linked-cost month must preserve receivable');
+eq(subject.financeCosts.length,1,'locked linked-cost month must preserve cost');
+eq(confirms,0,'locked linked-cost delete must not confirm');
+eq(persists,0,'locked linked-cost delete must not persist');
+includes(notifications.map(item=>item.message).join('|'),'关联项目成本所在月份已月结','linked-cost lock notification preserved');
+
+// Successful deletion removes only the target receivable and its own generated
+// RECEIVABLE_ITEM cost. Unrelated/manual costs and other receivables must survive.
+resetMutationState();
+receivable={id:'r-delete',clientId:'c1',amount:100,currency:'USD',settlementMonth:'2026-08',incomeType:'SERVICE_FEE',projectName:'August',payments:[]};
+const otherReceivable={id:'r-other',clientId:'c1',amount:50,currency:'USD',settlementMonth:'2026-08',incomeType:'OTHER',payments:[]};
+subject.financeReceivables=[receivable,otherReceivable];
+subject.financeCosts=[
+  {id:'linked-delete',sourceType:'RECEIVABLE_ITEM',sourceId:receivable.id,date:'2026-08-01',amount:10},
+  {id:'linked-other',sourceType:'RECEIVABLE_ITEM',sourceId:otherReceivable.id,date:'2026-08-01',amount:5},
+  {id:'manual-cost',sourceType:'',sourceId:receivable.id,date:'2026-08-01',amount:7},
+];
+subject.deleteReceivable(receivable);
+eq(subject.financeReceivables.length,1,'confirmed receivable delete removes exactly target row');
+eq(subject.financeReceivables[0].id,'r-other','confirmed receivable delete preserves unrelated receivable');
+eq(subject.financeCosts.some(cost=>cost.id==='linked-delete'),false,'confirmed receivable delete removes own linked generated cost');
+eq(subject.financeCosts.some(cost=>cost.id==='linked-other'),true,'confirmed receivable delete preserves other receivable linked cost');
+eq(subject.financeCosts.some(cost=>cost.id==='manual-cost'),true,'confirmed receivable delete preserves unrelated/manual cost');
+eq(confirms,1,'confirmed receivable delete opens one confirmation');
+eq(persists,1,'confirmed receivable delete persists once');
+eq(audits.length,1,'confirmed receivable delete audits once');
+includes(notifications.map(item=>item.message).join('|'),'收入项目及关联成本已删除','confirmed receivable delete success notification preserved');
+
+resetMutationState();
+receivable={id:'r-month-locked',clientId:'c1',amount:100,currency:'USD',settlementMonth:'2026-08',incomeType:'SERVICE_FEE',payments:[]};
+subject.financeReceivables=[receivable];
+subject.financeCosts=[];
+unlocked=false;
+subject.deleteReceivable(receivable);
+eq(subject.financeReceivables.length,1,'locked receivable month must preserve row');
+eq(confirms,0,'locked receivable delete must not confirm');
+eq(persists,0,'locked receivable delete must not persist');
+
+console.log('BUSINESS_RECEIVABLE_PAYMENT_BOUNDS_OK: finite-positive=required; overpayment=denied; payment-delete=recalculates+lock-guarded; receivable-delete=payment+linked-lock-guarded+scoped-cost-cleanup');
