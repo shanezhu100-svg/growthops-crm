@@ -126,3 +126,8 @@ print(
     f'output={out_sha}/{len(out)}B; renders=5; _rc=true; '
     'runtime-compiled-proxy=vue-3.5.41-compatible; withProxy-cache=weakmap; dynamic-code=0'
 )
+
+# Apply the reviewed company-summary correction only after the render registry is
+# deterministic. This changes one display literal plus financeCostText's ALL-scope
+# authority; it does not alter render structure or the selected-client cost basis.
+import finance_company_cost_summary_finalize  # noqa: E402,F401
