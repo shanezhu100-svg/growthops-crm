@@ -19,12 +19,8 @@ function extractMethod(name){
   return tail.slice(0,next).replace(/,\s*$/,'').trim();
 }
 
-const names=[
-  'saveFinanceCost','deleteFinanceCost','saveFinancePeriodCost','deleteFinancePeriodCost',
-  'syncFinancePeriodAutoCosts','ensureAutomaticAssetCosts'
-];
-for(const name of names){
+for(const name of ['syncFinancePeriodAutoCosts','ensureAutomaticAssetCosts']){
   console.log(`BUSINESS_FINANCE_COST_MUTATION_PROBE_SOURCE ${name}:`);
   console.log(extractMethod(name));
 }
-throw new Error('BUSINESS_FINANCE_COST_MUTATION_PROBE_INTENTIONAL_FAILURE: captured shipped cost mutations for permanent regression conversion');
+throw new Error('BUSINESS_FINANCE_COST_MUTATION_PROBE_INTENTIONAL_FAILURE: captured remaining shipped cost mutations for permanent regression conversion');
