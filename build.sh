@@ -162,6 +162,10 @@ node test_business_finance_reconciliation_cost.mjs
 # client/receivable status, rebate ownership, amount, and visible-profit regressions.
 node test_business_finance_unique_aggregation.mjs
 node test_business_finance_periods.mjs
+# Every business regression file must be reachable from one of the required roots
+# above (directly or through an explicit import chain), so dormant tests cannot give
+# a false impression of protected behavior.
+python3 test_business_gate_reachability.py
 # Final server-side identity and input boundaries. Patch the two deployment BFFs
 # before syntax/runtime tests so canonical builds and deployed handlers are aligned.
 python3 preview_runtime_boundary_finalize.py
