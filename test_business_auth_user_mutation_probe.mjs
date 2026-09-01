@@ -25,43 +25,7 @@ function extractMethod(name){
   }
   throw new Error(`BUSINESS_AUTH_USER_MUTATION_PROBE_FAILED: ${name} boundary not found`);
 }
-function compile(name){
-  const parsed=vm.runInNewContext(`({${extractMethod(name)}})`,{Date,Number,String,Object,Array,Math,JSON,Set,Map,Intl,RegExp},{timeout:1000});
-  return parsed[name];
-}
-const deleteAuthUser=compile('deleteAuthUser');
 
-const baseCurrent={id:'auth-current',name:'Current Admin',username:'current-admin',role:'ADMIN',enabled:true};
-function deleteCase({label,role='OPS',enabled=true,self=false,confirm=true}){
-  const counters={persist:0,audit:0,notify:0,confirm:0};
-  const current={...baseCurrent};
-  const target=self
-    ? {...current,enabled}
-    : {id:`target-${label}`,name:`Target ${label}`,username:`target-${label}`,role,enabled};
-  const subject={
-    authUsers:self?[{...target}]:[{...current},{...target}],
-    currentUser:{...current},
-    askConfirm:()=>{counters.confirm+=1;return confirm;},
-    persist:()=>{counters.persist+=1;},
-    logAudit:()=>{counters.audit+=1;},
-    notify:()=>{counters.notify+=1;},
-  };
-  let error='-';
-  try{deleteAuthUser.call(subject,target);}catch(exc){error=exc?.name||'Error';}
-  return {
-    label,error,removed:!subject.authUsers.some(user=>user?.id===target.id),
-    currentRetained:subject.authUsers.some(user=>user?.id===current.id),
-    len:subject.authUsers.length,...counters,
-  };
-}
-
-const cases=[
-  deleteCase({label:'ops-enabled',role:'OPS',enabled:true}),
-  deleteCase({label:'ops-disabled',role:'OPS',enabled:false}),
-  deleteCase({label:'finance-disabled',role:'FINANCE',enabled:false}),
-  deleteCase({label:'admin-disabled',role:'ADMIN',enabled:false}),
-  deleteCase({label:'self-disabled',role:'ADMIN',enabled:false,self:true}),
-  deleteCase({label:'ops-disabled-cancel',role:'OPS',enabled:false,confirm:false}),
-];
-const compact=cases.map(r=>`${r.label}:${r.removed?'DEL':'DENY'}/current=${r.currentRetained?'keep':'gone'}/len=${r.len}/confirm=${r.confirm}/persist=${r.persist}/audit=${r.audit}/notify=${r.notify}/error=${r.error}`).join(',');
-throw new Error(`BUSINESS_AUTH_USER_MUTATION_PROBE_RESULT: delete=${compact}`);
+const save=extractMethod('saveAuthUser');
+const del=extractMethod('deleteAuthUser');
+throw new Error('BUSINESS_AUTH_USER_MUTATION_SOURCE_PROBE: '+JSON.stringify({save,delete:del}));
