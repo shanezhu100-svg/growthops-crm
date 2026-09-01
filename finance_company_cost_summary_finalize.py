@@ -7,7 +7,7 @@ APP_DIR = ROOT / 'dist' / 'app'
 REGISTRY = ROOT / 'dist' / 'vendor' / 'vue-3.5.41.renders.js'
 
 OLD_COPY_CORE = '客户专属成本 + 公司项目成本 + 公司公共成本'
-NEW_COPY_CORE = '公司成本 + 公司项目成本'
+NEW_COPY = '已包含公司成本 + 公司项目成本；详细构成在下方成本模块查看。'
 
 
 def fail(message: str) -> None:
@@ -63,20 +63,24 @@ for path in files:
 if method_hits != 1:
     fail(f'{method_name} expected in exactly one app-inline artifact, found {method_hits}')
 
-# Vue templates are already compiled by this stage. Replace only the reviewed core
-# phrase in the deterministic render registry. Leave all surrounding help text and
-# render structure untouched; the old phrase is forbidden because it incorrectly
-# says the company total includes customer-specific costs.
+# Vue templates are already compiled by this stage. Locate only the one explanatory
+# sentence whose core claims customer-specific + company-project + company-public
+# cost are combined, then normalize that whole sentence to the reviewed company-only
+# wording. Other CLIENT labels/detail text remain untouched.
 if not REGISTRY.is_file():
     fail('render registry missing')
 registry = REGISTRY.read_text(encoding='utf-8')
 if registry.count(OLD_COPY_CORE) != 1:
     fail(f'old summary core expected exactly once, found {registry.count(OLD_COPY_CORE)}')
-if NEW_COPY_CORE in registry:
-    fail('new summary core already present before correction')
-registry = registry.replace(OLD_COPY_CORE, NEW_COPY_CORE, 1)
-if OLD_COPY_CORE in registry or registry.count(NEW_COPY_CORE) != 1:
-    fail('summary core replacement drifted')
+sentence_re = re.compile(r'已包含客户专属成本 \+ 公司项目成本 \+ 公司公共成本[^。]*。')
+matches = sentence_re.findall(registry)
+if len(matches) != 1:
+    fail(f'old summary sentence expected exactly once, found {len(matches)}')
+if NEW_COPY in registry:
+    fail('new summary copy already present before correction')
+registry = sentence_re.sub(NEW_COPY, registry, count=1)
+if OLD_COPY_CORE in registry or registry.count(NEW_COPY) != 1:
+    fail('summary copy replacement drifted')
 REGISTRY.write_text(registry, encoding='utf-8')
 registry_sha = hashlib.sha256(registry.encode('utf-8')).hexdigest()
 
