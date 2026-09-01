@@ -26,10 +26,9 @@ if len(matches) != 1 or matches[0][2] != 1:
     fail('expected exactly one deleteClient cleanup anchor in final shipped app; found ' + details)
 
 path, text, _ = matches[0]
-if 'growthOpsSop-${id}-' in text or "lead.convertedClientId=null;lead.convertedAt=''" in text:
-    fail('deleteClient integrity markers already present before exact patch; review duplicate/ordering drift')
-
 patched = text.replace(OLD, NEW, 1)
+if patched.count(NEW) != 1 or OLD in patched:
+    fail('exact deleteClient replacement did not produce one reviewed integrity block')
 path.write_text(patched, encoding='utf-8')
 
 print(
