@@ -25,53 +25,44 @@ function extractMethod(name){
   }
   throw new Error(`BUSINESS_AUTH_USER_MUTATION_PROBE_FAILED: ${name} boundary not found`);
 }
-
 function compile(name){
-  const source=extractMethod(name);
-  const parsed=vm.runInNewContext(`({${source}})`,{Date,Number,String,Object,Array,Math,JSON,Set,Map,Intl,RegExp},{timeout:1000});
+  const parsed=vm.runInNewContext(`({${extractMethod(name)}})`,{Date,Number,String,Object,Array,Math,JSON,Set,Map,Intl,RegExp},{timeout:1000});
   return parsed[name];
 }
 const saveAuthUser=compile('saveAuthUser');
 const deleteAuthUser=compile('deleteAuthUser');
-
-function makeCounters(){return {persist:0,audit:0,notify:0,confirm:0};}
+const roles=['ADMIN','MANAGER','OPS','FINANCE','VIEWER','USER','MEMBER','STAFF'];
 const current={id:'auth-current',name:'Current Admin',username:'current-admin',role:'ADMIN',enabled:true};
-const other={id:'auth-existing',name:'Existing User',username:'existing-user',role:'USER',enabled:true};
 
-const saveCounters=makeCounters();
-const saveSubject={
-  authUsers:[{...current},{...other}],
-  userForm:{name:'Synthetic New User',username:'synthetic-new-user',password:'SyntheticPass123!'},
-  currentUser:{...current},
-  currentPage:'users',
-  showUserModal:true,
-  canViewPage:()=>true,
-  accountUid:()=> 'auth-new',
-  roleLabel:value=>String(value??''),
-  persist:()=>{saveCounters.persist+=1;},
-  logAudit:()=>{saveCounters.audit+=1;},
-  notify:()=>{saveCounters.notify+=1;},
-};
-let saveError='-';
-try{saveAuthUser.call(saveSubject);}catch(error){saveError=`${error?.name||'Error'}:${error?.message||String(error)}`;}
-const added=saveSubject.authUsers.find(user=>user?.id==='auth-new')||null;
-
-const deleteCounters=makeCounters();
-const deleteSubject={
-  authUsers:[{...current},{...other}],
-  currentUser:{...current},
-  askConfirm:()=>{deleteCounters.confirm+=1;return true;},
-  persist:()=>{deleteCounters.persist+=1;},
-  logAudit:()=>{deleteCounters.audit+=1;},
-  notify:()=>{deleteCounters.notify+=1;},
-};
-let deleteError='-';
-try{deleteAuthUser.call(deleteSubject,deleteSubject.authUsers[1]);}catch(error){deleteError=`${error?.name||'Error'}:${error?.message||String(error)}`;}
-
-const addedKeys=added?Object.keys(added).sort().filter(key=>key!=='password').join(','):'-';
-const passwordKey=Boolean(added&&Object.prototype.hasOwnProperty.call(added,'password'));
-const summary=[
-  `save:error=${saveError}; added=${Boolean(added)}; len=${saveSubject.authUsers.length}; keys=${addedKeys}; passwordKey=${passwordKey}; persist=${saveCounters.persist}; audit=${saveCounters.audit}; notify=${saveCounters.notify}; modal=${String(saveSubject.showUserModal)}`,
-  `delete:error=${deleteError}; targetRemoved=${!deleteSubject.authUsers.some(user=>user?.id==='auth-existing')}; currentRetained=${deleteSubject.authUsers.some(user=>user?.id==='auth-current')}; len=${deleteSubject.authUsers.length}; confirm=${deleteCounters.confirm}; persist=${deleteCounters.persist}; audit=${deleteCounters.audit}; notify=${deleteCounters.notify}`,
-];
-throw new Error('BUSINESS_AUTH_USER_MUTATION_PROBE_RESULT: '+summary.join(' | '));
+function saveCase(role){
+  const counters={persist:0,audit:0,notify:0};
+  const subject={
+    authUsers:[{...current}],
+    userForm:{id:null,name:'Synthetic New User',username:`synthetic-${role.toLowerCase()}`,password:'SyntheticPass123!',role,enabled:true},
+    currentUser:{...current},currentPage:'users',showUserModal:true,
+    canViewPage:()=>true,accountUid:()=>`new-${role}`,
+    roleLabel:value=>String(value??''),
+    persist:()=>{counters.persist+=1;},logAudit:()=>{counters.audit+=1;},notify:()=>{counters.notify+=1;},
+  };
+  let error='-';
+  try{saveAuthUser.call(subject);}catch(exc){error=exc?.name||'Error';}
+  const added=subject.authUsers.find(user=>user?.id===`new-${role}`)||subject.authUsers.find(user=>user?.username===`synthetic-${role.toLowerCase()}`)||null;
+  return {role,error,added:Boolean(added),len:subject.authUsers.length,keys:added?Object.keys(added).sort().filter(k=>k!=='password'):[],passwordKey:Boolean(added&&Object.hasOwn(added,'password')),persist:counters.persist,audit:counters.audit,notify:counters.notify,modal:subject.showUserModal};
+}
+function deleteCase(role){
+  const counters={persist:0,audit:0,notify:0,confirm:0};
+  const target={id:`target-${role}`,name:`Target ${role}`,username:`target-${role.toLowerCase()}`,role,enabled:true};
+  const subject={
+    authUsers:[{...current},{...target}],currentUser:{...current},
+    askConfirm:()=>{counters.confirm+=1;return true;},
+    persist:()=>{counters.persist+=1;},logAudit:()=>{counters.audit+=1;},notify:()=>{counters.notify+=1;},
+  };
+  let error='-';
+  try{deleteAuthUser.call(subject,target);}catch(exc){error=exc?.name||'Error';}
+  return {role,error,removed:!subject.authUsers.some(user=>user?.id===target.id),currentRetained:subject.authUsers.some(user=>user?.id===current.id),len:subject.authUsers.length,confirm:counters.confirm,persist:counters.persist,audit:counters.audit,notify:counters.notify};
+}
+const saves=roles.map(saveCase);
+const deletes=roles.map(deleteCase);
+const compactSave=saves.map(r=>`${r.role}:${r.added?'ADD':'DENY'}/${r.persist}/${r.audit}/${r.notify}/${r.modal?'open':'closed'}${r.added?'/'+r.keys.join('+')+'/pwdKey='+r.passwordKey:''}`).join(',');
+const compactDelete=deletes.map(r=>`${r.role}:${r.removed?'DEL':'DENY'}/${r.confirm}/${r.persist}/${r.audit}/${r.notify}`).join(',');
+throw new Error(`BUSINESS_AUTH_USER_MUTATION_PROBE_RESULT: save=${compactSave} | delete=${compactDelete}`);
