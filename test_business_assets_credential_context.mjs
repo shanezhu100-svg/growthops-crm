@@ -57,9 +57,6 @@ const eq=(actual,expected,label)=>{if(actual!==expected)throw new Error(`BUSINES
 
 const clients=[{id:'c1',name:'Alpha'},{id:'c2',name:'Beta'}];
 
-// Aggregate mode is the highest-priority boundary only on the actual account-assets
-// route. It may visibly contain every client name, but it must never target a
-// concrete client-scoped credential RPC.
 {
   const subject=makeSubject({currentPage:'assets',clients,selectedAssetsClientId:0,selectedClientId:'c1'},{visibleNames:['Alpha','Beta']});
   eq(subject.resolveCredentialClientId(),'','numeric aggregate sentinel must suppress stale and visible client ids');
@@ -68,10 +65,6 @@ const clients=[{id:'c1',name:'Alpha'},{id:'c2',name:'Beta'}];
   const subject=makeSubject({currentPage:'assets',clients,selectedAssetsClientId:'ALL',selectedClientId:'c2'},{visibleNames:['Beta']});
   eq(subject.resolveCredentialClientId(),'','ALL aggregate sentinel must suppress a uniquely visible client');
 }
-
-// The client edit/detail forms contain the same Facebook/TikTok credential labels,
-// so the legacy body-text detector can report assetPage=true. Their explicit client
-// identity must win before a stale account-assets 0/ALL sentinel is considered.
 {
   const subject=makeSubject({currentPage:'client-form',clients,selectedAssetsClientId:0,selectedClientId:'c1'},{visibleNames:['Alpha','Beta'],assetPage:true});
   eq(subject.resolveCredentialClientId(),'c1','client-form selectedClientId must outrank stale aggregate asset sentinel');
@@ -80,16 +73,10 @@ const clients=[{id:'c1',name:'Alpha'},{id:'c2',name:'Beta'}];
   const subject=makeSubject({currentPage:'client-detail',clients,selectedAssetsClientId:'ALL',selectedClientId:'c2'},{visibleNames:['Alpha','Beta'],assetPage:true});
   eq(subject.resolveCredentialClientId(),'c2','client-detail selectedClientId must outrank stale aggregate asset sentinel');
 }
-
-// An explicit concrete asset selection is authoritative on the actual assets route.
 {
   const subject=makeSubject({currentPage:'assets',clients,selectedAssetsClientId:'c2',selectedClientId:'c1'},{visibleNames:['Alpha']});
   eq(subject.resolveCredentialClientId(),'c2','explicit asset selection must outrank visible/stale client state');
 }
-
-// Before the explicit aggregate selector existed, the resolver intentionally fell
-// back to a unique visible client. Preserve that behavior for legacy asset contexts
-// where selectedAssetsClientId is absent.
 {
   const subject=makeSubject({currentPage:'assets',clients,selectedClientId:'stale'},{visibleNames:['Beta']});
   eq(subject.resolveVisibleClientId(),'c2','unique visible client detection');
@@ -99,12 +86,11 @@ const clients=[{id:'c1',name:'Alpha'},{id:'c2',name:'Beta'}];
   const subject=makeSubject({currentPage:'assets',clients,assetClientId:'c1',selectedClientId:'stale'},{visibleNames:[],bodyNames:[]});
   eq(subject.resolveCredentialClientId(),'c1','legacy explicit asset client id remains supported when no visible client resolves');
 }
-
-// Outside the account-assets page, client-detail keeps explicit selectedClientId.
 {
   const subject=makeSubject({currentPage:'client-detail',clients,selectedClientId:'c1'},{assetPage:false,visibleNames:['Beta']});
   eq(subject.resolveCredentialClientId(),'c1','client-detail selectedClientId behavior must remain intact');
 }
 
 console.log('BUSINESS_ASSETS_CREDENTIAL_CONTEXT_OK: assets-aggregate=0+ALL-deny; client-form+detail=explicit-id-before-body-heuristic; explicit-asset=authoritative; visible-fallback=unique; stale-detail=isolated');
+await import('./test_business_client_tiktok_save.mjs');
 await import('./test_business_analytics_inventory.mjs');
