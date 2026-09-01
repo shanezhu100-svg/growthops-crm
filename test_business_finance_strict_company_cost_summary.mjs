@@ -26,8 +26,10 @@ if(!strictSource.includes("['COMPANY','COMPANY_PROJECT']"))throw new Error('BUSI
 for(const forbidden of ['ALLOCATE_SERVICE','ALLOCATE_SPEND','financeCompanyNonClientCostGroups','financeActivePeriodSnapshot']){
   if(strictSource.includes(forbidden))throw new Error(`BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: strict authority contains forbidden dependency ${forbidden}`);
 }
-if(!textSource.includes('financeCompanySummaryCostGroups()'))throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: ALL card does not invoke strict authority method');
-if(textSource.includes('financeCompanyNonClientCostGroups'))throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: ALL card still uses broad non-client authority');
+if(!textSource.includes('financeCompanySummaryCostGroups()'))throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: total-cost card does not invoke strict authority method');
+for(const forbidden of ['financeCompanyNonClientCostGroups','financeCostGroups','financeClientFilter']){
+  if(textSource.includes(forbidden))throw new Error(`BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: total-cost card still depends on ${forbidden}`);
+}
 
 const strictMethod=vm.runInNewContext(`({${strictSource}})`,{Number,String,Object,Array},{timeout:1000}).financeCompanySummaryCostGroups;
 const textMethod=vm.runInNewContext(`({${textSource}})`,{Number,String,Object,Array},{timeout:1000}).financeCostText;
@@ -52,7 +54,9 @@ const strict=subject.financeCompanySummaryCostGroups();
 if(JSON.stringify(strict)!==JSON.stringify({CNY:80}))throw new Error(`BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: strict total expected CNY 80, actual ${JSON.stringify(strict)}`);
 if(textMethod.call(subject)!=='CNY:80')throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: ALL card did not exclude client/allocation costs from 420 fixture');
 subject.financeClientFilter='c1';
-if(textMethod.call(subject)!=='CNY:420')throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: selected-client cost behavior changed');
+if(textMethod.call(subject)!=='CNY:80')throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: selected-client filter leaked client cost into total-cost card');
+subject.financeClientFilter='c2';
+if(textMethod.call(subject)!=='CNY:80')throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: total-cost card changed across client filters');
 
 // Legacy locked-period fallback is safe only while source cost mutation remains
 // fail-closed after month close. Keep those prerequisites mechanically guarded.
@@ -73,4 +77,4 @@ const copy='仅统计公司公共成本 + 公司项目成本；详细构成在�
 if(registry.split(copy).length-1!==1)throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: strict card copy missing or duplicated');
 if(registry.includes('已包含公司成本 + 公司项目成本；详细构成在下方成本模块查看。'))throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: broad company-cost copy remains');
 
-console.log('BUSINESS_FINANCE_STRICT_COMPANY_COST_OK: total-card=COMPANY+COMPANY_PROJECT-only; client+service-allocation+spend-allocation=excluded; selected-client=preserved; locked-history-prerequisites=guarded');
+console.log('BUSINESS_FINANCE_STRICT_COMPANY_COST_OK: total-card=COMPANY+COMPANY_PROJECT-only; client+service-allocation+spend-allocation=excluded; client-filter-invariant=true; locked-history-prerequisites=guarded');

@@ -40,7 +40,7 @@ strict_method = (
     ".forEach(c=>{const cur=c.currency||'USD';g[cur]=(g[cur]||0)+Number(c.amount||0)});return g},\n"
 )
 old_return = "return this.spendGroupsText(this.financeClientFilter==='ALL'?this.financeCompanyNonClientCostGroups:this.financeCostGroups)"
-new_return = "return this.spendGroupsText(this.financeClientFilter==='ALL'?this.financeCompanySummaryCostGroups():this.financeCostGroups)"
+new_return = "return this.spendGroupsText(this.financeCompanySummaryCostGroups())"
 
 hits = 0
 changed = []
@@ -78,6 +78,6 @@ registry_sha = hashlib.sha256(registry.encode('utf-8')).hexdigest()
 print(
     'FINANCE_STRICT_COMPANY_COST_SUMMARY_FINALIZE_OK: '
     'scope=COMPANY+COMPANY_PROJECT; client+allocated-shared=excluded; '
-    'selected-client=unchanged; legacy-locked-periods=raw-cost-recompute; '
+    'client-filter-invariant=true; legacy-locked-periods=raw-cost-recompute; '
     f'registry={registry_sha[:12]}; app=' + ','.join(f'{name}:{sha[:12]}' for name, sha in changed)
 )
