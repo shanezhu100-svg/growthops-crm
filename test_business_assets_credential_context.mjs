@@ -93,4 +93,5 @@ const clients=[{id:'c1',name:'Alpha'},{id:'c2',name:'Beta'}];
 
 console.log('BUSINESS_ASSETS_CREDENTIAL_CONTEXT_OK: assets-aggregate=0+ALL-deny; client-form+detail=explicit-id-before-body-heuristic; explicit-asset=authoritative; visible-fallback=unique; stale-detail=isolated');
 await import('./test_business_client_tiktok_save.mjs');
+await import('./test_business_auth_user_mutations.mjs');
 await import('./test_business_analytics_inventory.mjs');
