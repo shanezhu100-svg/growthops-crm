@@ -152,6 +152,9 @@ python3 test_vue_runtime_only_output.py
 # stale converted-lead pointers and client-scoped SOP progress. Financial-history
 # blockers and historical lead stages remain unchanged.
 python3 client_delete_reference_integrity_finalize.py
+# Reject non-finite finance cost inputs before final business regression execution.
+python3 finance_cost_input_guard_finalize.py
+python3 test_finance_cost_input_guard_output.py
 # Browser liveness is verified by the required GitHub CI after this portable
 # build completes. Hosting builds must not depend on a Chromium executable.
 # Business-semantic regression gates execute the final shipped application logic,
