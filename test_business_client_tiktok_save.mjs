@@ -9,23 +9,30 @@ const files=fs.readdirSync(appDir).filter(name=>/^app-inline-\d+\.js$/.test(name
 if(!files.length)throw new Error('BUSINESS_CLIENT_TIKTOK_SAVE_FAILED: no final app-inline JS artifacts');
 const bundle=files.map(name=>fs.readFileSync(path.join(appDir,name),'utf8')).join('\n');
 
-function escapeRegex(value){return value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}
 function extractMethod(name){
-  // Final Vue methods are emitted as object-literal members on their own lines.
-  // Boundaries must be detected at the same indentation as the requested member;
-  // scanning for any later `name(...) {` can accidentally stop at nested callbacks
-  // or helper-local method syntax and return a truncated, non-compilable function.
-  const signature=new RegExp(`^([ \\t]*)(${name}\\([^)]*\\)\\s*\\{)`,'m');
+  // Use the real JavaScript parser as the method-boundary authority. Starting at
+  // the shipped object-literal member, try each closing brace until the candidate
+  // is itself a valid object member with the requested function. Nested callbacks,
+  // objects, strings, templates and regex literals therefore cannot fool a custom
+  // brace/indentation heuristic into returning a truncated helper.
+  const signature=new RegExp(`(?:^|[,\\n])\\s*((?:async\\s+)?${name}\\s*\\([^)]*\\)\\s*\\{)`,'m');
   const match=signature.exec(bundle);
   if(!match)throw new Error(`BUSINESS_CLIENT_TIKTOK_SAVE_FAILED: final runtime ${name} not found`);
-  const indent=match[1];
-  const start=match.index+indent.length;
+  const start=match.index+match[0].indexOf(match[1]);
   const tail=bundle.slice(start);
-  const peer=new RegExp(`^${escapeRegex(indent)}([A-Za-z_$][A-Za-z0-9_$]*)\\s*\\([^)]*\\)\\s*\\{`,'gm');
-  const defs=[...tail.matchAll(peer)];
-  if(defs.length<2||defs[0][1]!==name)throw new Error(`BUSINESS_CLIENT_TIKTOK_SAVE_FAILED: ${name} parser drifted`);
-  const next=defs[1].index+indent.length;
-  return tail.slice(0,next).replace(/,\s*$/,'').trim();
+  const open=tail.indexOf('{');
+  if(open<0)throw new Error(`BUSINESS_CLIENT_TIKTOK_SAVE_FAILED: ${name} opening brace missing`);
+  for(let cursor=open+1;cursor<tail.length;cursor+=1){
+    if(tail[cursor]!=='}')continue;
+    const source=tail.slice(0,cursor+1).trim();
+    try{
+      const parsed=vm.runInNewContext(`({${source}})`,Object.create(null),{timeout:100});
+      if(typeof parsed?.[name]==='function')return source;
+    }catch{
+      // Not the outer method boundary yet; continue to the next closing brace.
+    }
+  }
+  throw new Error(`BUSINESS_CLIENT_TIKTOK_SAVE_FAILED: ${name} parser could not find a complete shipped method boundary`);
 }
 
 // Execute saveClient together with the actual shipped pure helper chain it calls.
