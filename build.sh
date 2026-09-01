@@ -158,6 +158,10 @@ node test_business_ad_metrics.mjs
 node test_business_finance_confirmed_profit_cost.mjs
 node test_business_finance_profit_confirmation.mjs
 node test_business_finance_reconciliation_cost.mjs
+# Broader shipped-runtime finance coverage. These top-level suites chain settlement,
+# client/receivable status, rebate ownership, amount, and visible-profit regressions.
+node test_business_finance_unique_aggregation.mjs
+node test_business_finance_periods.mjs
 # Final server-side identity and input boundaries. Patch the two deployment BFFs
 # before syntax/runtime tests so canonical builds and deployed handlers are aligned.
 python3 preview_runtime_boundary_finalize.py
