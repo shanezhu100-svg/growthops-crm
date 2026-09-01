@@ -90,3 +90,8 @@ print(
     'selected-client-cost=preserved; client-cost-copy=absent; '
     f'registry={registry_sha[:12]}; app=' + ','.join(f'{name}:{sha[:12]}' for name, sha in changed_app)
 )
+
+# Tighten only the top-level total-cost card to the explicit product scope requested
+# by Finance: COMPANY + COMPANY_PROJECT. Other broad company-profit/allocation
+# authorities intentionally remain unchanged.
+import finance_strict_company_cost_summary_finalize  # noqa: E402,F401
