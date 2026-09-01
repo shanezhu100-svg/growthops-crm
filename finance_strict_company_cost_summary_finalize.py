@@ -40,7 +40,7 @@ strict_method = (
     ".forEach(c=>{const cur=c.currency||'USD';g[cur]=(g[cur]||0)+Number(c.amount||0)});return g},\n"
 )
 old_return = "return this.spendGroupsText(this.financeClientFilter==='ALL'?this.financeCompanyNonClientCostGroups:this.financeCostGroups)"
-new_return = "return this.spendGroupsText(this.financeClientFilter==='ALL'?this.financeCompanySummaryCostGroups:this.financeCostGroups)"
+new_return = "return this.spendGroupsText(this.financeClientFilter==='ALL'?this.financeCompanySummaryCostGroups():this.financeCostGroups)"
 
 hits = 0
 changed = []
