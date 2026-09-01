@@ -151,20 +151,12 @@ python3 test_vue_runtime_only_output.py
 # Browser liveness is verified by the required GitHub CI after this portable
 # build completes. Hosting builds must not depend on a Chromium executable.
 # Business-semantic regression gates execute the final shipped application logic,
-# not a copied test implementation.
+# not a copied test implementation. Keep only the three independent aggregate roots;
+# the reachability gate below proves that their static/dynamic import graph still
+# covers every business regression file and rejects redundant direct roots.
 node test_business_receivable_reminder_probe.mjs
 node test_business_receivable_payment_bounds_probe.mjs
 node test_business_ad_metrics.mjs
-node test_business_finance_confirmed_profit_cost.mjs
-node test_business_finance_profit_confirmation.mjs
-node test_business_finance_reconciliation_cost.mjs
-# Broader shipped-runtime finance coverage. These top-level suites chain settlement,
-# client/receivable status, rebate ownership, amount, and visible-profit regressions.
-node test_business_finance_unique_aggregation.mjs
-node test_business_finance_periods.mjs
-# Every business regression file must be reachable from one of the required roots
-# above (directly or through an explicit import chain), so dormant tests cannot give
-# a false impression of protected behavior.
 python3 test_business_gate_reachability.py
 # Final server-side identity and input boundaries. Patch the two deployment BFFs
 # before syntax/runtime tests so canonical builds and deployed handlers are aligned.
