@@ -26,20 +26,52 @@ function extractMethod(name){
   throw new Error(`BUSINESS_AUTH_USER_MUTATION_PROBE_FAILED: ${name} boundary not found`);
 }
 
-function props(source,root){
-  return [...new Set([...source.matchAll(new RegExp(`\\b${root}(?:\\?\\.)?\\.([A-Za-z_$][A-Za-z0-9_$]*)`,'g'))].map(m=>m[1]))].sort();
-}
-function summarize(name){
+function compile(name){
   const source=extractMethod(name);
-  const thisRefs=props(source,'this');
-  const calls=[...new Set([...source.matchAll(/\bthis\.([A-Za-z_$][A-Za-z0-9_$]*)\s*\(/g)].map(m=>m[1]))].sort();
-  const params=(source.match(new RegExp(`^(?:async\\s+)?${name}\\s*\\(([^)]*)\\)`))?.[1]??'').replace(/\s+/g,' ').trim();
-  const userParam=params.split(',')[0]?.trim()||'user';
-  const formFields=props(source,'this\\.userForm');
-  const currentFields=props(source,'this\\.currentUser');
-  const userFields=userParam&&/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(userParam)?props(source,userParam):[];
-  const features={persist:/\bthis\.persist\s*\(/.test(source),audit:/\bthis\.logAudit\s*\(/.test(source),push:/\.push\s*\(/.test(source),splice:/\.splice\s*\(/.test(source),filter:/\.filter\s*\(/.test(source),findIndex:/\.findIndex\s*\(/.test(source)};
-  return `${name}:params=${params||'-'}; refs=${thisRefs.join(',')||'-'}; calls=${calls.join(',')||'-'}; form=${formFields.join(',')||'-'}; current=${currentFields.join(',')||'-'}; user=${userFields.join(',')||'-'}; features=${Object.entries(features).filter(([,v])=>v).map(([k])=>k).join(',')||'-'}`;
+  const parsed=vm.runInNewContext(`({${source}})`,{Date,Number,String,Object,Array,Math,JSON,Set,Map,Intl,RegExp},{timeout:1000});
+  return parsed[name];
 }
+const saveAuthUser=compile('saveAuthUser');
+const deleteAuthUser=compile('deleteAuthUser');
 
-throw new Error('BUSINESS_AUTH_USER_MUTATION_PROBE_RESULT: '+[summarize('saveAuthUser'),summarize('deleteAuthUser')].join(' | '));
+function makeCounters(){return {persist:0,audit:0,notify:0,confirm:0};}
+const current={id:'auth-current',name:'Current Admin',username:'current-admin',role:'ADMIN',enabled:true};
+const other={id:'auth-existing',name:'Existing User',username:'existing-user',role:'USER',enabled:true};
+
+const saveCounters=makeCounters();
+const saveSubject={
+  authUsers:[{...current},{...other}],
+  userForm:{name:'Synthetic New User',username:'synthetic-new-user',password:'SyntheticPass123!'},
+  currentUser:{...current},
+  currentPage:'users',
+  showUserModal:true,
+  canViewPage:()=>true,
+  accountUid:()=> 'auth-new',
+  roleLabel:value=>String(value??''),
+  persist:()=>{saveCounters.persist+=1;},
+  logAudit:()=>{saveCounters.audit+=1;},
+  notify:()=>{saveCounters.notify+=1;},
+};
+let saveError='-';
+try{saveAuthUser.call(saveSubject);}catch(error){saveError=`${error?.name||'Error'}:${error?.message||String(error)}`;}
+const added=saveSubject.authUsers.find(user=>user?.id==='auth-new')||null;
+
+const deleteCounters=makeCounters();
+const deleteSubject={
+  authUsers:[{...current},{...other}],
+  currentUser:{...current},
+  askConfirm:()=>{deleteCounters.confirm+=1;return true;},
+  persist:()=>{deleteCounters.persist+=1;},
+  logAudit:()=>{deleteCounters.audit+=1;},
+  notify:()=>{deleteCounters.notify+=1;},
+};
+let deleteError='-';
+try{deleteAuthUser.call(deleteSubject,deleteSubject.authUsers[1]);}catch(error){deleteError=`${error?.name||'Error'}:${error?.message||String(error)}`;}
+
+const addedKeys=added?Object.keys(added).sort().filter(key=>key!=='password').join(','):'-';
+const passwordKey=Boolean(added&&Object.prototype.hasOwnProperty.call(added,'password'));
+const summary=[
+  `save:error=${saveError}; added=${Boolean(added)}; len=${saveSubject.authUsers.length}; keys=${addedKeys}; passwordKey=${passwordKey}; persist=${saveCounters.persist}; audit=${saveCounters.audit}; notify=${saveCounters.notify}; modal=${String(saveSubject.showUserModal)}`,
+  `delete:error=${deleteError}; targetRemoved=${!deleteSubject.authUsers.some(user=>user?.id==='auth-existing')}; currentRetained=${deleteSubject.authUsers.some(user=>user?.id==='auth-current')}; len=${deleteSubject.authUsers.length}; confirm=${deleteCounters.confirm}; persist=${deleteCounters.persist}; audit=${deleteCounters.audit}; notify=${deleteCounters.notify}`,
+];
+throw new Error('BUSINESS_AUTH_USER_MUTATION_PROBE_RESULT: '+summary.join(' | '));
