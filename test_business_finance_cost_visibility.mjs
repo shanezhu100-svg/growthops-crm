@@ -23,7 +23,7 @@ function extractMethod(name){
 const names=[
   'financeVisibleCosts','financeCostAllocatedTotal','financeCostUnallocatedAmount',
   'financeCostCategoryText','financeCostScopeText','financeCostClientName',
-  'financeCostText','financeVisibleCostAllocatedText','financeUnallocatedCompanyCostText',
+  'financeCompanySummaryCostGroups','financeCostText','financeVisibleCostAllocatedText','financeUnallocatedCompanyCostText',
   'financeUnallocatedCompanyCostNonZero'
 ];
 const sources=Object.fromEntries(names.map(name=>[name,extractMethod(name)]));
@@ -91,11 +91,18 @@ eq(subject.financeCostClientName({clientId:'1'}),'Numeric Client','client lookup
 eq(subject.financeCostClientName({clientId:'missing'}),'客户已归档 / 删除','missing client uses archived fallback');
 eq(subject.financeCostClientName({}),'—','company cost has no client label');
 
-// Company/all-clients summary must use the reviewed company non-client authority.
-// The fixture intentionally models the reported bug: full scoped cost is CNY 420,
-// while only CNY 120 is company/company-project cost. The card must show 120.
+// Company/all-clients summary must derive from raw scoped cost records. The fixture
+// deliberately includes client and allocation costs as noise: only COMPANY 20 +
+// COMPANY_PROJECT 100 may contribute to the CNY 120 card.
 subject=makeSubject();
-eq(subject.financeCostText(),'CNY:120','ALL total-cost card excludes direct client costs');
+subject.financeCosts=[
+  {id:'company-public',date:'2026-09-01',scope:'COMPANY',amount:20,currency:'CNY'},
+  {id:'company-project',date:'2026-09-02',scope:'COMPANY_PROJECT',amount:100,currency:'CNY'},
+  {id:'client-direct',date:'2026-09-03',scope:'CLIENT',clientId:'c1',amount:300,currency:'CNY'},
+  {id:'allocate-service',date:'2026-09-04',scope:'ALLOCATE_SERVICE',amount:50,currency:'CNY'},
+  {id:'allocate-spend',date:'2026-09-05',scope:'ALLOCATE_SPEND',amount:25,currency:'CNY'},
+];
+eq(subject.financeCostText(),'CNY:120','ALL total-cost card includes only public and project company costs');
 subject.financeClientFilter='c1';
 eq(subject.financeCostText(),'USD:12.5|CNY:420','selected-client cost text keeps scoped client cost authority');
 eq(subject.financeUnallocatedCompanyCostText(),'USD:3','unallocated company text delegates grouped authority');
@@ -112,9 +119,9 @@ const registryPath=path.join(process.cwd(),'dist','vendor','vue-3.5.41.renders.j
 if(!fs.existsSync(registryPath))throw new Error('BUSINESS_FINANCE_COST_VISIBILITY_FAILED: final render registry missing');
 const registry=fs.readFileSync(registryPath,'utf8');
 const oldSummaryCopy='已包含客户专属成本 + 公司项目成本 + 公司公共成本；详细构成在下方成本模块查看。';
-const newSummaryCopy='已包含公司成本 + 公司项目成本；详细构成在下方成本模块查看。';
+const newSummaryCopy='仅统计公司公共成本 + 公司项目成本；详细构成在下方成本模块查看。';
 if(registry.includes(oldSummaryCopy))throw new Error('BUSINESS_FINANCE_COST_VISIBILITY_FAILED: company total-cost card still claims client-specific cost is included');
-if(registry.split(newSummaryCopy).length-1!==1)throw new Error('BUSINESS_FINANCE_COST_VISIBILITY_FAILED: reviewed company-only total-cost card copy missing or duplicated');
+if(registry.split(newSummaryCopy).length-1!==1)throw new Error('BUSINESS_FINANCE_COST_VISIBILITY_FAILED: reviewed strict company-only total-cost card copy missing or duplicated');
 
-console.log('BUSINESS_FINANCE_COST_VISIBILITY_OK: visible-filter+allocation+unallocated+scope-label+client-fallback+company-summary-excludes-client-cost+display=executed');
+console.log('BUSINESS_FINANCE_COST_VISIBILITY_OK: visible-filter+allocation+unallocated+scope-label+client-fallback+company-summary=company+project-only+display=executed');
 await import('./test_business_finance_profit_confirmation_probe.mjs');
