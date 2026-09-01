@@ -89,10 +89,10 @@ if unreachable:
         + ', '.join(unreachable)
     )
 
-# Provenance gate: a permanent business regression must either execute shipped JS
-# from dist/ or be a pure import shim/aggregator whose children do. This prevents a
-# self-contained reimplementation of product logic from going green while the actual
-# deployed CRM code has drifted.
+# Provenance gate: a permanent business regression must either read and execute
+# shipped JS from dist/ or be a pure import shim/aggregator whose children do. This
+# prevents a self-contained reimplementation (or a file that merely mentions
+# dist/app and app-inline- strings) from going green while the deployed CRM drifts.
 block_comment_re = re.compile(r'/\*.*?\*/', re.DOTALL)
 line_comment_re = re.compile(r'//[^\n]*')
 static_import_stmt_re = re.compile(
@@ -102,22 +102,35 @@ static_import_stmt_re = re.compile(
 dynamic_import_stmt_re = re.compile(
     r"(?:await\s+)?import\(\s*['\"]\./test_business_[^'\"]+\.mjs['\"]\s*\)\s*;?"
 )
+read_call_re = re.compile(r'\bfs\.readFileSync\s*\(')
+readdir_call_re = re.compile(r'\bfs\.readdirSync\s*\(')
+vm_exec_call_re = re.compile(r'\bvm\.runIn(?:New)?Context\s*\(')
 
 runtime_backed = []
 pure_shims = []
 invalid_provenance = []
 for name, text in texts.items():
-    # Most tests enumerate final app-inline-* JS under dist/app. A small number
-    # execute another deployed JS artifact (for example cloud-security-hotfix.js).
-    # Accept the latter only when the file is read from dist and then executed in a
-    # VM, not merely mentioned or inspected as text.
+    # Most tests enumerate final app-inline-* JS under dist/app. Require evidence
+    # that they enumerate the shipped bundle, actually read it, and execute extracted
+    # shipped code in a VM. Mere marker strings are not provenance.
     has_dist_app = bool(re.search(r"['\"]dist['\"]\s*,\s*['\"]app['\"]|dist/app", text))
     has_app_inline = 'app-inline-' in text
-    app_bundle_backed = has_dist_app and has_app_inline
+    reads_js = bool(read_call_re.search(text))
+    executes_js = bool(vm_exec_call_re.search(text))
+    enumerates_app_bundle = bool(readdir_call_re.search(text))
+    app_bundle_backed = (
+        has_dist_app
+        and has_app_inline
+        and enumerates_app_bundle
+        and reads_js
+        and executes_js
+    )
 
+    # A smaller class of tests executes another deployed JS artifact (for example
+    # dist/cloud-security-hotfix.js). It likewise must contain actual read and VM
+    # execution calls, not just path/marker text.
     has_dist_path = bool(re.search(r"path\.join\(\s*process\.cwd\(\)\s*,\s*['\"]dist['\"]", text))
-    reads_dist_js = has_dist_path and 'fs.readFileSync' in text
-    executes_dist_js = reads_dist_js and ('vm.runInNewContext' in text or 'vm.runInContext' in text)
+    executes_dist_js = has_dist_path and reads_js and executes_js
 
     if app_bundle_backed or executes_dist_js:
         runtime_backed.append(name)
@@ -141,7 +154,7 @@ for name, text in texts.items():
 
 if invalid_provenance:
     raise SystemExit(
-        'BUSINESS_GATE_REACHABILITY_FAILED: business tests are neither executed-shipped-runtime-backed nor pure import shims: '
+        'BUSINESS_GATE_REACHABILITY_FAILED: business tests are neither read+executed-shipped-runtime-backed nor pure import shims: '
         + ', '.join(sorted(invalid_provenance))
     )
 if len(runtime_backed) + len(pure_shims) != len(BUSINESS_FILES):
@@ -151,5 +164,5 @@ print(
     'BUSINESS_GATE_REACHABILITY_OK: '
     f'roots={len(roots)}; business-tests={len(BUSINESS_FILES)}; reachable={len(reachable)}; '
     'imports=static+dynamic; redundant-roots=0; unreachable=0; '
-    f'runtime-backed={len(runtime_backed)}; pure-shims={len(pure_shims)}; provenance=guarded'
+    f'runtime-backed={len(runtime_backed)}; pure-shims={len(pure_shims)}; provenance=read+execute-guarded'
 )
