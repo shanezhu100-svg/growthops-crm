@@ -17,12 +17,26 @@ missing_roots = sorted(set(roots) - set(BUSINESS_FILES))
 if missing_roots:
     raise SystemExit('BUSINESS_GATE_REACHABILITY_FAILED: build roots missing from repository: ' + ', '.join(missing_roots))
 
-import_re = re.compile(r"(?:await\s+)?import\(\s*['\"]\./(test_business_[^'\"]+\.mjs)['\"]\s*\)")
+# Business regressions use both dynamic chaining (`await import('./...')`) and
+# standard ESM side-effect imports (`import './...'`). Treat both as executable
+# reachability edges. Restrict parsing to same-directory test_business_*.mjs paths
+# so unrelated package imports cannot accidentally satisfy this gate.
+dynamic_import_re = re.compile(
+    r"(?:await\s+)?import\(\s*['\"]\./(test_business_[^'\"]+\.mjs)['\"]\s*\)"
+)
+static_import_re = re.compile(
+    r"(?:^|\n)\s*import(?:\s+[^'\"\n]+?\s+from\s+)?\s*['\"]\./(test_business_[^'\"]+\.mjs)['\"]\s*;?",
+    re.MULTILINE,
+)
+
 edges = {}
 unknown_imports = set()
 for name, path in BUSINESS_FILES.items():
     text = path.read_text(encoding='utf-8')
-    imports = import_re.findall(text)
+    imports = dynamic_import_re.findall(text) + static_import_re.findall(text)
+    # Preserve deterministic graph behavior while avoiding duplicate edges when a
+    # file happens to reference the same child through more than one syntax form.
+    imports = list(dict.fromkeys(imports))
     edges[name] = imports
     unknown_imports.update(item for item in imports if item not in BUSINESS_FILES)
 
@@ -50,5 +64,6 @@ if unreachable:
 
 print(
     'BUSINESS_GATE_REACHABILITY_OK: '
-    f'roots={len(roots)}; business-tests={len(BUSINESS_FILES)}; reachable={len(reachable)}; unreachable=0'
+    f'roots={len(roots)}; business-tests={len(BUSINESS_FILES)}; reachable={len(reachable)}; '
+    'imports=static+dynamic; unreachable=0'
 )
