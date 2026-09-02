@@ -33,9 +33,12 @@ files = sorted(APP_DIR.glob('app-inline-*.js'))
 if not files:
     fail('no app-inline artifacts')
 
+# The top-level total-cost card is strictly company-owned cost. A cost carrying a
+# clientId is customer-owned even if an older/imported record still has a stale
+# COMPANY scope value, so client ownership takes precedence over the legacy scope.
 strict_method = (
     "financeCompanySummaryCostGroups(){const g={};"
-    "this.financeCosts.filter(c=>{const scope=c.scope||(c.clientId?'CLIENT':'COMPANY');"
+    "this.financeCosts.filter(c=>{const scope=c.clientId?'CLIENT':(c.scope||'COMPANY');"
     "return this.financeDateMatch(c.date)&&['COMPANY','COMPANY_PROJECT'].includes(scope)})"
     ".forEach(c=>{const cur=c.currency||'USD';g[cur]=(g[cur]||0)+Number(c.amount||0)});return g},\n"
 )
@@ -77,7 +80,7 @@ registry_sha = hashlib.sha256(registry.encode('utf-8')).hexdigest()
 
 print(
     'FINANCE_STRICT_COMPANY_COST_SUMMARY_FINALIZE_OK: '
-    'scope=COMPANY+COMPANY_PROJECT; client+allocated-shared=excluded; '
-    'client-filter-invariant=true; legacy-locked-periods=raw-cost-recompute; '
+    'scope=COMPANY+COMPANY_PROJECT; client-owned+allocated-shared=excluded; '
+    'clientId-precedence=true; client-filter-invariant=true; legacy-locked-periods=raw-cost-recompute; '
     f'registry={registry_sha[:12]}; app=' + ','.join(f'{name}:{sha[:12]}' for name, sha in changed)
 )
