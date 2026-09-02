@@ -123,7 +123,7 @@ for(const amount of ['0','-1','not-a-number','Infinity']){
 }
 
 function renewalContext({target,standaloneAlerts=[],clients=[],dismissedAlerts=[]}){
-  const notices=[],audits=[],autoBillCalls=[];
+  const notices=[],audits=[],autoBillCalls=[],networkSyncCalls=[];
   let persistCount=0;
   const ctx={
     renewalTarget:target,
@@ -133,14 +133,14 @@ function renewalContext({target,standaloneAlerts=[],clients=[],dismissedAlerts=[
     dismissedAlerts,
     showRenewalModal:true,
     localDateKey(){return '2026-09-02'},
-    syncLegacyNetworkFields(){},
+    syncLegacyNetworkFields(client){networkSyncCalls.push(client)},
     ensureAutomaticReceivables(args){autoBillCalls.push(args);return 2},
     persist(){persistCount+=1},
     logAudit(action,detail){audits.push([action,detail])},
     notify(message){notices.push(message)},
     alertTypeName(key){return key},
   };
-  return {ctx,notices,audits,autoBillCalls,get persistCount(){return persistCount}};
+  return {ctx,notices,audits,autoBillCalls,networkSyncCalls,get persistCount(){return persistCount}};
 }
 
 // Existing standalone alert renewal updates exactly that alert and clears its dismissal.
@@ -201,6 +201,79 @@ function renewalContext({target,standaloneAlerts=[],clients=[],dismissedAlerts=[
   ok(state.notices.some(message=>String(message).includes('变化')||String(message).includes('刷新')), 'stale contract renewal notice');
 }
 
+// A modern IP renewal is scoped to the exact network environment referenced by the
+// alert. It must never touch a sibling or legacy root record.
+{
+  const env={id:'net-1',ipDueDate:'2026-10-01'};
+  const client={id:'client-1',ipDueDate:'2026-11-15',networkEnvironments:[env]};
+  const target={id:'ip-client-1-net-1',isStandalone:false,typeKey:'IP',networkId:'net-1',dueDate:'2026-10-01',clientId:'client-1',clientName:'Client One',type:'IP'};
+  const state=renewalContext({target,clients:[client],dismissedAlerts:[{id:target.id}]});
+  methods.saveRenewal.call(state.ctx);
+  eq(env.ipDueDate,'2026-12-31','modern IP renewal date');
+  eq(client.ipDueDate,'2026-11-15','modern IP legacy root untouched');
+  eq(state.networkSyncCalls.length,1,'modern IP legacy sync');
+  eq(state.autoBillCalls.length,0,'modern IP no auto billing');
+  eq(state.persistCount,1,'modern IP persist');
+  eq(state.audits.length,1,'modern IP audit');
+}
+
+// A modern IP target whose environment date changed after the modal opened must not
+// overwrite the newer value or dismiss the alert.
+{
+  const env={id:'net-1',ipDueDate:'2027-01-31'};
+  const client={id:'client-1',ipDueDate:'2026-11-15',networkEnvironments:[env]};
+  const target={id:'ip-client-1-net-1',isStandalone:false,typeKey:'IP',networkId:'net-1',dueDate:'2026-10-01',clientId:'client-1',clientName:'Client One',type:'IP'};
+  const state=renewalContext({target,clients:[client],dismissedAlerts:[{id:target.id}]});
+  methods.saveRenewal.call(state.ctx);
+  eq(env.ipDueDate,'2027-01-31','stale modern IP date preserved');
+  eq(client.ipDueDate,'2026-11-15','stale modern IP legacy root preserved');
+  eq(state.networkSyncCalls.length,0,'stale modern IP no sync');
+  eq(state.ctx.dismissedAlerts.length,1,'stale modern IP dismissal preserved');
+  eq(state.persistCount,0,'stale modern IP persist');
+  eq(state.audits.length,0,'stale modern IP audit');
+  ok(state.notices.some(message=>String(message).includes('变化')||String(message).includes('刷新')), 'stale modern IP notice');
+}
+
+// A missing modern networkId is an exact-source miss. It must not silently fall back
+// to the client's legacy root ipDueDate and mutate the wrong renewal source.
+{
+  const client={id:'client-1',ipDueDate:'2026-10-01',networkEnvironments:[]};
+  const target={id:'ip-client-1-net-missing',isStandalone:false,typeKey:'IP',networkId:'net-missing',dueDate:'2026-10-01',clientId:'client-1',clientName:'Client One',type:'IP'};
+  const state=renewalContext({target,clients:[client],dismissedAlerts:[{id:target.id}]});
+  methods.saveRenewal.call(state.ctx);
+  eq(client.ipDueDate,'2026-10-01','missing modern IP must not fallback to legacy root');
+  eq(state.networkSyncCalls.length,0,'missing modern IP no sync');
+  eq(state.ctx.dismissedAlerts.length,1,'missing modern IP dismissal preserved');
+  eq(state.persistCount,0,'missing modern IP persist');
+  eq(state.audits.length,0,'missing modern IP audit');
+  ok(state.notices.some(message=>String(message).includes('不存在')||String(message).includes('刷新')), 'missing modern IP notice');
+}
+
+// Legacy clients without a networkId remain supported, but the root due date is also
+// compare-and-set protected against a stale modal.
+{
+  const client={id:'client-1',ipDueDate:'2026-10-01',networkEnvironments:[]};
+  const target={id:'ip-client-1-legacy',isStandalone:false,typeKey:'IP',dueDate:'2026-10-01',clientId:'client-1',clientName:'Client One',type:'IP'};
+  const state=renewalContext({target,clients:[client],dismissedAlerts:[{id:target.id}]});
+  methods.saveRenewal.call(state.ctx);
+  eq(client.ipDueDate,'2026-12-31','legacy IP renewal date');
+  eq(state.networkSyncCalls.length,1,'legacy IP sync');
+  eq(state.persistCount,1,'legacy IP persist');
+  eq(state.audits.length,1,'legacy IP audit');
+}
+{
+  const client={id:'client-1',ipDueDate:'2027-01-31',networkEnvironments:[]};
+  const target={id:'ip-client-1-legacy',isStandalone:false,typeKey:'IP',dueDate:'2026-10-01',clientId:'client-1',clientName:'Client One',type:'IP'};
+  const state=renewalContext({target,clients:[client],dismissedAlerts:[{id:target.id}]});
+  methods.saveRenewal.call(state.ctx);
+  eq(client.ipDueDate,'2027-01-31','stale legacy IP date preserved');
+  eq(state.networkSyncCalls.length,0,'stale legacy IP no sync');
+  eq(state.ctx.dismissedAlerts.length,1,'stale legacy IP dismissal preserved');
+  eq(state.persistCount,0,'stale legacy IP persist');
+  eq(state.audits.length,0,'stale legacy IP audit');
+  ok(state.notices.some(message=>String(message).includes('变化')||String(message).includes('刷新')), 'stale legacy IP notice');
+}
+
 // Standalone alert creation still enforces a known type and a non-empty due date.
 {
   let persistCount=0,auditCount=0;
@@ -214,4 +287,4 @@ function renewalContext({target,standaloneAlerts=[],clients=[],dismissedAlerts=[
   eq(auditCount,0,'invalid standalone alert audit');
 }
 
-console.log('BUSINESS_CLIENT_REMINDER_MONEY_MUTATIONS_OK: recharge=finite-positive+month-lock+account-scope; recharge-reminder=persist-only; renewal=standalone+contract+stale-fail-closed+auto-billing; standalone-alert=type-guard; persist+audit=phase-pinned');
+console.log('BUSINESS_CLIENT_REMINDER_MONEY_MUTATIONS_OK: recharge=finite-positive+month-lock+account-scope; recharge-reminder=persist-only; renewal=standalone+contract+ip-exact-source+stale-fail-closed+auto-billing; standalone-alert=type-guard; persist+audit=phase-pinned');
