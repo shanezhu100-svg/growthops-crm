@@ -30,11 +30,12 @@ for(const forbidden of ['ALLOCATE_SERVICE','ALLOCATE_SPEND','financeCompanyNonCl
   if(strictSource.includes(forbidden))throw new Error(`BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: strict authority contains forbidden dependency ${forbidden}`);
 }
 
-const allBinding="if(this.financeClientFilter==='ALL')return this.financeCompanySummaryCostGroups";
+const allBinding="if(this.financeClientFilter==='ALL'){const groups=this.financeCompanySummaryCostGroups";
 if(!costGroupsSource.includes(allBinding))throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: financeCostGroups ALL binding does not use strict company-only authority');
 if(costGroupsSource.indexOf(allBinding)>costGroupsSource.indexOf('financeActiveSnapshotScope'))throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: strict ALL binding must run before snapshot fallback');
+if(!costGroupsSource.includes("typeof groups==='function'?groups.call(this):groups"))throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: direct-extraction compatibility fallback missing from ALL binding');
 if(!textSource.includes('financeCompanySummaryCostGroups'))throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: total-cost text does not use strict authority');
-if(textSource.includes('financeCompanySummaryCostGroups()'))throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: computed strict authority is incorrectly called as a method');
+if(textSource.includes('financeCompanySummaryCostGroups()'))throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: computed strict authority is incorrectly called directly as a method');
 for(const forbidden of ['financeCompanyNonClientCostGroups','financeCostGroups','financeClientFilter']){
   if(textSource.includes(forbidden))throw new Error(`BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: total-cost text still depends on ${forbidden}`);
 }
