@@ -71,13 +71,9 @@ recharge_lock_new = (
 recharge_row_old = "date:this.rechargeForm.date||this.localDateKey()"
 recharge_row_new = "date:rechargeDate"
 
-renewal_old = "const newDue=String(this.renewalForm.newDueDate||'');if(!newDue){this.notify('请选择新的到期日');return}if(newDue<=String(item.dueDate||'')){"
-renewal_new = (
-    "const newDue=String(this.renewalForm.newDueDate||'');"
-    "if(!newDue){this.notify('请选择新的到期日');return}"
-    + calendar_guard('newDue', '请选择有效的到期日期', 'renewalDate')
-    + "if(newDue<=String(item.dueDate||'')){"
-)
+renewal_assign = "const newDue=String(this.renewalForm.newDueDate||'');"
+renewal_empty = "if(!newDue){this.notify('请选择新的到期日');return}"
+renewal_empty_guarded = renewal_empty + calendar_guard('newDue', '请选择有效的到期日期', 'renewalDate')
 
 found = {'saveRecharge': 0, 'saveRenewal': 0}
 changed = []
@@ -106,9 +102,11 @@ for path in files:
         source = text[start:end]
         if '请选择有效的到期日期' in source:
             fail('saveRenewal already contains calendar date guard')
-        if source.count(renewal_old) != 1:
-            fail(f'saveRenewal date anchor count={source.count(renewal_old)}')
-        patched = source.replace(renewal_old, renewal_new, 1)
+        if source.count(renewal_assign) != 1:
+            fail(f'saveRenewal assignment anchor count={source.count(renewal_assign)}')
+        if source.count(renewal_empty) != 1:
+            fail(f'saveRenewal empty-date anchor count={source.count(renewal_empty)}')
+        patched = source.replace(renewal_empty, renewal_empty_guarded, 1)
         text = text[:start] + patched + text[end:]
 
     if text != original:
@@ -124,6 +122,6 @@ if len(changed) != 1:
 print(
     'CLIENT_REMINDER_DATE_GUARD_FINALIZE_OK: '
     'recharge=yyyy-mm-dd+calendar-valid-before-month-lock+empty-local-default; '
-    'renewal=yyyy-mm-dd+calendar-valid-before-state+billing; leap-day=preserved; '
+    'renewal=yyyy-mm-dd+calendar-valid-after-empty-check-before-state+billing; leap-day=preserved; '
     + 'artifact=' + ','.join(f'{name}:{sha[:12]}' for name, sha in changed)
 )
