@@ -13,11 +13,30 @@ function extractMethod(name){
   const match=signature.exec(bundle);
   if(!match)throw new Error(`BUSINESS_OPENING_DEAL_PROBE_FAILED: ${name} not found`);
   const start=match.index+match[0].indexOf(match[1]);
-  const tail=bundle.slice(start);
-  const defs=[...tail.matchAll(/(?:^|[,]\s*|\n\s*)([A-Za-z_$][A-Za-z0-9_$]*)\s*\([^)]*\)\s*\{/g)];
-  if(defs.length<2||defs[0][1]!==name)throw new Error(`BUSINESS_OPENING_DEAL_PROBE_FAILED: ${name} parser drifted`);
-  const next=defs[1].index+defs[1][0].indexOf(defs[1][1]);
-  return tail.slice(0,next).replace(/,\s*$/,'').trim();
+  const open=bundle.indexOf('{',start);
+  if(open<0)throw new Error(`BUSINESS_OPENING_DEAL_PROBE_FAILED: ${name} opening brace missing`);
+  let depth=0,quote='',escaped=false,lineComment=false,blockComment=false;
+  for(let i=open;i<bundle.length;i+=1){
+    const ch=bundle[i],next=bundle[i+1]||'';
+    if(lineComment){if(ch==='\n')lineComment=false;continue}
+    if(blockComment){if(ch==='*'&&next==='/'){blockComment=false;i+=1}continue}
+    if(quote){
+      if(escaped){escaped=false;continue}
+      if(ch==='\\'){escaped=true;continue}
+      if(ch===quote)quote='';
+      continue;
+    }
+    if(ch==='/'&&next==='/'){lineComment=true;i+=1;continue}
+    if(ch==='/'&&next==='*'){blockComment=true;i+=1;continue}
+    if(ch==='"'||ch==="'"||ch==='`'){quote=ch;continue}
+    if(ch==='{')depth+=1;
+    else if(ch==='}'){
+      depth-=1;
+      if(depth===0)return bundle.slice(start,i+1).trim();
+      if(depth<0)break;
+    }
+  }
+  throw new Error(`BUSINESS_OPENING_DEAL_PROBE_FAILED: ${name} closing brace missing`);
 }
 
 const names=['saveOpeningDeal','deleteOpeningDeal'];
