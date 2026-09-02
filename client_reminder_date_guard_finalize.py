@@ -105,6 +105,8 @@ for path in files:
         if source.count(renewal_assign) != 1:
             fail(f'saveRenewal assignment anchor count={source.count(renewal_assign)}')
         if source.count(renewal_empty) != 1:
+            probe_at = source.find(renewal_assign)
+            print('CLIENT_REMINDER_RENEWAL_PREFIX_PROBE=' + repr(source[probe_at:probe_at + 700]))
             fail(f'saveRenewal empty-date anchor count={source.count(renewal_empty)}')
         patched = source.replace(renewal_empty, renewal_empty_guarded, 1)
         text = text[:start] + patched + text[end:]
