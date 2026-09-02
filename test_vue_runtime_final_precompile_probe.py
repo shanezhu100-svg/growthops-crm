@@ -15,7 +15,7 @@ RUNTIME_URL='https://unpkg.com/vue@3.5.41/dist/vue.runtime.global.js'
 RUNTIME_SHA='45c904194aaf24112c8f4fc4386b87e107a32eede80c410ce93be459ebdee088'
 RUNTIME_BYTES=414799
 EXPECTED_FACTORIES={
-    'root':('4fe173224f3ea60ada057bf39f5b25dfcc1a1bc46a5e3a3d140845aa93eecfe7',1095246),
+    'root':('a71d8e3fd7fe3a673f939aadcc37a3ab18b3fe9aa97b65d2ca4a5fd1bdcb0c52',1095257),
     'component01':('12ce20f7003c90017ebf8cd31e97bc632eb90518176775dbfe663c9b9166fae6',1550),
     'component02':('7a99ecc1e3f6f9d2d14501681e630c40fa59f94144a50d72f392aa757732dcd7',756),
     'component03':('658b8af682a2023c6e01515def82b39f1fcaf5fe7a7315c582e298ff0c3a85be',646),
