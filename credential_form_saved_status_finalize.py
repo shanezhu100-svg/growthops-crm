@@ -22,7 +22,10 @@ if "client-form" not in html:
     fail('client-form route marker missing from final HTML')
 
 old_context = "  const isCredentialSummaryContext=()=>isAccountAssetPage()||vm.currentPage==='client-detail';\n"
-new_context = "  const isCredentialSummaryContext=()=>isAccountAssetPage()||vm.currentPage==='client-detail'||vm.currentPage==='client-form';\n"
+new_context = (
+    "  const clientFormCredentialId=()=>{const id=String(vm.form?.id??'');return !vm.form?'__legacy__':(id&&id!=='0'&&id.toUpperCase()!=='ALL'?id:'')};\n"
+    "  const isCredentialSummaryContext=()=>isAccountAssetPage()||vm.currentPage==='client-detail'||(vm.currentPage==='client-form'&&Boolean(clientFormCredentialId()));\n"
+)
 if security.count(old_context) != 1:
     fail(f'unexpected credential summary context count: {security.count(old_context)}')
 security = security.replace(old_context, new_context, 1)
@@ -38,11 +41,15 @@ def replace_block(start_marker: str, end_marker: str, replacement: str, label: s
 
 
 # client-form contains the same Facebook/TikTok labels as the account-assets page,
-# so the historical body-text detector can classify it as an asset page. Resolve
-# explicit detail/edit context before applying the account-assets ALL/0 sentinel.
-# This prevents a stale selectedAssetsClientId=0 from suppressing the actual client
-# being edited while preserving the aggregate no-credential boundary on /assets.
+# so the historical body-text detector can classify it as an asset page. For a real
+# edit, form.id is the authoritative client identity. For a create form, form.id is
+# empty and credentials must be completely isolated from stale selectedClientId state.
+# Legacy synthetic contexts without vm.form retain the prior selected-client fallback.
 resolver_block = r'''  const resolveCredentialClientId=()=>{
+    if(vm.currentPage==='client-form'&&vm.form){
+      const formId=clientFormCredentialId();
+      return formId==='__legacy__'?'':formId;
+    }
     if(vm.currentPage==='client-detail'||vm.currentPage==='client-form'){
       const directCandidates=[vm.selectedClientId,vm.selectedClient?.id,vm.currentClient?.id];
       for(const value of directCandidates){
@@ -269,7 +276,7 @@ for forbidden in (
 SECURITY.write_text(security, encoding='utf-8')
 print(
     'CREDENTIAL_FORM_SAVED_STATUS_FINALIZE_OK: '
-    'context=client-form+detail+assets; client-form-id=before-asset-sentinel; '
+    'context=client-form+detail+assets; client-form=form-id-authoritative+create-isolated; '
     'form-inputs=mutation-only; safe-summary=input-overlay; focus=preserves-saved-state; '
     'typing=mutation-handoff; empty-form-status=placeholder; login=value-color; '
     'password=masked+visible-hit-target-eye-inside-input; per-account-card=nearest-pair; '
