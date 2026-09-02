@@ -22,9 +22,14 @@ function extractMethod(name){
 
 const names=['saveOpeningDeal','deleteOpeningDeal'];
 const sources=Object.fromEntries(names.map(name=>[name,extractMethod(name)]));
-let methods;
-try{methods=vm.runInNewContext(`({${names.map(name=>sources[name]).join(',\n')}})`,{Number,String,Object,Array,Math,Set,JSON,Date},{timeout:1000})}
-catch(error){throw new Error(`BUSINESS_OPENING_DEAL_PROBE_FAILED: compile: ${error.message}`)}
-for(const name of names)if(typeof methods[name]!=='function')throw new Error(`BUSINESS_OPENING_DEAL_PROBE_FAILED: ${name} not executable`);
-console.log('BUSINESS_OPENING_DEAL_PROBE_SOURCE='+JSON.stringify(sources));
+for(const name of names){
+  console.log(`BUSINESS_OPENING_DEAL_PROBE_SOURCE_${name}=`+JSON.stringify(sources[name]));
+  try{
+    const single=vm.runInNewContext(`({${sources[name]}})`,{Number,String,Object,Array,Math,Set,JSON,Date},{timeout:1000});
+    if(typeof single[name]!=='function')throw new Error(`${name} not executable`);
+    console.log(`BUSINESS_OPENING_DEAL_PROBE_COMPILE_${name}=OK`);
+  }catch(error){
+    throw new Error(`BUSINESS_OPENING_DEAL_PROBE_FAILED: ${name} compile: ${error.message}`);
+  }
+}
 console.log('BUSINESS_OPENING_DEAL_PROBE_OK: final-dist methods=saveOpeningDeal+deleteOpeningDeal; execution=compiled-only');
