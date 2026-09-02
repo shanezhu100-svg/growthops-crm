@@ -75,7 +75,7 @@ renewal_assign = "const newDue=String(this.renewalForm.newDueDate||'');"
 renewal_empty = "if(!newDue){this.notify('请选择新的到期日期');return}"
 renewal_empty_guarded = renewal_empty + calendar_guard('newDue', '请选择有效的到期日期', 'renewalDate')
 
-found = {'saveRecharge': 0, 'saveRenewal': 0}
+found = {'saveRecharge': 0, 'saveRenewal': 0, 'saveStandaloneAlert': 0}
 changed = []
 for path in files:
     text = path.read_text(encoding='utf-8')
@@ -108,6 +108,14 @@ for path in files:
             fail(f'saveRenewal empty-date anchor count={source.count(renewal_empty)}')
         patched = source.replace(renewal_empty, renewal_empty_guarded, 1)
         text = text[:start] + patched + text[end:]
+
+    bounds = method_bounds(text, 'saveStandaloneAlert')
+    if bounds is not None:
+        found['saveStandaloneAlert'] += 1
+        start, end = bounds
+        source = text[start:end]
+        print('CLIENT_REMINDER_STANDALONE_PREFIX_PROBE=' + repr(source[:900]))
+        fail('standalone reminder prefix probe complete')
 
     if text != original:
         path.write_text(text, encoding='utf-8')
