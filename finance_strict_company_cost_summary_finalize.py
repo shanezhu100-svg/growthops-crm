@@ -43,12 +43,35 @@ strict_method = (
     ".forEach(c=>{const cur=c.currency||'USD';g[cur]=(g[cur]||0)+Number(c.amount||0)});return g},\n"
 )
 old_return = "return this.spendGroupsText(this.financeClientFilter==='ALL'?this.financeCompanyNonClientCostGroups:this.financeCostGroups)"
-new_return = "return this.spendGroupsText(this.financeCompanySummaryCostGroups())"
+new_return = "return this.spendGroupsText(this.financeCompanySummaryCostGroups)"
+
+# The live finance template renders financeCostGroups directly in both the upper
+# KPI card and the lower cost-summary card. Therefore fixing financeCostText alone
+# is insufficient. Make the ALL-client financeCostGroups getter delegate to the
+# strict company-only authority before any locked-period snapshot can return the
+# historical all-cost aggregate. Selected-client behavior remains unchanged.
+cost_groups_anchor = "financeCostGroups(){const snap=this.financeActiveSnapshotScope;"
+cost_groups_replacement = (
+    "financeCostGroups(){if(this.financeClientFilter==='ALL')return this.financeCompanySummaryCostGroups;"
+    "const snap=this.financeActiveSnapshotScope;"
+)
 
 hits = 0
+cost_group_hits = 0
 changed = []
 for path in files:
     text = path.read_text(encoding='utf-8')
+
+    cost_bounds = method_bounds(text, 'financeCostGroups')
+    if cost_bounds is not None:
+        cost_group_hits += 1
+        start, end = cost_bounds
+        source = text[start:end].rstrip()
+        if source.count(cost_groups_anchor) != 1:
+            fail('financeCostGroups all-client anchor drifted')
+        patched_source = source.replace(cost_groups_anchor, cost_groups_replacement, 1)
+        text = text[:start] + patched_source + text[end:]
+
     bounds = method_bounds(text, 'financeCostText')
     if bounds is None:
         continue
@@ -66,6 +89,8 @@ for path in files:
 
 if hits != 1:
     fail(f'financeCostText expected once, found {hits}')
+if cost_group_hits != 1:
+    fail(f'financeCostGroups expected once, found {cost_group_hits}')
 
 if not REGISTRY.is_file():
     fail('render registry missing')
@@ -81,6 +106,7 @@ registry_sha = hashlib.sha256(registry.encode('utf-8')).hexdigest()
 print(
     'FINANCE_STRICT_COMPANY_COST_SUMMARY_FINALIZE_OK: '
     'scope=COMPANY+COMPANY_PROJECT; client-owned+allocated-shared=excluded; '
-    'clientId-precedence=true; client-filter-invariant=true; legacy-locked-periods=raw-cost-recompute; '
+    'clientId-precedence=true; all-template-bindings=financeCostGroups-strict; '
+    'selected-client-cost=preserved; legacy-locked-periods=raw-cost-recompute; '
     f'registry={registry_sha[:12]}; app=' + ','.join(f'{name}:{sha[:12]}' for name, sha in changed)
 )
