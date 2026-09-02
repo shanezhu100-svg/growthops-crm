@@ -8,6 +8,9 @@ const adapter=fs.readFileSync(adapterPath,'utf8');
 for(const marker of ['vm.createBackupSnapshot=','vm.deleteBackupSnapshot=','vm.restoreBackupSnapshot=','vm.downloadFullBackup=','vm.importFullBackup=','function sanitizedBackupPayload()','function applyBusinessBackup(','growth-ops-cloud-backup-v4-redacted','redactBackupSecrets']){
   if(!adapter.includes(marker))throw new Error(`BUSINESS_BACKUP_MUTATIONS_FAILED: authoritative adapter marker missing: ${marker}`);
 }
+const bootAnchor='\n  boot();\n})();';
+if(adapter.split(bootAnchor).length!==2)throw new Error('BUSINESS_BACKUP_MUTATIONS_FAILED: adapter boot anchor drifted');
+const harnessAdapter=adapter.replace(bootAnchor,'\n  // Synthetic mutation harness: do not start cloud/session boot.\n})();');
 const eq=(actual,expected,label)=>{if(actual!==expected)throw new Error(`BUSINESS_BACKUP_MUTATIONS_FAILED: ${label}; expected=${JSON.stringify(expected)}; actual=${JSON.stringify(actual)}`);};
 const ok=(value,label)=>{if(!value)throw new Error(`BUSINESS_BACKUP_MUTATIONS_FAILED: ${label}`);};
 
@@ -27,7 +30,7 @@ function makeRuntime({role='ADMIN',confirm=true,backupSnapshots=[],payload=null}
   const URLMock={createObjectURL(blob){capturedBlob=blob;return 'blob:synthetic-backup';},revokeObjectURL(url){calls.revoke.push(url);}};
   class FileReaderMock{result='';onload=null;readAsText(file){calls.fileReads+=1;this.result=String(file?.contents??'');this.onload?.();}}
   const window={__growthOpsVm:subject,__GROWTHOPS_SUPABASE_URL__:'',__GROWTHOPS_SUPABASE_KEY__:'',location:{hash:'#system'}};
-  vm.runInNewContext(adapter,{window,document,localStorage,URL:URLMock,FileReader:FileReaderMock,Blob,TextEncoder,structuredClone,crypto,console,setTimeout,clearTimeout,Date,Math,JSON,String,Number,Object,Array,Promise,Error,
+  vm.runInNewContext(harnessAdapter,{window,document,localStorage,URL:URLMock,FileReader:FileReaderMock,Blob,TextEncoder,structuredClone,crypto,console,setTimeout,clearTimeout,Date,Math,JSON,String,Number,Object,Array,Promise,Error,
     fetch:async()=>{calls.fetch+=1;throw new Error('BUSINESS_BACKUP_MUTATIONS_FAILED: unexpected real/network fetch');}},{timeout:1000});
   Object.assign(subject,{
     currentUser:{id:'admin-current',name:'Current Admin',role,enabled:true},currentPage:'system',backupSnapshots:backupSnapshots.map(item=>structuredClone(item)),clients:[{id:'client-before',name:'Before Client'}],
@@ -100,4 +103,4 @@ const importPayload={...restorePayload,clients:[{id:'client-restored',name:'Rest
   eq(calls.audit.at(-1)[0],'导入脱敏全量备份','import audit');eq(calls.audit.at(-1)[1],'backup.json','import filename');eq(calls.notify.at(-1),'脱敏备份已导入并同步云端；Vault 凭证未由备份覆盖','import notice');eq(calls.fetch,0,'import network');
 }
 
-console.log('BUSINESS_BACKUP_MUTATIONS_OK: authority=final-cloud-adapter; snapshot=v4-redacted+cap+persist; delete=admin+confirm+id-scope; restore=protect+apply+auth-isolated; export=redacted+download; import=redacted+admin+parse+confirm+protect+auth-isolated; network=zero');
+console.log('BUSINESS_BACKUP_MUTATIONS_OK: authority=final-cloud-adapter; boot=suppressed-only-at-auto-entry; snapshot=v4-redacted+cap+persist; delete=admin+confirm+id-scope; restore=protect+apply+auth-isolated; export=redacted+download; import=redacted+admin+parse+confirm+protect+auth-isolated; network=zero');
