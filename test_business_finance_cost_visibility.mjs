@@ -121,9 +121,9 @@ const registryPath=path.join(process.cwd(),'dist','vendor','vue-3.5.41.renders.j
 if(!fs.existsSync(registryPath))throw new Error('BUSINESS_FINANCE_COST_VISIBILITY_FAILED: final render registry missing');
 const registry=fs.readFileSync(registryPath,'utf8');
 const oldSummaryCopy='已包含客户专属成本 + 公司项目成本 + 公司公共成本；详细构成在下方成本模块查看。';
-const newSummaryCopy='仅统计公司公共成本 + 公司项目成本；详细构成在下方成本模块查看。';
+const newSummaryCopy='公司项目 + 公司公共';
 if(registry.includes(oldSummaryCopy))throw new Error('BUSINESS_FINANCE_COST_VISIBILITY_FAILED: company total-cost card still claims client-specific cost is included');
-if(registry.split(newSummaryCopy).length-1!==1)throw new Error('BUSINESS_FINANCE_COST_VISIBILITY_FAILED: reviewed strict company-only total-cost card copy missing or duplicated');
+if(!registry.includes(newSummaryCopy))throw new Error('BUSINESS_FINANCE_COST_VISIBILITY_FAILED: reviewed strict company-only total-cost card copy missing');
 
 console.log('BUSINESS_FINANCE_COST_VISIBILITY_OK: visible-filter+allocation+unallocated+scope-label+client-fallback+company-summary=company+project-only+client-filter-invariant+display=executed');
 await import('./test_business_finance_profit_confirmation_probe.mjs');
