@@ -53,8 +53,10 @@ files = sorted(APP_DIR.glob('app-inline-*.js'))
 if not files:
     fail('no final app-inline JS artifacts')
 
-old = "if(item.isStandalone){const a=this.standaloneAlerts.find(a=>String(a.id)===String(item.id));if(a)a.dueDate=newDue}else{"
-new = "if(item.isStandalone){const a=this.standaloneAlerts.find(a=>String(a.id)===String(item.id));if(!a){this.notify('该提醒已不存在，请刷新页面后重试');return}a.dueDate=newDue}else{"
+standalone_old = "if(item.isStandalone){const a=this.standaloneAlerts.find(a=>String(a.id)===String(item.id));if(a)a.dueDate=newDue}else{"
+standalone_new = "if(item.isStandalone){const a=this.standaloneAlerts.find(a=>String(a.id)===String(item.id));if(!a){this.notify('该提醒已不存在，请刷新页面后重试');return}a.dueDate=newDue}else{"
+contract_old = "if(item.typeKey==='CONTRACT'){const old=c.endDate;c.endDate=newDue;"
+contract_new = "if(item.typeKey==='CONTRACT'){if(String(c.endDate||'')!==String(item.dueDate||'')){this.notify('合同到期日期已变化，请刷新页面后重试');return}const old=c.endDate;c.endDate=newDue;"
 
 found = 0
 changed = []
@@ -66,11 +68,14 @@ for path in files:
     found += 1
     start, end = bounds
     source = text[start:end]
-    if '该提醒已不存在' in source:
-        fail('saveRenewal already contains standalone stale-target guard')
-    if source.count(old) != 1:
-        fail(f'saveRenewal standalone anchor count={source.count(old)}')
-    patched = source.replace(old, new, 1)
+    if '该提醒已不存在' in source or '合同到期日期已变化' in source:
+        fail('saveRenewal already contains renewal integrity guard')
+    if source.count(standalone_old) != 1:
+        fail(f'saveRenewal standalone anchor count={source.count(standalone_old)}')
+    if source.count(contract_old) != 1:
+        fail(f'saveRenewal contract anchor count={source.count(contract_old)}')
+    patched = source.replace(standalone_old, standalone_new, 1)
+    patched = patched.replace(contract_old, contract_new, 1)
     text = text[:start] + patched + text[end:]
     path.write_text(text, encoding='utf-8')
     changed.append((path.name, hashlib.sha256(text.encode('utf-8')).hexdigest()))
@@ -82,6 +87,8 @@ if len(changed) != 1:
 
 print(
     'RENEWAL_INTEGRITY_GUARD_FINALIZE_OK: '
-    'standalone-stale-target=denied-before-dismiss+persist+audit; existing-standalone=preserved; '
+    'standalone-stale-target=denied-before-dismiss+persist+audit; '
+    'contract-stale-target=compare-and-set-before-history+billing+persist+audit; '
+    'existing-standalone+current-contract=preserved; '
     + 'artifact=' + ','.join(f'{name}:{sha[:12]}' for name, sha in changed)
 )
