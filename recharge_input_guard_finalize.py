@@ -86,3 +86,5 @@ print(
     'month-lock+valid-positive=preserved; '
     + 'artifact=' + ','.join(f'{name}:{sha[:12]}' for name, sha in changed)
 )
+
+import renewal_integrity_guard_finalize  # noqa: E402,F401
