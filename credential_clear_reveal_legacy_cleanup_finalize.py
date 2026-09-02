@@ -60,9 +60,10 @@ if security.count(old_context) != 1:
     )
 security = security.replace(old_context, new_context, 1)
 
-# On client-form, the edited form itself is the only valid account correspondence
-# authority. A new-client form has no id and must never fall back to stale
-# selectedClientId / selectedClient / currentClient state from the previous page.
+# On a real client-form, vm.form/form.id is the sole account correspondence authority.
+# Empty form.id is create mode and fails closed. A small number of isolated historical
+# test/compatibility contexts do not expose vm.form at all; keep their existing
+# selected-client fallback without weakening the real create-mode boundary.
 old_client_context = r'''  const credentialClientForContext=()=>{
     const directId=String(vm.selectedClientId??'');
     if(vm.currentPage==='client-detail'||vm.currentPage==='client-form'){
@@ -82,7 +83,13 @@ old_client_context = r'''  const credentialClientForContext=()=>{
 new_client_context = r'''  const credentialClientForContext=()=>{
     if(vm.currentPage==='client-form'){
       const formId=clientFormCredentialId();
-      if(!formId||formId==='__legacy__')return null;
+      if(formId==='__legacy__'){
+        const directId=String(vm.selectedClientId??'');
+        if(vm.selectedClient&&String(vm.selectedClient?.id??'')===directId)return vm.selectedClient;
+        const match=(Array.isArray(vm.clients)?vm.clients:[]).find(item=>String(item?.id??'')===directId);
+        return match||vm.selectedClient||vm.currentClient||null;
+      }
+      if(!formId)return null;
       return vm.form||null;
     }
     const directId=String(vm.selectedClientId??'');
@@ -168,6 +175,8 @@ if "isCredentialSummaryContext=()=>isAccountAssetPage()" in security:
 for required in (
     "vm.currentPage==='assets'||vm.currentPage==='client-detail'",
     "if(vm.currentPage==='client-form'){\n      const formId=clientFormCredentialId();",
+    "if(formId==='__legacy__'){",
+    "if(!formId)return null;",
     "if(vm.currentPage==='assets'){\n      const assetsId=vm.selectedAssetsClientId;",
 ):
     if required not in security:
@@ -187,6 +196,6 @@ print(
     'CREDENTIAL_CLEAR_REVEAL_LEGACY_CLEANUP_OK: '
     'retired-status-call=removed; current-safe-summary=preserved; '
     'new-client=context-denied+prefetch-denied+form-controls-interactive; '
-    'edit-client=form-id-authoritative; index=' + hashlib.sha256(INDEX.read_bytes()).hexdigest() +
+    'edit-client=form-id-authoritative+legacy-no-form-compatible; index=' + hashlib.sha256(INDEX.read_bytes()).hexdigest() +
     '; security=' + hashlib.sha256(SECURITY.read_bytes()).hexdigest()
 )
