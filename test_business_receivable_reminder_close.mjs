@@ -62,51 +62,58 @@ function pay(row,amount){
   subject.saveReceivablePayment();
 }
 
-// Automatic bill reminder and a client-level standalone receivable reminder both
-// remain while money is still outstanding. Recording a partial payment must not
-// accidentally close either reminder.
+// Formal financeReceivables are the single reminder authority once a standalone
+// RECEIVABLE can be linked. While money is outstanding, keep only the automatic
+// bill reminder and suppress the duplicate client-level standalone reminder.
 reset();
 let r1=bill('r1','c1');
 subject.financeReceivables=[r1];
 subject.standaloneAlerts=[reminder('sa-alpha'),{id:'sa-ip',typeKey:'IP',clientName:'Alpha',dueDate:'2026-08-30'}];
 eq(has('RECEIVABLE-r1'),true,'automatic reminder exists before payment');
-eq(has('sa-alpha'),true,'standalone receivable reminder exists before payment');
+eq(has('sa-alpha'),false,'linked standalone reminder suppressed before payment');
+eq(has('sa-ip'),true,'non-receivable reminder remains unchanged');
 pay(r1,40);
 eq(subject.financeReceivableUnpaid(r1),60,'partial payment leaves outstanding amount');
 eq(has('RECEIVABLE-r1'),true,'automatic reminder remains after partial payment');
-eq(has('sa-alpha'),true,'standalone reminder remains after partial payment');
-eq(has('sa-ip'),true,'non-receivable reminder remains unchanged');
+eq(has('sa-alpha'),false,'linked standalone reminder stays suppressed after partial payment');
+eq(has('sa-ip'),true,'non-receivable reminder remains unchanged after partial payment');
 
-// The actual saveReceivablePayment path completing the outstanding balance must
-// remove both the automatic bill reminder and the linked client-level reminder.
+// Completing the outstanding balance removes the automatic bill reminder. The
+// linked standalone reminder stays suppressed, so settled receivables never reappear.
 pay(r1,60);
 eq(subject.financeReceivableUnpaid(r1),0,'full payment settles bill');
 eq(has('RECEIVABLE-r1'),false,'automatic reminder closes after full payment');
-eq(has('sa-alpha'),false,'linked standalone reminder closes after full payment');
+eq(has('sa-alpha'),false,'linked standalone reminder remains suppressed after full payment');
 eq(has('sa-ip'),true,'other reminder types remain after full payment');
 
-// A client-level reminder represents the customer's outstanding receivables as a
-// whole. Settling one bill must not close it while another bill is still unpaid.
+// A client with multiple receivables must still have exactly the unpaid automatic
+// bill reminder(s), never an additional client-level RECEIVABLE reminder.
 reset();
 r1=bill('r1','c1',100,[{amount:100}]);
 let r2=bill('r2','c1',75,[]);
 subject.financeReceivables=[r1,r2];
 subject.standaloneAlerts=[reminder('sa-client',{clientId:'c1'})];
-eq(has('sa-client'),true,'client reminder remains while another bill is outstanding');
+eq(has('RECEIVABLE-r1'),false,'settled bill has no automatic reminder');
+eq(has('RECEIVABLE-r2'),true,'other unpaid bill keeps its automatic reminder');
+eq(has('sa-client'),false,'client-level standalone reminder suppressed when formal receivables exist');
 
-// When a standalone reminder carries a precise receivableId, that exact bill is
-// authoritative; another outstanding bill for the same client must not keep the
-// already-settled bill reminder open.
+// A precise receivableId is also subordinate to the formal row, regardless of
+// whether that row is settled or still outstanding.
 subject.standaloneAlerts=[reminder('sa-r1',{clientId:'c1',receivableId:'r1'})];
-eq(has('sa-r1'),false,'explicit settled receivable reminder closes independently');
+eq(has('sa-r1'),false,'explicit settled receivable standalone reminder suppressed');
+subject.standaloneAlerts=[reminder('sa-r2',{clientId:'c1',receivableId:'r2'})];
+eq(has('RECEIVABLE-r2'),true,'explicit unpaid receivable keeps automatic reminder');
+eq(has('sa-r2'),false,'explicit unpaid receivable standalone reminder suppressed');
 
-// A different customer's outstanding reminder remains untouched.
+// A different customer's formal outstanding receivable follows the same rule:
+// keep the automatic reminder only and suppress its duplicate standalone record.
 subject.standaloneAlerts=[reminder('sa-beta',{clientId:'c2',clientName:'Beta'})];
 subject.financeReceivables.push(bill('r3','c2',50,[]));
-eq(has('sa-beta'),true,'different client outstanding reminder remains');
+eq(has('RECEIVABLE-r3'),true,'different client automatic reminder remains');
+eq(has('sa-beta'),false,'different client linked standalone reminder suppressed');
 
 // Fail safe on unresolved linkage: duplicate names or a uniquely matched client
-// with no receivable rows must not silently hide a manually created reminder.
+// with no formal receivable rows must not silently hide a manually created reminder.
 reset();
 subject.clients=[client('c1','Same'),client('c2','Same')];
 subject.standaloneAlerts=[reminder('sa-ambiguous',{clientName:'Same'})];
@@ -115,4 +122,4 @@ reset();
 subject.standaloneAlerts=[reminder('sa-no-bill',{clientName:'Alpha'})];
 eq(has('sa-no-bill'),true,'no linked receivable rows keeps reminder');
 
-console.log('BUSINESS_RECEIVABLE_REMINDER_CLOSE_OK: full-payment=closes-linked; partial=preserved; other-outstanding=preserved; receivable-id=precise; unresolved=fail-safe; other-types=unchanged');
+console.log('BUSINESS_RECEIVABLE_REMINDER_CLOSE_OK: formal-receivable=single-authority; linked-standalone=suppressed; partial=automatic-preserved; settled=closed; unresolved=fail-safe; other-types=unchanged');
