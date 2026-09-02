@@ -41,8 +41,8 @@ for (let i = 0; i + 1 < defs.length; i += 1) {
   if (/\bthis\.persist\s*\(/.test(source)) signals.push('persist');
   if (/\bthis\.logAudit\s*\(/.test(source)) signals.push('audit');
   if (/\b(?:window\.)?confirm\s*\(/.test(source)) signals.push('confirm');
-  if (/\bthis\.(?:clients|leads|financeReceivables|financeCosts|adData|ads|receivablePayments)\s*=/.test(source)) signals.push('state-replace');
-  if (/\bthis\.(?:clients|leads|financeReceivables|financeCosts|adData|ads|receivablePayments)\.(?:push|splice)\s*\(/.test(source)) signals.push('state-mutate');
+  if (/\bthis\.(?:clients|leads|openingDeals|openingProviders|financeReceivables|financeCosts|adData|ads|receivablePayments)\s*=/.test(source)) signals.push('state-replace');
+  if (/\bthis\.(?:clients|leads|openingDeals|openingProviders|financeReceivables|financeCosts|adData|ads|receivablePayments)\.(?:push|unshift|splice)\s*\(/.test(source)) signals.push('state-mutate');
   if (signals.length) candidates.set(name, [...new Set(signals)].sort());
 }
 
