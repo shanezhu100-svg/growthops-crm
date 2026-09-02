@@ -36,4 +36,4 @@ jobs:
           node --version
           python3 --version
       - name: Run canonical CRM build gates
-        run: sh build.sh && python3 test_vue_runtime_only_output.py && python3 test_browser_mount_smoke.py && python3 test_browser_client_form_credential_status.py && python3 test_browser_new_client_credential_isolation.py && python3 test_browser_client_form_multi_account_refresh.py && python3 cloudflare_p1_verify.py
+        run: sh build.sh && python3 test_vue_runtime_only_output.py && python3 test_new_client_credential_isolation_source.py && python3 test_browser_mount_smoke.py && python3 test_browser_client_form_credential_status.py && python3 test_browser_new_client_credential_isolation.py && python3 test_browser_client_form_multi_account_refresh.py && python3 cloudflare_p1_verify.py
