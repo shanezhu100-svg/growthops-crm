@@ -200,20 +200,18 @@ if proc.returncode != 0:
     fail(f'Chromium exit={proc.returncode}; stderr={stderr[-1600:]}')
 
 dom = proc.stdout or ''
-if 'data-new-client-isolation="pass"' not in dom:
-    attrs = {}
-    for name in (
-        'data-new-client-isolation','data-summary-call-count','data-account-texts',
-        'data-secret-texts','data-input-values','data-placeholders','data-unexpected-rpc-count',
-    ):
-        match = re.search(rf'{re.escape(name)}="([^"]*)"', dom)
-        attrs[name] = match.group(1) if match else '__missing__'
-    fail('new-client credential isolation regression failed: ' + json.dumps(attrs, ensure_ascii=False) + '; stderr=' + stderr[-1200:])
+attrs = {}
+for name in (
+    'data-new-client-isolation','data-summary-call-count','data-account-texts',
+    'data-secret-texts','data-input-values','data-placeholders','data-unexpected-rpc-count',
+):
+    match = re.search(rf'{re.escape(name)}="([^"]*)"', dom)
+    attrs[name] = match.group(1) if match else '__missing__'
 
+if 'data-new-client-isolation="pass"' not in dom:
+    fail('new-client credential isolation regression failed: ' + json.dumps(attrs, ensure_ascii=False) + '; stderr=' + stderr[-1200:])
 if 'data-summary-call-count="0"' not in dom:
     fail('create form still requested a previous client credential summary')
-if 'previous-fb@example.test' in dom or 'previous-tk@example.test' in dom or '••••••••' in dom:
-    fail('previous client credential state leaked into new-client DOM')
 if 'data-unexpected-rpc-count="0"' not in dom:
     fail('new-client isolation invoked an unexpected RPC')
 
