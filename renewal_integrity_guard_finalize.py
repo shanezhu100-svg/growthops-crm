@@ -57,6 +57,8 @@ standalone_old = "if(item.isStandalone){const a=this.standaloneAlerts.find(a=>St
 standalone_new = "if(item.isStandalone){const a=this.standaloneAlerts.find(a=>String(a.id)===String(item.id));if(!a){this.notify('该提醒已不存在，请刷新页面后重试');return}a.dueDate=newDue}else{"
 contract_old = "if(item.typeKey==='CONTRACT'){const old=c.endDate;c.endDate=newDue;"
 contract_new = "if(item.typeKey==='CONTRACT'){if(String(c.endDate||'')!==String(item.dueDate||'')){this.notify('合同到期日期已变化，请刷新页面后重试');return}const old=c.endDate;c.endDate=newDue;"
+ip_old = "}else if(item.typeKey==='IP'){const env=(c.networkEnvironments||[]).find(e=>String(e.id)===String(item.networkId));if(env)env.ipDueDate=newDue;else if(c.ipDueDate)c.ipDueDate=newDue;this.syncLegacyNetworkFields(c)}"
+ip_new = "}else if(item.typeKey==='IP'){const networkId=String(item.networkId||''),env=networkId?(c.networkEnvironments||[]).find(e=>String(e.id)===networkId):null;if(networkId){if(!env){this.notify('网络环境已不存在，请刷新页面后重试');return}if(String(env.ipDueDate||'')!==String(item.dueDate||'')){this.notify('IP 到期日期已变化，请刷新页面后重试');return}env.ipDueDate=newDue}else{if(!c.ipDueDate){this.notify('IP 到期记录已不存在，请刷新页面后重试');return}if(String(c.ipDueDate||'')!==String(item.dueDate||'')){this.notify('IP 到期日期已变化，请刷新页面后重试');return}c.ipDueDate=newDue}this.syncLegacyNetworkFields(c)}"
 
 found = 0
 changed = []
@@ -68,14 +70,17 @@ for path in files:
     found += 1
     start, end = bounds
     source = text[start:end]
-    if '该提醒已不存在' in source or '合同到期日期已变化' in source:
+    if '该提醒已不存在' in source or '合同到期日期已变化' in source or '网络环境已不存在' in source:
         fail('saveRenewal already contains renewal integrity guard')
     if source.count(standalone_old) != 1:
         fail(f'saveRenewal standalone anchor count={source.count(standalone_old)}')
     if source.count(contract_old) != 1:
         fail(f'saveRenewal contract anchor count={source.count(contract_old)}')
+    if source.count(ip_old) != 1:
+        fail(f'saveRenewal IP anchor count={source.count(ip_old)}')
     patched = source.replace(standalone_old, standalone_new, 1)
     patched = patched.replace(contract_old, contract_new, 1)
+    patched = patched.replace(ip_old, ip_new, 1)
     text = text[:start] + patched + text[end:]
     path.write_text(text, encoding='utf-8')
     changed.append((path.name, hashlib.sha256(text.encode('utf-8')).hexdigest()))
@@ -89,6 +94,7 @@ print(
     'RENEWAL_INTEGRITY_GUARD_FINALIZE_OK: '
     'standalone-stale-target=denied-before-dismiss+persist+audit; '
     'contract-stale-target=compare-and-set-before-history+billing+persist+audit; '
-    'existing-standalone+current-contract=preserved; '
+    'ip=exact-source+modern-and-legacy-compare-and-set+missing-source-denied; '
+    'valid-existing-renewals=preserved; '
     + 'artifact=' + ','.join(f'{name}:{sha[:12]}' for name, sha in changed)
 )
