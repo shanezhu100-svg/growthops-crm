@@ -16,7 +16,7 @@ EXPECTED_SHA256 = {
     'app/app-style-03.css': '64bd5db676657f40c7962080ce62f3b74125865c3f084a67ce21d0fc77ed00b6',
     'app/app-style-04.css': '59de39d8388f561c5229cfa39f7d4c5299b34997c21e3c142d9ced067850a11e',
     'vendor/vue-3.5.41.runtime.global.js': '45c904194aaf24112c8f4fc4386b87e107a32eede80c410ce93be459ebdee088',
-    'vendor/vue-3.5.41.renders.js': '6d3353fb0ddd8ab28423fc0ec85c91ffcb942465f2701f0cbc69376c37195561',
+    'vendor/vue-3.5.41.renders.js': 'b27a24535a2a51f71264eb98ef75b29b39c191c2b08397d4e2856adccf6142bb',
     'vendor/xlsx-0.18.5.full.min.js': 'c9506197caf809a075b6dee1da0d36fb19da7158ffe8a88e7b0c96c5d8623c99',
     'vendor/fontawesome/css/all.min.css': '5ceaaba22d75b58e04150311f596306562a3e595e27ed4b1dfa451b82dda9e50',
     'vendor/fontawesome/webfonts/fa-brands-400.ttf': 'e28096fa75a96ac77020155ea3a6dd7312983e84115366d4cf49a0c312ec6d51',
