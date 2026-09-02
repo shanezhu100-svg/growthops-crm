@@ -50,10 +50,10 @@ const names = [...candidates.keys()].sort();
 if (!names.length) throw new Error('BUSINESS_PERSISTED_MUTATION_INVENTORY_FAILED: no mutation-like shipped methods found; detector drifted');
 const rendered = names.map(name => `${name}[${candidates.get(name).join('+')}]`);
 
-// Reviewed shipped mutation surface from the 2026-09-01 inventory probe. Pin both
-// method identity and durable-boundary signals: a newly introduced write path, a
-// removed method, or a method that stops crossing its reviewed persist/audit/state
-// boundary must be explicitly reviewed instead of silently drifting into Production.
+// Reviewed shipped mutation surface. Pin both method identity and durable-boundary
+// signals: a newly introduced write path, a removed method, or a method that stops
+// crossing its reviewed persist/audit/state boundary must be explicitly reviewed
+// instead of silently drifting into Production.
 const EXPECTED = [
   'addAdCampaign[persist]',
   'addAdSet[persist]',
@@ -75,7 +75,7 @@ const EXPECTED = [
   'deleteReminderType[audit+persist]',
   'downloadFullBackup[audit]',
   'editAdCampaign[persist]',
-  'ensureAutomaticAssetCosts[persist+state-replace]',
+  'ensureAutomaticAssetCosts[persist+state-mutate+state-replace]',
   'ensureAutomaticReceivables[audit+persist]',
   'ensureSopDailyTasks[persist]',
   'exportFinanceExcel[audit]',
@@ -86,6 +86,7 @@ const EXPECTED = [
   'login[audit]',
   'logout[audit]',
   'migrateLegacyAccountSpendRecords[audit]',
+  'migrateOpeningDeals[state-replace]',
   'navigateTo[persist]',
   'openConvertedLeadClient[persist]',
   'removeAdCampaign[audit+persist]',
@@ -100,14 +101,14 @@ const EXPECTED = [
   'saveAdSpend[persist]',
   'saveAdsPlan[audit+persist]',
   'saveAuthUser[audit+persist]',
-  'saveClient[audit+persist]',
+  'saveClient[audit+persist+state-mutate]',
   'saveExternalAsset[audit+persist]',
-  'saveFinanceCost[audit+persist]',
-  'saveLead[audit+persist]',
+  'saveFinanceCost[audit+persist+state-mutate]',
+  'saveLead[audit+persist+state-mutate]',
   'saveMediaTool[audit+persist]',
-  'saveOpeningDeal[audit+persist]',
-  'saveOpeningProvider[audit+persist]',
-  'saveReceivable[audit+persist]',
+  'saveOpeningDeal[audit+persist+state-mutate]',
+  'saveOpeningProvider[audit+persist+state-mutate]',
+  'saveReceivable[audit+persist+state-mutate]',
   'saveReceivablePayment[audit+persist]',
   'saveRecharge[audit+persist]',
   'saveRechargeReminder[persist]',
@@ -119,8 +120,8 @@ const EXPECTED = [
   'saveSopTask[audit+persist]',
   'saveStandaloneAlert[audit+persist]',
   'syncFinancePeriodAutoCosts[persist]',
-  'syncOpeningFeeCost[state-replace]',
-  'syncReceivableLinkedCost[state-replace]',
+  'syncOpeningFeeCost[state-mutate+state-replace]',
+  'syncReceivableLinkedCost[state-mutate+state-replace]',
   'toggleFinanceMonthLock[audit+persist]',
   'voidReconciliation[audit+persist]',
 ];
