@@ -23,6 +23,7 @@ function extractMethod(name){
 const strictSource=extractMethod('financeCompanySummaryCostGroups');
 const textSource=extractMethod('financeCostText');
 if(!strictSource.includes("['COMPANY','COMPANY_PROJECT']"))throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: strict scope allowlist drifted');
+if(!strictSource.includes("c.clientId?'CLIENT'"))throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: client ownership must override stale company scope');
 for(const forbidden of ['ALLOCATE_SERVICE','ALLOCATE_SPEND','financeCompanyNonClientCostGroups','financeActivePeriodSnapshot']){
   if(strictSource.includes(forbidden))throw new Error(`BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: strict authority contains forbidden dependency ${forbidden}`);
 }
@@ -35,7 +36,7 @@ const strictMethod=vm.runInNewContext(`({${strictSource}})`,{Number,String,Objec
 const textMethod=vm.runInNewContext(`({${textSource}})`,{Number,String,Object,Array},{timeout:1000}).financeCostText;
 const subject={
   financeClientFilter:'ALL',
-  financeCostGroups:{CNY:420},
+  financeCostGroups:{CNY:920},
   financeCompanyNonClientCostGroups:{CNY:120},
   financeActivePeriodSnapshot:{company:{companyPublicCostGroups:{CNY:999},companyProjectCostGroups:{CNY:999}}},
   financeCosts:[
@@ -44,6 +45,7 @@ const subject={
     {date:'2026-09-03',scope:'ALLOCATE_SERVICE',amount:20,currency:'CNY'},
     {date:'2026-09-04',scope:'ALLOCATE_SPEND',amount:20,currency:'CNY'},
     {date:'2026-09-05',scope:'CLIENT',clientId:'c1',amount:300,currency:'CNY'},
+    {date:'2026-09-06',scope:'COMPANY',clientId:'c1',amount:500,currency:'CNY'},
     {date:'2026-10-01',scope:'COMPANY_PROJECT',amount:999,currency:'CNY'},
   ],
   financeDateMatch(date){return /^2026-09-/.test(String(date||''));},
@@ -52,7 +54,7 @@ const subject={
 subject.financeCompanySummaryCostGroups=function(){return strictMethod.call(subject);};
 const strict=subject.financeCompanySummaryCostGroups();
 if(JSON.stringify(strict)!==JSON.stringify({CNY:80}))throw new Error(`BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: strict total expected CNY 80, actual ${JSON.stringify(strict)}`);
-if(textMethod.call(subject)!=='CNY:80')throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: ALL card did not exclude client/allocation costs from 420 fixture');
+if(textMethod.call(subject)!=='CNY:80')throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: ALL card did not exclude client/allocation costs from fixture');
 subject.financeClientFilter='c1';
 if(textMethod.call(subject)!=='CNY:80')throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: selected-client filter leaked client cost into total-cost card');
 subject.financeClientFilter='c2';
@@ -77,4 +79,4 @@ const copy='仅统计公司公共成本 + 公司项目成本；详细构成在�
 if(registry.split(copy).length-1!==1)throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: strict card copy missing or duplicated');
 if(registry.includes('已包含公司成本 + 公司项目成本；详细构成在下方成本模块查看。'))throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: broad company-cost copy remains');
 
-console.log('BUSINESS_FINANCE_STRICT_COMPANY_COST_OK: total-card=COMPANY+COMPANY_PROJECT-only; client+service-allocation+spend-allocation=excluded; client-filter-invariant=true; locked-history-prerequisites=guarded');
+console.log('BUSINESS_FINANCE_STRICT_COMPANY_COST_OK: total-card=COMPANY+COMPANY_PROJECT-only; client-owned+service-allocation+spend-allocation=excluded; clientId-precedence=true; client-filter-invariant=true; locked-history-prerequisites=guarded');
