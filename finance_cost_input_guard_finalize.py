@@ -30,7 +30,7 @@ files = sorted(APP_DIR.glob('app-inline-*.js'))
 if not files:
     fail('no final app-inline JS artifacts')
 
-found = {'saveFinanceCost': 0, 'ensureAutomaticAssetCosts': 0}
+found = {'saveFinanceCost': 0, 'ensureAutomaticAssetCosts': 0, 'createReceivableForClientMonth': 0}
 changed = []
 for path in files:
     text = path.read_text(encoding='utf-8')
@@ -71,6 +71,23 @@ for path in files:
         source = source.replace(old, new, 1)
         text = text[:start] + source + text[end:]
 
+    bounds = method_bounds(text, 'createReceivableForClientMonth')
+    if bounds is not None:
+        found['createReceivableForClientMonth'] += 1
+        start, end = bounds
+        source = text[start:end]
+        old = "if(!client||client.archived||!month||(client.billingMode||'FULL_MONTH')==='MANUAL'||Number(client.monthlyFee||0)<=0||this.isMonthLocked(month))return 0;"
+        new = (
+            "const receivableMonthlyFeeCheck=Number(client&&client.monthlyFee||0);"
+            "if(!client||client.archived||!month||(client.billingMode||'FULL_MONTH')==='MANUAL'||!Number.isFinite(receivableMonthlyFeeCheck)||receivableMonthlyFeeCheck<=0||this.isMonthLocked(month))return 0;"
+        )
+        if source.count(old) != 1:
+            fail(f'createReceivableForClientMonth monthly-fee anchor expected once, found {source.count(old)}')
+        if 'receivableMonthlyFeeCheck=' in source:
+            fail('createReceivableForClientMonth already contains finite monthly-fee guard')
+        source = source.replace(old, new, 1)
+        text = text[:start] + source + text[end:]
+
     if text != original:
         path.write_text(text, encoding='utf-8')
         changed.append((path.name, hashlib.sha256(text.encode('utf-8')).hexdigest()))
@@ -84,6 +101,7 @@ if not changed:
 print(
     'FINANCE_COST_INPUT_GUARD_FINALIZE_OK: '
     'manual-cost=finite-nonnegative; automatic-ip-monthly-fee=finite-positive; '
-    'nan+infinity=denied-before-cost-mutation; existing-month-lock+audit+persistence=preserved; '
+    'automatic-receivable-monthly-fee=finite-positive; '
+    'nan+infinity=denied-before-cost-or-receivable-mutation; existing-lock+audit+persistence=preserved; '
     + 'artifacts=' + ','.join(f'{name}:{sha[:12]}' for name, sha in changed)
 )
