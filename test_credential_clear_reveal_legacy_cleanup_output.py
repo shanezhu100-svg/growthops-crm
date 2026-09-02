@@ -29,8 +29,10 @@ require("isCredentialSummaryContext=()=>isAccountAssetPage()" not in SECURITY,
         'body-text credential context can still misclassify client-form')
 require("if(vm.currentPage==='client-form'){\n      const formId=clientFormCredentialId();" in SECURITY,
         'client-form credential account authority is not form.id scoped')
-require("if(!formId||formId==='__legacy__')return null;" in SECURITY,
-        'create form does not fail closed on empty form.id')
+require("if(formId==='__legacy__'){" in SECURITY,
+        'legacy no-form edit compatibility fallback missing')
+require("if(!formId)return null;" in SECURITY,
+        'real create form does not fail closed on empty form.id')
 require("if(vm.currentPage==='assets'){\n      const assetsId=vm.selectedAssetsClientId;" in SECURITY,
         'credential prefetch is not assets-route scoped')
 require("const formControl=(cell.matches?.('input,textarea,select')?cell:null)" in INDEX,
@@ -51,5 +53,6 @@ require(BUILD.index(test_call) > BUILD.index(finalizer_call),
 print(
     'CREDENTIAL_CLEAR_REVEAL_LEGACY_CLEANUP_TEST_OK: '
     'retired-reference=absent; current-safe-summary=present; build-order=guarded; '
-    'new-client=context-denied+prefetch-denied+mutation-controls-ungated; edit-client=form-id-authoritative'
+    'new-client=context-denied+prefetch-denied+mutation-controls-ungated; '
+    'edit-client=form-id-authoritative+legacy-no-form-compatible'
 )
