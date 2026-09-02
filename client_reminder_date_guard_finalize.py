@@ -75,6 +75,10 @@ renewal_assign = "const newDue=String(this.renewalForm.newDueDate||'');"
 renewal_empty = "if(!newDue){this.notify('请选择新的到期日期');return}"
 renewal_empty_guarded = renewal_empty + calendar_guard('newDue', '请选择有效的到期日期', 'renewalDate')
 
+standalone_assign = "const dueDate=String(this.newAlertForm.dueDate||'');"
+standalone_empty = "if(!dueDate){this.notify('请选择到期日期');return}"
+standalone_empty_guarded = standalone_empty + calendar_guard('dueDate', '请选择有效的到期日期', 'standaloneDate')
+
 found = {'saveRecharge': 0, 'saveRenewal': 0, 'saveStandaloneAlert': 0}
 changed = []
 for path in files:
@@ -114,8 +118,14 @@ for path in files:
         found['saveStandaloneAlert'] += 1
         start, end = bounds
         source = text[start:end]
-        print('CLIENT_REMINDER_STANDALONE_PREFIX_PROBE=' + repr(source[:900]))
-        fail('standalone reminder prefix probe complete')
+        if '请选择有效的到期日期' in source:
+            fail('saveStandaloneAlert already contains calendar date guard')
+        if source.count(standalone_assign) != 1:
+            fail(f'saveStandaloneAlert assignment anchor count={source.count(standalone_assign)}')
+        if source.count(standalone_empty) != 1:
+            fail(f'saveStandaloneAlert empty-date anchor count={source.count(standalone_empty)}')
+        patched = source.replace(standalone_empty, standalone_empty_guarded, 1)
+        text = text[:start] + patched + text[end:]
 
     if text != original:
         path.write_text(text, encoding='utf-8')
@@ -130,6 +140,7 @@ if len(changed) != 1:
 print(
     'CLIENT_REMINDER_DATE_GUARD_FINALIZE_OK: '
     'recharge=yyyy-mm-dd+calendar-valid-before-month-lock+empty-local-default; '
-    'renewal=yyyy-mm-dd+calendar-valid-after-empty-check-before-state+billing; leap-day=preserved; '
+    'renewal=yyyy-mm-dd+calendar-valid-before-state+billing; '
+    'standalone=yyyy-mm-dd+calendar-valid-before-record+persist+audit; leap-day=preserved; '
     + 'artifact=' + ','.join(f'{name}:{sha[:12]}' for name, sha in changed)
 )
