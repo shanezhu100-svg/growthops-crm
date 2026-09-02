@@ -32,6 +32,7 @@ def extract(name: str) -> str:
 
 save = extract('saveFinanceCost')
 auto = extract('ensureAutomaticAssetCosts')
+receivable = extract('createReceivableForClientMonth')
 for marker in (
     'financeCostAmountCheck=',
     '!Number.isFinite(financeCostAmountCheck)',
@@ -46,8 +47,20 @@ for marker in (
 ):
     if auto.count(marker) != 1:
         fail(f'ensureAutomaticAssetCosts marker drift: {marker}')
+for marker in (
+    'receivableMonthlyFeeCheck=',
+    '!Number.isFinite(receivableMonthlyFeeCheck)',
+    'receivableMonthlyFeeCheck<=0',
+    '!Number.isFinite(amount)||amount<=0',
+):
+    if receivable.count(marker) != 1:
+        fail(f'createReceivableForClientMonth marker drift: {marker}')
 if 'if(env.autoCost===false||Number(env.ipMonthlyFee||0)<=0)return;' in auto:
     fail('legacy non-finite-permissive IP monthly fee guard remains')
+if "Number(client.monthlyFee||0)<=0||this.isMonthLocked(month)" in receivable:
+    fail('legacy non-finite-permissive receivable monthly fee guard remains')
+if 'const amount=this.financeServiceFeeForClientMonth(client,month);if(amount<=0)return 0;' in receivable:
+    fail('legacy non-finite-permissive calculated receivable amount guard remains')
 
 finalizer = 'python3 finance_cost_input_guard_finalize.py'
 output_gate = 'python3 test_finance_cost_input_guard_output.py'
@@ -58,4 +71,4 @@ for call in (finalizer, output_gate):
 if not (BUILD.index(finalizer) < BUILD.index(output_gate) < BUILD.index(business_root)):
     fail('finance cost input guard must finalize+verify before business regressions')
 
-print('FINANCE_COST_INPUT_GUARD_OUTPUT_OK: manual-cost=finite-nonnegative; auto-ip-fee=finite-positive; legacy-nonfinite-path=absent; build-order=guarded')
+print('FINANCE_COST_INPUT_GUARD_OUTPUT_OK: manual-cost=finite-nonnegative; auto-ip-fee=finite-positive; auto-receivable=monthly-fee+calculated-amount-finite-positive; legacy-nonfinite-paths=absent; build-order=guarded')
