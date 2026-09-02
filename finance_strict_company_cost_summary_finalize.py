@@ -43,17 +43,19 @@ strict_method = (
     ".forEach(c=>{const cur=c.currency||'USD';g[cur]=(g[cur]||0)+Number(c.amount||0)});return g},\n"
 )
 old_return = "return this.spendGroupsText(this.financeClientFilter==='ALL'?this.financeCompanyNonClientCostGroups:this.financeCostGroups)"
-new_return = "return this.spendGroupsText(this.financeCompanySummaryCostGroups)"
+new_return = "const groups=this.financeCompanySummaryCostGroups;return this.spendGroupsText(typeof groups==='function'?groups.call(this):groups)"
 
 # The live finance template renders financeCostGroups directly in both the upper
 # KPI card and the lower cost-summary card. Therefore fixing financeCostText alone
 # is insufficient. Make the ALL-client financeCostGroups getter delegate to the
 # strict company-only authority before any locked-period snapshot can return the
 # historical all-cost aggregate. Selected-client behavior remains unchanged.
+# The typeof fallback keeps direct method-extraction regression tests compatible;
+# in Vue runtime `this.financeCompanySummaryCostGroups` is the unwrapped computed value.
 cost_groups_anchor = "financeCostGroups(){const snap=this.financeActiveSnapshotScope;"
 cost_groups_replacement = (
-    "financeCostGroups(){if(this.financeClientFilter==='ALL')return this.financeCompanySummaryCostGroups;"
-    "const snap=this.financeActiveSnapshotScope;"
+    "financeCostGroups(){if(this.financeClientFilter==='ALL'){const groups=this.financeCompanySummaryCostGroups;"
+    "return typeof groups==='function'?groups.call(this):groups}const snap=this.financeActiveSnapshotScope;"
 )
 
 hits = 0
