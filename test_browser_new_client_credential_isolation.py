@@ -11,6 +11,7 @@ import threading
 ROOT = Path(__file__).resolve().parent
 DIST = ROOT / 'dist'
 HOTFIX = DIST / 'cloud-security-hotfix.js'
+PREBOOT = DIST / 'app' / 'app-inline-02.js'
 
 
 def fail(message: str) -> None:
@@ -19,6 +20,8 @@ def fail(message: str) -> None:
 
 if not HOTFIX.is_file():
     fail('dist/cloud-security-hotfix.js missing; run canonical build first')
+if not PREBOOT.is_file() or '__GROWTHOPS_CREDENTIAL_V5_PREBOOT__' not in PREBOOT.read_text(encoding='utf-8'):
+    fail('shipped credential preboot asset missing; run canonical build first')
 
 browser = next(
     (
@@ -31,10 +34,11 @@ browser = next(
 if not browser:
     fail('no supported Chromium executable on CI runner')
 
-# Reproduce the reported failure mode: the user previously edited client-old, then
-# opens the new-client form. selectedClientId/selectedClient are deliberately stale,
-# while form.id is empty. A create form must not request or render any saved credential
-# summary from the previous client.
+# Reproduce the real failure path with the shipped v6 preboot asset: the user
+# previously edited client-old, then opens the new-client form. Both selected-client
+# and selected-assets state are deliberately stale, while form.id is empty. Create
+# inputs must survive the preboot scrub, remain hit-testable/editable, and must not
+# request or render any saved credential state from the previous client.
 fixture = r'''<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -45,19 +49,20 @@ fixture = r'''<!doctype html>
     .field label{display:block;margin-bottom:6px}
     .field input{display:block;width:100%;height:48px;box-sizing:border-box;padding:0 14px}
   </style>
+  <script src="/app/app-inline-02.js"></script>
 </head>
 <body>
   <h1>新增客户</h1>
   <section><h2>Facebook 资产</h2>
     <div class="account-card">
-      <div class="field"><label>登录账号</label><input id="fb-login" value="" placeholder="邮箱 / 个人号"></div>
-      <div class="field"><label>密码 / 2FA</label><input id="fb-secret" value="" placeholder="密码 / 2FA Token"></div>
+      <div class="field" id="fb-login-row"><label>登录账号</label><input id="fb-login" value="" placeholder="邮箱 / 个人号"></div>
+      <div class="field" id="fb-secret-row"><label>密码 / 2FA</label><input id="fb-secret" value="" placeholder="密码 / 2FA Token"></div>
     </div>
   </section>
   <section><h2>TikTok 资产</h2>
     <div class="account-card">
-      <div class="field"><label>登录账号</label><input id="tk-login" value="" placeholder="邮箱 / TikTok 账号"></div>
-      <div class="field"><label>密码 / 2FA</label><input id="tk-secret" value="" placeholder="密码 / 2FA Token"></div>
+      <div class="field" id="tk-login-row"><label>登录账号</label><input id="tk-login" value="" placeholder="邮箱 / TikTok 账号"></div>
+      <div class="field" id="tk-secret-row"><label>密码 / 2FA</label><input id="tk-secret" value="" placeholder="密码 / 2FA Token"></div>
     </div>
   </section>
   <script>
@@ -65,12 +70,16 @@ fixture = r'''<!doctype html>
     window.__growthOpsUnexpectedRpc=[];
     window.__growthOpsVm={
       currentPage:'client-form',
-      // stale state from the previous client is intentional
+      // stale previous-page state is intentional
       selectedClientId:'client-old',
-      selectedAssetsClientId:0,
+      selectedAssetsClientId:'client-old',
       currentUser:{id:'admin-1',role:'ADMIN'},
       clients:[{id:'client-old',name:'Previous Client'}],
       selectedClient:{
+        id:'client-old',name:'Previous Client',
+        fbAccounts:[{id:'fb-old'}],tkAccounts:[{id:'tk-old'}]
+      },
+      selectedAssetsClient:{
         id:'client-old',name:'Previous Client',
         fbAccounts:[{id:'fb-old'}],tkAccounts:[{id:'tk-old'}]
       },
@@ -96,35 +105,61 @@ fixture = r'''<!doctype html>
   <script src="/cloud-security-hotfix.js"></script>
   <script>
     setTimeout(()=>{
-      const accounts=[...document.querySelectorAll('[data-growthops-credential-form-status="account"]')];
-      const secrets=[...document.querySelectorAll('[data-growthops-credential-form-status="secret"]')];
-      const accountTexts=accounts.map(node=>String(node.textContent||'').trim());
-      const secretTexts=secrets.map(node=>String(node.textContent||'').trim());
-      const inputs=['fb-login','fb-secret','tk-login','tk-secret'].map(id=>document.getElementById(id));
+      const ids=['fb-login','fb-secret','tk-login','tk-secret'];
+      const inputs=ids.map(id=>document.getElementById(id));
+      const rows=['fb-login-row','fb-secret-row','tk-login-row','tk-secret-row'].map(id=>document.getElementById(id));
+      const inputsExist=inputs.every(Boolean);
       const inputValues=inputs.map(node=>node?.value??'__missing__');
       const placeholders=inputs.map(node=>String(node?.getAttribute('placeholder')||''));
+      const pendingRows=rows.filter(row=>row?.getAttribute('data-growthops-credential-v6-gate')==='pending').length;
+      const fakeMask=document.body.innerText.includes('••••••••');
       const summaryCalls=window.__growthOpsCredentialSummaryCalls||[];
       const unexpected=window.__growthOpsUnexpectedRpc||[];
-      const leakedText=[...accountTexts,...secretTexts].some(text=>
-        text.includes('previous-fb@example.test')||
-        text.includes('previous-tk@example.test')||
-        text.includes('••••••••')
-      );
+
+      const blockedByPointerEvents=input=>{
+        let node=input;
+        while(node&&node!==document.documentElement){
+          if(getComputedStyle(node).pointerEvents==='none')return true;
+          node=node.parentElement;
+        }
+        return false;
+      };
+      const pointerBlocked=inputs.filter(Boolean).some(blockedByPointerEvents);
+      const hitTargets=inputs.filter(Boolean).map(input=>{
+        const rect=input.getBoundingClientRect();
+        const hit=document.elementFromPoint(rect.left+rect.width/2,rect.top+rect.height/2);
+        return hit===input||input.contains(hit);
+      });
+      const hitTestable=hitTargets.length===4&&hitTargets.every(Boolean);
+
+      let editable=false;
+      const login=document.getElementById('fb-login');
+      if(login){
+        login.focus();
+        login.value='new-client@example.test';
+        login.dispatchEvent(new Event('input',{bubbles:true}));
+        editable=document.activeElement===login&&login.value==='new-client@example.test';
+        login.value='';
+      }
+
+      const leakedText=document.body.innerText.includes('previous-fb@example.test')||document.body.innerText.includes('previous-tk@example.test');
       const placeholdersPreserved=placeholders.every(Boolean);
       const pass=(
-        summaryCalls.length===0 &&
-        unexpected.length===0 &&
-        !leakedText &&
-        inputValues.every(value=>value==='') &&
-        placeholdersPreserved
+        summaryCalls.length===0 && unexpected.length===0 && !leakedText && !fakeMask &&
+        inputsExist && inputValues.every(value=>value==='') && placeholdersPreserved &&
+        pendingRows===0 && !pointerBlocked && hitTestable && editable
       );
       document.body.setAttribute('data-new-client-isolation',pass?'pass':'fail');
       document.body.setAttribute('data-summary-call-count',String(summaryCalls.length));
-      document.body.setAttribute('data-account-texts',JSON.stringify(accountTexts));
-      document.body.setAttribute('data-secret-texts',JSON.stringify(secretTexts));
+      document.body.setAttribute('data-unexpected-rpc-count',String(unexpected.length));
+      document.body.setAttribute('data-inputs-exist',String(inputsExist));
       document.body.setAttribute('data-input-values',JSON.stringify(inputValues));
       document.body.setAttribute('data-placeholders',JSON.stringify(placeholders));
-      document.body.setAttribute('data-unexpected-rpc-count',String(unexpected.length));
+      document.body.setAttribute('data-pending-row-count',String(pendingRows));
+      document.body.setAttribute('data-fake-mask',String(fakeMask));
+      document.body.setAttribute('data-pointer-blocked',String(pointerBlocked));
+      document.body.setAttribute('data-hit-targets',JSON.stringify(hitTargets));
+      document.body.setAttribute('data-editable',String(editable));
     },1600);
   </script>
 </body></html>'''
@@ -159,6 +194,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return
         if self.path == '/cloud-security-hotfix.js':
             self.send_file(HOTFIX)
+            return
+        if self.path == '/app/app-inline-02.js':
+            self.send_file(PREBOOT)
             return
         self.send_error(404)
 
@@ -202,21 +240,27 @@ if proc.returncode != 0:
 dom = proc.stdout or ''
 attrs = {}
 for name in (
-    'data-new-client-isolation','data-summary-call-count','data-account-texts',
-    'data-secret-texts','data-input-values','data-placeholders','data-unexpected-rpc-count',
+    'data-new-client-isolation','data-summary-call-count','data-unexpected-rpc-count',
+    'data-inputs-exist','data-input-values','data-placeholders','data-pending-row-count',
+    'data-fake-mask','data-pointer-blocked','data-hit-targets','data-editable',
 ):
     match = re.search(rf'{re.escape(name)}="([^"]*)"', dom)
     attrs[name] = match.group(1) if match else '__missing__'
 
 if 'data-new-client-isolation="pass"' not in dom:
-    fail('new-client credential isolation regression failed: ' + json.dumps(attrs, ensure_ascii=False) + '; stderr=' + stderr[-1200:])
+    fail('new-client credential isolation/interaction regression failed: ' + json.dumps(attrs, ensure_ascii=False) + '; stderr=' + stderr[-1200:])
 if 'data-summary-call-count="0"' not in dom:
     fail('create form still requested a previous client credential summary')
 if 'data-unexpected-rpc-count="0"' not in dom:
     fail('new-client isolation invoked an unexpected RPC')
+if 'data-pending-row-count="0"' not in dom or 'data-pointer-blocked="false"' not in dom:
+    fail('new-client mutation rows are still captured by the credential gate')
+if 'data-editable="true"' not in dom:
+    fail('new-client login input is not focusable/editable')
 
 print(
     'BROWSER_NEW_CLIENT_CREDENTIAL_ISOLATION_OK: '
-    f'browser={Path(browser).name}; client-form=create; stale-selected-client=ignored; '
-    'safe-summary-rpc=not-called; previous-login+secret-status=absent; mutation-inputs=blank; placeholders=preserved'
+    f'browser={Path(browser).name}; client-form=create; stale-client+asset-state=ignored; '
+    'safe-summary-rpc=not-called; fake-mask=absent; mutation-inputs=preserved+hit-testable+editable; '
+    'credential-gate=not-applied; placeholders=preserved'
 )

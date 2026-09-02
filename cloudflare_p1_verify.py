@@ -9,7 +9,7 @@ EXPECTED_SHA256 = {
     'index.html': '1ce7157cca79306d6dbef736e090e0c15d389f3031c15ac3db0b98f5285c13ac',
     'tailwind.css': '082358f4ff9c6d67ccb8e628ed27669967e15cfa7908f2e4c36a1e89c0a3f7b6',
     'app/app-inline-01.js': '52ade14219e58afb7b9f4535440479add87f8a59a0404e7fe504cfde5f06c53e',
-    'app/app-inline-02.js': 'dfb07b154ec1ab7c540dbf044164a0ea7445dee996f859504d22f673d247f26b',
+    'app/app-inline-02.js': 'bca2a9f4935004057b74bf975392fe70cd89b6f388e42e1daacea7fa67b9fdae',
     'app/app-inline-03.js': '388adde8a79bb1e759ec77af865623c8d1ed9131b67e2295aa5b7d39618b4bae',
     'app/app-style-01.css': '33a4a117d6b9e820b389e09d87a4ccb94242fb043e80ea087f72c17f46861a70',
     'app/app-style-02.css': '01ed16d03067a8879b877440574fbc6d98af53e0909685e1a23271169c149997',
@@ -31,7 +31,7 @@ EXPECTED_SHA256 = {
     'vendor/inter/inter-latin.woff2': '3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62',
     'vendor/inter/inter-latin-ext.woff2': '34b9c504cab7a73e37b746343a449132e56cf7b5481af2cb81dc74dcff25c956',
     'cloud-adapter.js': '9713943a80008f625000d6fac2440fb9395f9e6e2c1fd09e820a399c5c34379f',
-    'cloud-security-hotfix.js': '6e3cc3e67d6fbfac12de22c8bbba263a3df25ca303bae88bf0648cbc7e23370f',
+    'cloud-security-hotfix.js': '157c43b5db3f3c79e29895bed720d72dd86bc3ddf110c32bdc833f4a0a5f0fb8',
     'cloud-p1-overrides.js': 'e50e05322a0d56e78bf112a52be08ff54263f4ce88cb0b9b91f6613722b8ccab',
     'cloud-ui-action-bridge.js': '12258783b11b7ddb5193f20abedabc4234731b4f11c3f5f00016f9ae4483cb72',
 }
