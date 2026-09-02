@@ -21,24 +21,33 @@ function extractMethod(name){
 }
 
 const strictSource=extractMethod('financeCompanySummaryCostGroups');
+const costGroupsSource=extractMethod('financeCostGroups');
 const textSource=extractMethod('financeCostText');
+
 if(!strictSource.includes("['COMPANY','COMPANY_PROJECT']"))throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: strict scope allowlist drifted');
 if(!strictSource.includes("c.clientId?'CLIENT'"))throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: client ownership must override stale company scope');
 for(const forbidden of ['ALLOCATE_SERVICE','ALLOCATE_SPEND','financeCompanyNonClientCostGroups','financeActivePeriodSnapshot']){
   if(strictSource.includes(forbidden))throw new Error(`BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: strict authority contains forbidden dependency ${forbidden}`);
 }
-if(!textSource.includes('financeCompanySummaryCostGroups()'))throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: total-cost card does not invoke strict authority method');
+
+const allBinding="if(this.financeClientFilter==='ALL')return this.financeCompanySummaryCostGroups";
+if(!costGroupsSource.includes(allBinding))throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: financeCostGroups ALL binding does not use strict company-only authority');
+if(costGroupsSource.indexOf(allBinding)>costGroupsSource.indexOf('financeActiveSnapshotScope'))throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: strict ALL binding must run before snapshot fallback');
+if(!textSource.includes('financeCompanySummaryCostGroups'))throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: total-cost text does not use strict authority');
+if(textSource.includes('financeCompanySummaryCostGroups()'))throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: computed strict authority is incorrectly called as a method');
 for(const forbidden of ['financeCompanyNonClientCostGroups','financeCostGroups','financeClientFilter']){
-  if(textSource.includes(forbidden))throw new Error(`BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: total-cost card still depends on ${forbidden}`);
+  if(textSource.includes(forbidden))throw new Error(`BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: total-cost text still depends on ${forbidden}`);
 }
 
 const strictMethod=vm.runInNewContext(`({${strictSource}})`,{Number,String,Object,Array},{timeout:1000}).financeCompanySummaryCostGroups;
+const costGroupsMethod=vm.runInNewContext(`({${costGroupsSource}})`,{Number,String,Object,Array},{timeout:1000}).financeCostGroups;
 const textMethod=vm.runInNewContext(`({${textSource}})`,{Number,String,Object,Array},{timeout:1000}).financeCostText;
 const subject={
   financeClientFilter:'ALL',
   financeCostGroups:{CNY:920},
   financeCompanyNonClientCostGroups:{CNY:120},
   financeActivePeriodSnapshot:{company:{companyPublicCostGroups:{CNY:999},companyProjectCostGroups:{CNY:999}}},
+  financeActiveSnapshotScope:{costGroups:{CNY:999}},
   financeCosts:[
     {date:'2026-09-01',scope:'COMPANY',amount:50,currency:'CNY'},
     {date:'2026-09-02',scope:'COMPANY_PROJECT',amount:30,currency:'CNY'},
@@ -51,14 +60,23 @@ const subject={
   financeDateMatch(date){return /^2026-09-/.test(String(date||''));},
   spendGroupsText(groups){return Object.entries(groups||{}).map(([cur,value])=>`${cur}:${value}`).join('|');},
 };
-subject.financeCompanySummaryCostGroups=function(){return strictMethod.call(subject);};
-const strict=subject.financeCompanySummaryCostGroups();
+
+const strict=strictMethod.call(subject);
 if(JSON.stringify(strict)!==JSON.stringify({CNY:80}))throw new Error(`BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: strict total expected CNY 80, actual ${JSON.stringify(strict)}`);
-if(textMethod.call(subject)!=='CNY:80')throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: ALL card did not exclude client/allocation costs from fixture');
+subject.financeCompanySummaryCostGroups=strict;
+
+const allGroups=costGroupsMethod.call(subject);
+if(JSON.stringify(allGroups)!==JSON.stringify({CNY:80}))throw new Error(`BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: live financeCostGroups ALL binding expected CNY 80, actual ${JSON.stringify(allGroups)}`);
+if(textMethod.call(subject)!=='CNY:80')throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: total-cost text did not render strict company-only amount');
+
+// The strict company total must not change when a client happens to be selected in
+// other finance controls. The displayed ALL summary binding above is what the live
+// template consumes, while selected-client cost semantics remain in the original
+// financeCostGroups body after the early ALL return.
 subject.financeClientFilter='c1';
-if(textMethod.call(subject)!=='CNY:80')throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: selected-client filter leaked client cost into total-cost card');
+if(textMethod.call(subject)!=='CNY:80')throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: total-cost text changed across client filters');
 subject.financeClientFilter='c2';
-if(textMethod.call(subject)!=='CNY:80')throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: total-cost card changed across client filters');
+if(textMethod.call(subject)!=='CNY:80')throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: total-cost text changed across client filters');
 
 // Legacy locked-period fallback is safe only while source cost mutation remains
 // fail-closed after month close. Keep those prerequisites mechanically guarded.
@@ -79,4 +97,4 @@ const copy='仅统计公司公共成本 + 公司项目成本；详细构成在�
 if(registry.split(copy).length-1!==1)throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: strict card copy missing or duplicated');
 if(registry.includes('已包含公司成本 + 公司项目成本；详细构成在下方成本模块查看。'))throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: broad company-cost copy remains');
 
-console.log('BUSINESS_FINANCE_STRICT_COMPANY_COST_OK: total-card=COMPANY+COMPANY_PROJECT-only; client-owned+service-allocation+spend-allocation=excluded; clientId-precedence=true; client-filter-invariant=true; locked-history-prerequisites=guarded');
+console.log('BUSINESS_FINANCE_STRICT_COMPANY_COST_OK: live financeCostGroups ALL binding=COMPANY+COMPANY_PROJECT-only; client-owned+service-allocation+spend-allocation=excluded; clientId-precedence=true; locked-history-prerequisites=guarded');
