@@ -102,5 +102,5 @@ print(
     'same-origin-app-js=hash-pinned; same-origin-app-css=hash-pinned; '
     'same-origin-vendor-js=hash-pinned; vue-runtime-only+renders=hash-pinned; vue-compiler=absent; '
     'same-origin-fontawesome=hash-pinned; same-origin-inter=hash-pinned; '
-    'corp=same-origin; robots=noindex+nofollow=noarchive; failopen_404=guarded; static_headers=guarded'
+    'corp=same-origin; robots=noindex+nofollow+noarchive; failopen_404=guarded; static_headers=guarded'
 )
