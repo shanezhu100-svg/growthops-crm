@@ -17,7 +17,8 @@ if missing:
 final_required = (
     "isCredentialSummaryContext=()=>vm.currentPage==='assets'||vm.currentPage==='client-detail'",
     "if(vm.currentPage==='client-form'){\n      const formId=clientFormCredentialId();",
-    "if(!formId||formId==='__legacy__')return null;",
+    "if(formId==='__legacy__'){",
+    "if(!formId)return null;",
     "if(vm.currentPage==='assets'){\n      const assetsId=vm.selectedAssetsClientId;",
     "const formControl=(cell.matches?.('input,textarea,select')?cell:null)",
     "if(formControl)continue;",
@@ -36,5 +37,6 @@ for forbidden in (
 print(
     'NEW_CLIENT_CREDENTIAL_ISOLATION_SOURCE_OK: '
     'create-form-id-empty=context+prefetch-denied; edit-form-id=authoritative; '
-    'preboot=mutation-controls-bypassed; stale-selected-client=non-authoritative'
+    'preboot=mutation-controls-bypassed; stale-selected-client=non-authoritative; '
+    'legacy-no-form=compatibility-fallback'
 )
