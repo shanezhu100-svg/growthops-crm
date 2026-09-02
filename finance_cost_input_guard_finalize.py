@@ -76,16 +76,20 @@ for path in files:
         found['createReceivableForClientMonth'] += 1
         start, end = bounds
         source = text[start:end]
-        old = "if(!client||client.archived||!month||(client.billingMode||'FULL_MONTH')==='MANUAL'||Number(client.monthlyFee||0)<=0||this.isMonthLocked(month))return 0;"
-        new = (
+        monthly_old = "if(!client||client.archived||!month||(client.billingMode||'FULL_MONTH')==='MANUAL'||Number(client.monthlyFee||0)<=0||this.isMonthLocked(month))return 0;"
+        monthly_new = (
             "const receivableMonthlyFeeCheck=Number(client&&client.monthlyFee||0);"
             "if(!client||client.archived||!month||(client.billingMode||'FULL_MONTH')==='MANUAL'||!Number.isFinite(receivableMonthlyFeeCheck)||receivableMonthlyFeeCheck<=0||this.isMonthLocked(month))return 0;"
         )
-        if source.count(old) != 1:
-            fail(f'createReceivableForClientMonth monthly-fee anchor expected once, found {source.count(old)}')
-        if 'receivableMonthlyFeeCheck=' in source:
-            fail('createReceivableForClientMonth already contains finite monthly-fee guard')
-        source = source.replace(old, new, 1)
+        amount_old = "const amount=this.financeServiceFeeForClientMonth(client,month);if(amount<=0)return 0;"
+        amount_new = "const amount=this.financeServiceFeeForClientMonth(client,month);if(!Number.isFinite(amount)||amount<=0)return 0;"
+        if source.count(monthly_old) != 1:
+            fail(f'createReceivableForClientMonth monthly-fee anchor expected once, found {source.count(monthly_old)}')
+        if source.count(amount_old) != 1:
+            fail(f'createReceivableForClientMonth calculated-amount anchor expected once, found {source.count(amount_old)}')
+        if 'receivableMonthlyFeeCheck=' in source or '!Number.isFinite(amount)||amount<=0' in source:
+            fail('createReceivableForClientMonth finite guards already present')
+        source = source.replace(monthly_old, monthly_new, 1).replace(amount_old, amount_new, 1)
         text = text[:start] + source + text[end:]
 
     if text != original:
@@ -101,7 +105,7 @@ if not changed:
 print(
     'FINANCE_COST_INPUT_GUARD_FINALIZE_OK: '
     'manual-cost=finite-nonnegative; automatic-ip-monthly-fee=finite-positive; '
-    'automatic-receivable-monthly-fee=finite-positive; '
+    'automatic-receivable-monthly-fee+calculated-amount=finite-positive; '
     'nan+infinity=denied-before-cost-or-receivable-mutation; existing-lock+audit+persistence=preserved; '
     + 'artifacts=' + ','.join(f'{name}:{sha[:12]}' for name, sha in changed)
 )
