@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parent
 APP_DIR = ROOT / 'dist' / 'app'
 REGISTRY = ROOT / 'dist' / 'vendor' / 'vue-3.5.41.renders.js'
 OLD_COPY = '已包含公司成本 + 公司项目成本；详细构成在下方成本模块查看。'
-NEW_COPY = '仅统计公司公共成本 + 公司项目成本；详细构成在下方成本模块查看。'
+NEW_COPY = '公司项目 + 公司公共'
 
 
 def fail(message):
