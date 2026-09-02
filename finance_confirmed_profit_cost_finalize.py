@@ -143,3 +143,4 @@ import lead_client_stale_edit_guard_finalize  # noqa: E402,F401
 import lead_client_financial_input_guard_finalize  # noqa: E402,F401
 import ad_data_input_guard_finalize  # noqa: E402,F401
 import opening_cost_month_lock_guard_finalize  # noqa: E402,F401
+import opening_deal_lifecycle_guard_finalize  # noqa: E402,F401
