@@ -8,3 +8,4 @@ await import('./test_business_finance_settlement_mutations.mjs');
 await import('./test_business_finance_cost_mutations.mjs');
 await import('./test_business_opening_cost_month_lock.mjs');
 await import('./test_business_opening_deal_mutations.mjs');
+await import('./test_business_client_reminder_money_probe.mjs');
