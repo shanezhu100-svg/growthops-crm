@@ -6,6 +6,7 @@ ROOT = Path(__file__).resolve().parent
 APP_DIR = ROOT / 'dist' / 'app'
 REGISTRY = ROOT / 'dist' / 'vendor' / 'vue-3.5.41.renders.js'
 OLD_COPY = '已包含公司成本 + 公司项目成本；详细构成在下方成本模块查看。'
+STALE_COMPACT_COPY = '客户专属 + 公司项目 + 公司公共'
 NEW_COPY = '公司项目 + 公司公共'
 
 
@@ -99,10 +100,13 @@ if not REGISTRY.is_file():
 registry = REGISTRY.read_text(encoding='utf-8')
 if registry.count(OLD_COPY) != 1:
     fail(f'prior company-summary copy expected once, found {registry.count(OLD_COPY)}')
-new_copy_before = registry.count(NEW_COPY)
+stale_compact_count = registry.count(STALE_COMPACT_COPY)
+if stale_compact_count < 1:
+    fail('compact customer-cost summary copy missing before strict replacement')
 registry = registry.replace(OLD_COPY, NEW_COPY, 1)
-if registry.count(NEW_COPY) != new_copy_before + 1:
-    fail('strict summary copy replacement drifted')
+registry = registry.replace(STALE_COMPACT_COPY, NEW_COPY)
+if OLD_COPY in registry or STALE_COMPACT_COPY in registry:
+    fail('customer-cost wording remains in total-cost summary copy')
 REGISTRY.write_text(registry, encoding='utf-8')
 registry_sha = hashlib.sha256(registry.encode('utf-8')).hexdigest()
 
@@ -110,6 +114,7 @@ print(
     'FINANCE_STRICT_COMPANY_COST_SUMMARY_FINALIZE_OK: '
     'scope=COMPANY+COMPANY_PROJECT; client-owned+allocated-shared=excluded; '
     'clientId-precedence=true; all-template-bindings=financeCostGroups-strict; '
+    f'copy=company-only; compact-replacements={stale_compact_count}; '
     'selected-client-cost=preserved; legacy-locked-periods=raw-cost-recompute; '
     f'registry={registry_sha[:12]}; app=' + ','.join(f'{name}:{sha[:12]}' for name, sha in changed)
 )
