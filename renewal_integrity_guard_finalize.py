@@ -98,3 +98,5 @@ print(
     'valid-existing-renewals=preserved; '
     + 'artifact=' + ','.join(f'{name}:{sha[:12]}' for name, sha in changed)
 )
+
+import client_reminder_date_guard_finalize  # noqa: E402,F401
