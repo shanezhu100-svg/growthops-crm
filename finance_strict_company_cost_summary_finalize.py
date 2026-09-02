@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parent
 APP_DIR = ROOT / 'dist' / 'app'
 REGISTRY = ROOT / 'dist' / 'vendor' / 'vue-3.5.41.renders.js'
 OLD_COPY = '已包含公司成本 + 公司项目成本；详细构成在下方成本模块查看。'
-NEW_COPY = '仅统计公司公共成本 + 公司项目成本；详细构成在下方成本模块查看。'
+NEW_COPY = '公司项目 + 公司公共'
 
 
 def fail(message):
@@ -99,9 +99,10 @@ if not REGISTRY.is_file():
 registry = REGISTRY.read_text(encoding='utf-8')
 if registry.count(OLD_COPY) != 1:
     fail(f'prior company-summary copy expected once, found {registry.count(OLD_COPY)}')
-if NEW_COPY in registry:
-    fail('strict summary copy already present')
+new_copy_before = registry.count(NEW_COPY)
 registry = registry.replace(OLD_COPY, NEW_COPY, 1)
+if registry.count(NEW_COPY) != new_copy_before + 1:
+    fail('strict summary copy replacement drifted')
 REGISTRY.write_text(registry, encoding='utf-8')
 registry_sha = hashlib.sha256(registry.encode('utf-8')).hexdigest()
 
