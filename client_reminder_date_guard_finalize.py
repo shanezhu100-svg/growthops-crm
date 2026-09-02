@@ -47,11 +47,11 @@ def method_bounds(text: str, name: str):
     fail(f'{name} closing brace missing')
 
 
-def calendar_guard(value_name: str, notice: str) -> str:
+def calendar_guard(value_name: str, notice: str, prefix: str) -> str:
     return (
-        f"const dateMatch=/^(\\d{{4}})-(\\d{{2}})-(\\d{{2}})$/.exec({value_name}),"
-        f"dateObj=dateMatch?new Date(Date.UTC(Number(dateMatch[1]),Number(dateMatch[2])-1,Number(dateMatch[3]))):null;"
-        f"if(!dateMatch||dateObj.getUTCFullYear()!==Number(dateMatch[1])||dateObj.getUTCMonth()!==Number(dateMatch[2])-1||dateObj.getUTCDate()!==Number(dateMatch[3]))"
+        f"const {prefix}Match=/^(\\d{{4}})-(\\d{{2}})-(\\d{{2}})$/.exec({value_name}),"
+        f"{prefix}Obj={prefix}Match?new Date(Date.UTC(Number({prefix}Match[1]),Number({prefix}Match[2])-1,Number({prefix}Match[3]))):null;"
+        f"if(!{prefix}Match||{prefix}Obj.getUTCFullYear()!==Number({prefix}Match[1])||{prefix}Obj.getUTCMonth()!==Number({prefix}Match[2])-1||{prefix}Obj.getUTCDate()!==Number({prefix}Match[3]))"
         f"{{this.notify('{notice}');return}}"
     )
 
@@ -62,43 +62,68 @@ files = sorted(APP_DIR.glob('app-inline-*.js'))
 if not files:
     fail('no final app-inline JS artifacts')
 
-lock_old = "if(!this.assertMonthUnlocked(String(this.rechargeForm.date||this.localDateKey()).slice(0,7),'登记广告充值'))return;"
-lock_new = (
+recharge_lock_old = "if(!this.assertMonthUnlocked(String(this.rechargeForm.date||this.localDateKey()).slice(0,7),'登记广告充值'))return;"
+recharge_lock_new = (
     "const rechargeDate=String(this.rechargeForm.date||this.localDateKey());"
-    + calendar_guard('rechargeDate', '请输入有效的充值日期')
+    + calendar_guard('rechargeDate', '请输入有效的充值日期', 'rechargeDate')
     + "if(!this.assertMonthUnlocked(rechargeDate.slice(0,7),'登记广告充值'))return;"
 )
-row_old = "date:this.rechargeForm.date||this.localDateKey()"
-row_new = "date:rechargeDate"
+recharge_row_old = "date:this.rechargeForm.date||this.localDateKey()"
+recharge_row_new = "date:rechargeDate"
 
-found = 0
+renewal_old = "const newDue=String(this.renewalForm.newDueDate||'');if(!newDue){this.notify('请选择新的到期日');return}if(newDue<=String(item.dueDate||'')){"
+renewal_new = (
+    "const newDue=String(this.renewalForm.newDueDate||'');"
+    "if(!newDue){this.notify('请选择新的到期日');return}"
+    + calendar_guard('newDue', '请选择有效的到期日期', 'renewalDate')
+    + "if(newDue<=String(item.dueDate||'')){"
+)
+
+found = {'saveRecharge': 0, 'saveRenewal': 0}
 changed = []
 for path in files:
     text = path.read_text(encoding='utf-8')
-    bounds = method_bounds(text, 'saveRecharge')
-    if bounds is None:
-        continue
-    found += 1
-    start, end = bounds
-    source = text[start:end]
-    if '请输入有效的充值日期' in source:
-        fail('saveRecharge already contains calendar date guard')
-    if source.count(lock_old) != 1:
-        fail(f'saveRecharge lock/date anchor count={source.count(lock_old)}')
-    if source.count(row_old) != 1:
-        fail(f'saveRecharge persisted date anchor count={source.count(row_old)}')
-    patched = source.replace(lock_old, lock_new, 1).replace(row_old, row_new, 1)
-    text = text[:start] + patched + text[end:]
-    path.write_text(text, encoding='utf-8')
-    changed.append((path.name, hashlib.sha256(text.encode('utf-8')).hexdigest()))
+    original = text
 
-if found != 1:
-    fail(f'saveRecharge expected in exactly one app-inline artifact, found {found}')
+    bounds = method_bounds(text, 'saveRecharge')
+    if bounds is not None:
+        found['saveRecharge'] += 1
+        start, end = bounds
+        source = text[start:end]
+        if '请输入有效的充值日期' in source:
+            fail('saveRecharge already contains calendar date guard')
+        if source.count(recharge_lock_old) != 1:
+            fail(f'saveRecharge lock/date anchor count={source.count(recharge_lock_old)}')
+        if source.count(recharge_row_old) != 1:
+            fail(f'saveRecharge persisted date anchor count={source.count(recharge_row_old)}')
+        patched = source.replace(recharge_lock_old, recharge_lock_new, 1).replace(recharge_row_old, recharge_row_new, 1)
+        text = text[:start] + patched + text[end:]
+
+    bounds = method_bounds(text, 'saveRenewal')
+    if bounds is not None:
+        found['saveRenewal'] += 1
+        start, end = bounds
+        source = text[start:end]
+        if '请选择有效的到期日期' in source:
+            fail('saveRenewal already contains calendar date guard')
+        if source.count(renewal_old) != 1:
+            fail(f'saveRenewal date anchor count={source.count(renewal_old)}')
+        patched = source.replace(renewal_old, renewal_new, 1)
+        text = text[:start] + patched + text[end:]
+
+    if text != original:
+        path.write_text(text, encoding='utf-8')
+        changed.append((path.name, hashlib.sha256(text.encode('utf-8')).hexdigest()))
+
+for name, count in found.items():
+    if count != 1:
+        fail(f'{name} expected in exactly one app-inline artifact, found {count}')
 if len(changed) != 1:
     fail(f'expected one changed artifact, found {len(changed)}')
 
 print(
     'CLIENT_REMINDER_DATE_GUARD_FINALIZE_OK: '
-    'recharge=yyyy-mm-dd+calendar-valid-before-month-lock; empty=local-default; leap-day=preserved; '
+    'recharge=yyyy-mm-dd+calendar-valid-before-month-lock+empty-local-default; '
+    'renewal=yyyy-mm-dd+calendar-valid-before-state+billing; leap-day=preserved; '
     + 'artifact=' + ','.join(f'{name}:{sha[:12]}' for name, sha in changed)
 )
