@@ -160,15 +160,11 @@ if html.count(old_preboot) != 1:
     )
 html = html.replace(old_preboot, new_preboot, 1)
 
-for forbidden in (
-    "isCredentialSummaryContext=()=>isAccountAssetPage()",
-    "if(vm.currentPage==='client-detail'||vm.currentPage==='client-form')",
-):
-    if forbidden in security:
-        raise SystemExit(
-            'CREDENTIAL_CLEAR_REVEAL_LEGACY_CLEANUP_FAILED: '
-            'stale create-form credential authority survived: ' + forbidden
-        )
+if "isCredentialSummaryContext=()=>isAccountAssetPage()" in security:
+    raise SystemExit(
+        'CREDENTIAL_CLEAR_REVEAL_LEGACY_CLEANUP_FAILED: '
+        'body-text credential context survived final route scoping'
+    )
 for required in (
     "vm.currentPage==='assets'||vm.currentPage==='client-detail'",
     "if(vm.currentPage==='client-form'){\n      const formId=clientFormCredentialId();",
