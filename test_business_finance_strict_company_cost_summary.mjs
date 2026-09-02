@@ -94,7 +94,7 @@ for(const [name,marker] of [
 
 const registryPath=path.join(process.cwd(),'dist','vendor','vue-3.5.41.renders.js');
 const registry=fs.readFileSync(registryPath,'utf8');
-const copy='仅统计公司公共成本 + 公司项目成本；详细构成在下方成本模块查看。';
+const copy='公司项目 + 公司公共';
 if(registry.split(copy).length-1!==1)throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: strict card copy missing or duplicated');
 if(registry.includes('已包含公司成本 + 公司项目成本；详细构成在下方成本模块查看。'))throw new Error('BUSINESS_FINANCE_STRICT_COMPANY_COST_FAILED: broad company-cost copy remains');
 
