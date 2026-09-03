@@ -75,6 +75,7 @@ assertEq(sparse.cpaText, '—', 'CPA must not divide by zero conversions');
 assertEq(sparse.roasText, '2.00', 'ROAS remains valid when spend is positive');
 
 console.log(`BUSINESS_AD_METRICS_OK: source=${sourceFile}; cpm+frequency+ctr+cpc+cvr+cpa+roas=executed; zero-denominators=guarded`);
+await import('./test_business_sop_mutation_probe.mjs');
 await import('./test_business_ad_summary.mjs');
 await import('./test_business_finance_reconciliation_cost.mjs');
 await import('./test_business_finance_confirmed_profit_cost.mjs');
