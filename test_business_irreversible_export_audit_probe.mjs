@@ -26,8 +26,9 @@ function appSubject(kind){
     canManageFinance:()=>true,canManageProviders:()=>true,excelLibraryReady:()=>true,
     excelAppendJsonSheet:()=>{},excelSafeFilePart:v=>String(v),
     logAudit:()=>events.push('audit-created'),persist:()=>events.push('persist-enqueued'),notify:()=>events.push('success-notice'),
-    financePeriodLabel:'2026-09',financeClientFilter:'ALL',financeProviderFilter:'ALL',financeTotals:{spend:{},expected:{},actual:{}},financeReceivableTotals:{expected:{},paid:{},unpaid:{}},financeCostGroups:{},financeExpectedNetProfitGroups:{},financeActualNetProfitGroups:{},financeCashReceivedGroups:{},financeTotalAdSpendGroups:{},financeAttributedSpendGroups:{},financeUnassignedSpendGroups:{},financeNoRebateSpendGroups:{},financeActualProfitLabel:'待确认',financeRows:[],financeVisibleReceivables:[],financeVisibleCosts:[],financeReconciliationRows:[],
-    openingSpendPeriodLabel:'2026-09',openingSelectedProviderName:'全部开户商',openingSpendPeriod:'MONTH',openingMonthKey:'2026-09',openingQuarter:3,openingQuarterYear:'2026',openingYear:'2026',openingProviderFilter:'ALL',filteredOpeningDeals:[],
+    financePeriodLabel:'2026-09',financeClientFilter:'ALL',financeProviderFilter:'ALL',financeTotals:{spend:{},expected:{},actual:{}},financeReceivableTotals:{expected:{},paid:{},unpaid:{}},financeCostGroups:{},financeExpectedNetProfitGroups:{},financeActualNetProfitGroups:{},financeCashReceivedGroups:{},financeTotalAdSpendGroups:{},financeAttributedSpendGroups:{},financeUnassignedSpendGroups:{},financeNoRebateSpendGroups:{},financeActualProfitLabel:'待确认',financeRows:[],financeVisibleReceivables:[],financeVisibleCosts:[],financeReconciliationRows:[],financeReconciliations:[],
+    openingSpendPeriodLabel:'2026-09',openingSelectedProviderName:'全部开户商',openingSpendPeriod:'MONTH',openingMonthKey:'2026-09',openingQuarter:3,openingQuarterYear:'2026',openingYear:'2026',openingProviderFilter:'ALL',openingProviders:[],openingDeals:[],filteredOpeningProviders:[],filteredOpeningDeals:[],
+    openingDealsFinancialsForPeriod:()=>({spendGroups:{},rebateGroups:{}}),contactCurrentRebateRate:()=>0,rebatePolicyForContact:()=>null,localDateKey:()=> '2026-09-03',
   };
   const context={XLSX};
   // The shipped methods resolve XLSX as a global lexical, so execute them again with the probe global.
