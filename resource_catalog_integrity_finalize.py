@@ -120,7 +120,40 @@ def patch_delete_media_tool(source: str) -> str:
     return source
 
 
-found = {'saveExternalAsset': 0, 'deleteExternalAsset': 0, 'saveMediaTool': 0, 'deleteMediaTool': 0}
+def patch_delete_reminder_type(source: str) -> str:
+    identity_old = "if(type?.system){this.notify('系统提醒类型不能删除，只能修改显示名称');return}const used=this.reminderTypeUsageCount(type?.key);"
+    identity_new = (
+        "const reminderTypeByKey=()=>((this.reminderTypes||[]).find(t=>String(t.key)===String(type?.key))),currentType=reminderTypeByKey();"
+        "if(!currentType){this.notify('提醒类型不存在，请刷新页面后重试');return;}"
+        "if(currentType.system){this.notify('系统提醒类型不能删除，只能修改显示名称');return}"
+        "const used=this.reminderTypeUsageCount(currentType.key);"
+    )
+    if source.count(identity_old) != 1:
+        fail(f'deleteReminderType live-target anchor count={source.count(identity_old)}')
+    source = source.replace(identity_old, identity_new, 1)
+
+    delete_pattern = re.compile(r"this\.reminderTypes\s*=\s*this\.reminderTypes\.filter\(t\s*=>\s*[^;]+\);")
+    matches = list(delete_pattern.finditer(source))
+    if len(matches) != 1:
+        fail(f'deleteReminderType delete assignment count={len(matches)}')
+    delete_new = (
+        "const liveType=reminderTypeByKey();"
+        "if(!liveType){this.notify('提醒类型不存在，请刷新页面后重试');return;}"
+        "if(liveType.system){this.notify('系统提醒类型不能删除，只能修改显示名称');return;}"
+        "const liveUsed=this.reminderTypeUsageCount(liveType.key);"
+        "if(liveUsed){this.notify(`该类型仍有 ${liveUsed} 条独立提醒正在使用，请先删除或更换这些提醒`);return;}"
+        "this.reminderTypes=this.reminderTypes.filter(t=>String(t.key)!==String(liveType.key));"
+    )
+    return delete_pattern.sub(delete_new, source, count=1)
+
+
+found = {
+    'saveExternalAsset': 0,
+    'deleteExternalAsset': 0,
+    'saveMediaTool': 0,
+    'deleteMediaTool': 0,
+    'deleteReminderType': 0,
+}
 changed = []
 for path in files:
     text = path.read_text(encoding='utf-8')
@@ -137,6 +170,9 @@ for path in files:
     text, did_delete_tool = replace_method(text, 'deleteMediaTool', patch_delete_media_tool)
     if did_delete_tool:
         found['deleteMediaTool'] += 1
+    text, did_delete_reminder_type = replace_method(text, 'deleteReminderType', patch_delete_reminder_type)
+    if did_delete_reminder_type:
+        found['deleteReminderType'] += 1
     if text != original:
         path.write_text(text, encoding='utf-8')
         changed.append((path.name, hashlib.sha256(text.encode('utf-8')).hexdigest()))
@@ -153,6 +189,8 @@ print(
     'external-asset-delete=live-target-before-confirm+rechecked-on-confirm; '
     'media-tool-edit=existing-id-required; '
     'media-tool-delete=live-target-before-confirm+rechecked-on-confirm; '
-    'stale=denied-before-insert+persist+audit; '
+    'reminder-type-save=existing-canonical-stale-edit-guard; '
+    'reminder-type-delete=live-target+usage-before-confirm+rechecked-on-confirm; '
+    'stale=denied-before-mutation+persist+audit; '
     f'artifact={changed[0][0]}:{changed[0][1][:12]}'
 )
