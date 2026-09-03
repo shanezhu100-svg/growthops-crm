@@ -75,7 +75,15 @@ def patch_delete_external(source: str) -> str:
     return source.replace(callback_old, callback_new, 1)
 
 
-found = {'saveExternalAsset': 0, 'deleteExternalAsset': 0}
+def patch_save_media_tool(source: str) -> str:
+    old = "if(payload.id){const i=this.mediaTools.findIndex(t=>t.id===payload.id);if(i>-1)this.mediaTools[i]=payload}else this.mediaTools.unshift({...payload,id:this.accountUid('tool')});this.persist();"
+    new = "if(payload.id){const i=this.mediaTools.findIndex(t=>t.id===payload.id);if(i<0){this.notify('该投放工具已不存在，请刷新页面后重试');return;}this.mediaTools[i]=payload}else this.mediaTools.unshift({...payload,id:this.accountUid('tool')});this.persist();"
+    if source.count(old) != 1:
+        fail(f'saveMediaTool stale-edit anchor count={source.count(old)}')
+    return source.replace(old, new, 1)
+
+
+found = {'saveExternalAsset': 0, 'deleteExternalAsset': 0, 'saveMediaTool': 0}
 changed = []
 for path in files:
     text = path.read_text(encoding='utf-8')
@@ -86,6 +94,9 @@ for path in files:
     text, did_delete_external = replace_method(text, 'deleteExternalAsset', patch_delete_external)
     if did_delete_external:
         found['deleteExternalAsset'] += 1
+    text, did_save_tool = replace_method(text, 'saveMediaTool', patch_save_media_tool)
+    if did_save_tool:
+        found['saveMediaTool'] += 1
     if text != original:
         path.write_text(text, encoding='utf-8')
         changed.append((path.name, hashlib.sha256(text.encode('utf-8')).hexdigest()))
@@ -100,6 +111,7 @@ print(
     'RESOURCE_CATALOG_INTEGRITY_FINALIZE_OK: '
     'external-asset-edit=existing-id-required; '
     'external-asset-delete=live-target-before-confirm+rechecked-on-confirm; '
+    'media-tool-edit=existing-id-required; '
     'stale=denied-before-insert+persist+audit; '
     f'artifact={changed[0][0]}:{changed[0][1][:12]}'
 )
