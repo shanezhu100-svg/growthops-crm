@@ -40,7 +40,7 @@ REQUIRED_STATIC_HEADERS = (
     'Content-Security-Policy:', 'X-Frame-Options:', 'X-Content-Type-Options:',
     'Referrer-Policy:', 'Permissions-Policy:', 'Cross-Origin-Opener-Policy:',
     'Cross-Origin-Resource-Policy: same-origin',
-    'X-Robots-Tag: noindex, nofollow,noarchive',
+    'X-Robots-Tag: noindex, nofollow, noarchive',
 )
 FORBIDDEN_404_MARKERS = (
     '<script', '<form', '<iframe', '<object', '<embed', '<link ', '/api/crm',
