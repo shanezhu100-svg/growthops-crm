@@ -29,7 +29,7 @@ old_delete_user = """  vm.deleteAuthUser=(user)=>{
     });
   };"""
 new_delete_user = """  vm.deleteAuthUser=(user)=>{
-    const resolve=()=>Array.isArray(vm.authUsers)?vm.authUsers.find(u=>String(u?.id)===String(user?.id)):null;
+    const resolve=()=>Array.isArray(vm.authUsers)&&vm.authUsers.length?vm.authUsers.find(u=>String(u?.id)===String(user?.id)):user;
     let target=resolve();
     if(vm.currentUser?.role!=='ADMIN'){vm.notify('只有管理员可以删除用户');return;}
     if(!target){vm.notify('用户状态已变化，请刷新后重试');return;}
