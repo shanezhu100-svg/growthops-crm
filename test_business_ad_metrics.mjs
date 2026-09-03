@@ -85,3 +85,4 @@ await import('./test_business_lead_lifecycle.mjs');
 await import('./test_business_client_delete_integrity.mjs');
 await import('./test_business_financial_input_bounds.mjs');
 await import('./test_business_ad_input_bounds.mjs');
+await import('./test_business_adapter_confirmation_toctou_probe.mjs');
