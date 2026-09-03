@@ -24,39 +24,82 @@ def method_bounds(text: str, name: str):
     return start, end
 
 
+def replace_method(text: str, name: str, patcher):
+    bounds = method_bounds(text, name)
+    if bounds is None:
+        return text, False
+    start, end = bounds
+    source = text[start:end]
+    patched = patcher(source)
+    if patched == source:
+        fail(f'{name} patch made no change')
+    return text[:start] + patched + text[end:], True
+
+
 if not APP_DIR.is_dir():
     fail('dist/app missing')
 files = sorted(APP_DIR.glob('app-inline-*.js'))
 if not files:
     fail('no final app-inline JS artifacts')
 
-found = 0
+
+def patch_save_external(source: str) -> str:
+    old = "if(isEdit){const i=client[key].findIndex(a=>String(a.id)===String(f.id));if(i>=0)client[key][i]=f;else client[key].unshift({...f,id:this.accountUid(type==='GOOGLE'?'google':'ig')})}else client[key].unshift({...f,id:this.accountUid(type==='GOOGLE'?'google':'ig')});"
+    new = "if(isEdit){const i=client[key].findIndex(a=>String(a.id)===String(f.id));if(i<0){this.notify('该账号资产已不存在，请刷新页面后重试');return;}client[key][i]=f}else client[key].unshift({...f,id:this.accountUid(type==='GOOGLE'?'google':'ig')});"
+    if source.count(old) != 1:
+        fail(f'saveExternalAsset stale-edit anchor count={source.count(old)}')
+    return source.replace(old, new, 1)
+
+
+def patch_delete_external(source: str) -> str:
+    head = "const isGoogle=type==='GOOGLE',key=isGoogle?'googleAccounts':'instagramAccounts',label=isGoogle?'Google':'Instagram';this.askConfirm("
+    replacement = (
+        "const isGoogle=type==='GOOGLE',key=isGoogle?'googleAccounts':'instagramAccounts',label=isGoogle?'Google':'Instagram';"
+        "const externalAssetById=()=>((client[key]||[]).find(a=>String(a.id)===String(account.id))),currentAccount=externalAssetById();"
+        "if(!currentAccount){this.notify('该账号资产已不存在，请刷新页面后重试');return;}"
+        "this.askConfirm("
+    )
+    if source.count(head) != 1:
+        fail(f'deleteExternalAsset live-target head anchor count={source.count(head)}')
+    source = source.replace(head, replacement, 1)
+    source = source.replace("account.accountName||label+' 账号'", "currentAccount.accountName||label+' 账号'", 1)
+    callback_old = "confirmText:'确认删除'},()=>{client[key]=(client[key]||[]).filter(a=>String(a.id)!==String(account.id));this.persist();this.logAudit(`删除 ${label} 账号`,`${client.name} · ${account.accountName||''}`);"
+    callback_new = (
+        "confirmText:'确认删除'},()=>{const liveAccount=externalAssetById();"
+        "if(!liveAccount){this.notify('该账号资产已不存在，请刷新页面后重试');return;}"
+        "client[key]=(client[key]||[]).filter(a=>String(a.id)!==String(liveAccount.id));"
+        "this.persist();this.logAudit(`删除 ${label} 账号`,`${client.name} · ${liveAccount.accountName||''}`);"
+    )
+    if source.count(callback_old) != 1:
+        fail(f'deleteExternalAsset confirmation recheck anchor count={source.count(callback_old)}')
+    return source.replace(callback_old, callback_new, 1)
+
+
+found = {'saveExternalAsset': 0, 'deleteExternalAsset': 0}
 changed = []
 for path in files:
     text = path.read_text(encoding='utf-8')
     original = text
-    bounds = method_bounds(text, 'saveExternalAsset')
-    if bounds is not None:
-        found += 1
-        start, end = bounds
-        source = text[start:end]
-        old = "if(isEdit){const i=client[key].findIndex(a=>String(a.id)===String(f.id));if(i>=0)client[key][i]=f;else client[key].unshift({...f,id:this.accountUid(type==='GOOGLE'?'google':'ig')})}else client[key].unshift({...f,id:this.accountUid(type==='GOOGLE'?'google':'ig')});"
-        new = "if(isEdit){const i=client[key].findIndex(a=>String(a.id)===String(f.id));if(i<0){this.notify('该账号资产已不存在，请刷新页面后重试');return;}client[key][i]=f}else client[key].unshift({...f,id:this.accountUid(type==='GOOGLE'?'google':'ig')});"
-        if source.count(old) != 1:
-            fail(f'saveExternalAsset stale-edit anchor count={source.count(old)}')
-        source = source.replace(old, new, 1)
-        text = text[:start] + source + text[end:]
+    text, did_save_external = replace_method(text, 'saveExternalAsset', patch_save_external)
+    if did_save_external:
+        found['saveExternalAsset'] += 1
+    text, did_delete_external = replace_method(text, 'deleteExternalAsset', patch_delete_external)
+    if did_delete_external:
+        found['deleteExternalAsset'] += 1
     if text != original:
         path.write_text(text, encoding='utf-8')
         changed.append((path.name, hashlib.sha256(text.encode('utf-8')).hexdigest()))
 
-if found != 1:
-    fail(f'saveExternalAsset expected in exactly one app-inline artifact, found {found}')
+for name, count in found.items():
+    if count != 1:
+        fail(f'{name} expected in exactly one app-inline artifact, found {count}')
 if len(changed) != 1:
     fail(f'expected exactly one changed artifact, found {len(changed)}')
 
 print(
     'RESOURCE_CATALOG_INTEGRITY_FINALIZE_OK: '
-    'external-asset-edit=existing-id-required; stale-edit=denied-before-insert+persist+audit; '
+    'external-asset-edit=existing-id-required; '
+    'external-asset-delete=live-target-before-confirm+rechecked-on-confirm; '
+    'stale=denied-before-insert+persist+audit; '
     f'artifact={changed[0][0]}:{changed[0][1][:12]}'
 )
