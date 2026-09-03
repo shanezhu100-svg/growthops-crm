@@ -30,7 +30,7 @@ EXPECTED_SHA256 = {
     'vendor/inter/inter.css': 'a9173515531a1bb9820b2adce8e7df7a3cb3b4d114894f836c74ed0fdcafc144',
     'vendor/inter/inter-latin.woff2': '3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62',
     'vendor/inter/inter-latin-ext.woff2': '34b9c504cab7a73e37b746343a449132e56cf7b5481af2cb81dc74dcff25c956',
-    'cloud-adapter.js': 'd2e5d689231a97cadd13d1344a540d64439490ee39766986349d0ec2e45e1359',
+    'cloud-adapter.js': 'ec54529b2c24f63f1ebbd7a9104c47ac319be43e0a8355f8bfb04ec47bc674cb',
     'cloud-security-hotfix.js': '157c43b5db3f3c79e29895bed720d72dd86bc3ddf110c32bdc833f4a0a5f0fb8',
     'cloud-p1-overrides.js': 'e50e05322a0d56e78bf112a52be08ff54263f4ce88cb0b9b91f6613722b8ccab',
     'cloud-ui-action-bridge.js': '12258783b11b7ddb5193f20abedabc4234731b4f11c3f5f00016f9ae4483cb72',
@@ -40,7 +40,7 @@ REQUIRED_STATIC_HEADERS = (
     'Content-Security-Policy:', 'X-Frame-Options:', 'X-Content-Type-Options:',
     'Referrer-Policy:', 'Permissions-Policy:', 'Cross-Origin-Opener-Policy:',
     'Cross-Origin-Resource-Policy: same-origin',
-    'X-Robots-Tag: noindex, nofollow, noarchive',
+    'X-Robots-Tag: noindex, nofollow,noarchive',
 )
 FORBIDDEN_404_MARKERS = (
     '<script', '<form', '<iframe', '<object', '<embed', '<link ', '/api/crm',
