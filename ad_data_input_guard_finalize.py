@@ -61,10 +61,6 @@ def patch_save_record(source: str) -> str:
 
 
 def patch_delete_record(source: str) -> str:
-    # The UI can hold a stale row while account data changes, and both the row and
-    # finance-month lock can change while a confirmation dialog is open. Validate
-    # current account membership before confirmation and again inside the callback;
-    # re-check the month lock at the actual mutation boundary as well.
     initial_anchor = "if(!client||!account||!record)return;if(!this.assertMonthUnlocked(String(record.date||'').slice(0,7),'删除广告数据'))return;"
     initial_replacement = (
         "if(!client||!account||!record)return;"
@@ -88,7 +84,22 @@ def patch_delete_record(source: str) -> str:
     return source.replace(callback_anchor, callback_replacement, 1)
 
 
-found = {'saveAdDataRecord': 0, 'deleteAdDataRecord': 0}
+def patch_save_spend(source: str) -> str:
+    # Preserve the legacy empty-value default of zero, but never let a negative or
+    # non-finite account spend enter durable workspace state.
+    anchor = "if(!account)return;account.adSpend=Number(account.adSpend||0);account.adSpendCurrency=account.adSpendCurrency||'USD';"
+    replacement = (
+        "if(!account)return;"
+        "const adSpendRaw=account.adSpend,adSpendValue=(adSpendRaw===null||adSpendRaw===undefined||adSpendRaw==='')?0:Number(adSpendRaw);"
+        "if(!Number.isFinite(adSpendValue)||adSpendValue<0){this.notify('请输入有效的广告消耗金额');return;}"
+        "account.adSpend=adSpendValue;account.adSpendCurrency=account.adSpendCurrency||'USD';"
+    )
+    if source.count(anchor) != 1:
+        fail(f'saveAdSpend numeric anchor count={source.count(anchor)}')
+    return source.replace(anchor, replacement, 1)
+
+
+found = {'saveAdDataRecord': 0, 'deleteAdDataRecord': 0, 'saveAdSpend': 0}
 changed = []
 for path in files:
     text = path.read_text(encoding='utf-8')
@@ -99,6 +110,9 @@ for path in files:
     text, did_delete = replace_method(text, 'deleteAdDataRecord', patch_delete_record)
     if did_delete:
         found['deleteAdDataRecord'] += 1
+    text, did_spend = replace_method(text, 'saveAdSpend', patch_save_spend)
+    if did_spend:
+        found['saveAdSpend'] += 1
     if text != original:
         path.write_text(text, encoding='utf-8')
         changed.append((path.name, hashlib.sha256(text.encode('utf-8')).hexdigest()))
@@ -113,6 +127,7 @@ print(
     'AD_DATA_INPUT_GUARD_FINALIZE_OK: '
     'record-input=spend+impressions+clicks+leads+conversions+revenue+fb-reach-finite-nonnegative; '
     'record-delete=stale-target-denied-before-confirm+rechecked-on-confirm+month-lock-rechecked-on-confirm; '
-    'invalid-record-input=denied-before-month-lock+mutation+sync+persist+audit; '
+    'account-ad-spend=finite-nonnegative+empty-zero-default; '
+    'invalid-values=denied-before-mutation+sync+persist+audit; '
     f'artifact={changed[0][0]}:{changed[0][1][:12]}'
 )
