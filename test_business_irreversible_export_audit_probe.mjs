@@ -31,7 +31,6 @@ function appSubject(kind){
     openingDealsFinancialsForPeriod:()=>({spendGroups:{},rebateGroups:{}}),contactCurrentRebateRate:()=>0,rebatePolicyForContact:()=>null,localDateKey:()=> '2026-09-03',
   };
   const context={XLSX};
-  // The shipped methods resolve XLSX as a global lexical, so execute them again with the probe global.
   const method=vm.runInNewContext(`({${extract(kind)}})`,context,{timeout:1000})[kind];
   return {subject:{...subject,[kind]:method},events};
 }
@@ -44,7 +43,6 @@ for(const name of ['exportFinanceExcel','exportRebateExcel']){
   if(file<audit)findings.push(`${name}: file delivery occurs before export audit is even created`);
 }
 
-// Final cloud-adapter full-backup export: its real DOM click must likewise not precede audit creation.
 const adapterPath=path.join(root,'dist','cloud-adapter.js');
 if(!fs.existsSync(adapterPath))throw new Error('BUSINESS_IRREVERSIBLE_EXPORT_AUDIT_PROBE_FAILED: final cloud-adapter missing');
 const adapter=fs.readFileSync(adapterPath,'utf8');
@@ -58,6 +56,7 @@ vm.runInNewContext(adapter.replace(bootAnchor,'\n})();'),{window,document,localS
 Object.assign(subject,{
   currentUser:{id:'admin',name:'Admin',role:'ADMIN'},
   collectBackupPayload:()=>({clients:[],auditLogs:[],backupSnapshots:[],authUsers:[]}),
+  localDateKey:()=> '2026-09-03',
   logAudit:()=>events.push('audit-created'),persist:()=>events.push('persist-enqueued'),notify:()=>events.push('success-notice'),
 });
 subject.downloadFullBackup();
