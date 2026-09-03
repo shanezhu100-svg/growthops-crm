@@ -7,7 +7,8 @@ if(!fs.existsSync(adapterPath))throw new Error('BUSINESS_LOGOUT_PERSISTENCE_BARR
 const adapter=fs.readFileSync(adapterPath,'utf8');
 for(const marker of [
   'async function flushSave()',
-  "await flushSave();}catch(e){vm.notify(`云端保存失败，已取消退出：",
+  "await flushSave();}catch(e){if(logoutAuditRows.length&&Array.isArray(vm.auditLogs))",
+  "vm.notify(`云端保存失败，已取消退出：",
   "rpc('crm_logout'",
 ])if(!adapter.includes(marker))throw new Error(`BUSINESS_LOGOUT_PERSISTENCE_BARRIER_FAILED: final adapter marker missing: ${marker}`);
 const bootAnchor='\n  boot();\n})();';
