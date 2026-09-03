@@ -1,7 +1,9 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import vm from 'node:vm';
 
-const source=fs.readFileSync('dist/cloud-adapter.js','utf8');
+const adapterPath=path.join(process.cwd(),'dist','cloud-adapter.js');
+const source=fs.readFileSync(adapterPath,'utf8');
 for(const marker of [
   'const auditBefore=new Set(Array.isArray(vm.auditLogs)?vm.auditLogs:[])',
   'const logoutAuditRows=Array.isArray(vm.auditLogs)?vm.auditLogs.filter(row=>!auditBefore.has(row)):[]',
