@@ -85,8 +85,6 @@ def patch_delete_record(source: str) -> str:
 
 
 def patch_save_spend(source: str) -> str:
-    # Preserve the legacy empty-value default of zero, but never let a negative or
-    # non-finite account spend enter durable workspace state.
     anchor = "if(!account)return;account.adSpend=Number(account.adSpend||0);account.adSpendCurrency=account.adSpendCurrency||'USD';"
     replacement = (
         "if(!account)return;"
@@ -99,7 +97,31 @@ def patch_save_spend(source: str) -> str:
     return source.replace(anchor, replacement, 1)
 
 
-found = {'saveAdDataRecord': 0, 'deleteAdDataRecord': 0, 'saveAdSpend': 0}
+def patch_save_plan(source: str) -> str:
+    # Validate every ad-set before replacing campaign.adSets or touching saved flags,
+    # dates, persistence, or audit. Empty budget remains a deliberate blank; empty
+    # age bounds retain the legacy 18/65 defaults.
+    anchor = "campaign.adSets=(campaign.adSets||[]).map(adset=>({...adset,ageMin:Number(adset.ageMin||18),ageMax:Number(adset.ageMax||65),budget:adset.budget===''?'':Number(adset.budget||0)}));"
+    replacement = (
+        "const adPlanSets=campaign.adSets||[],adPlanInvalid=adPlanSets.some(adset=>{"
+        "const ageMinRaw=adset?.ageMin,ageMaxRaw=adset?.ageMax,budgetRaw=adset?.budget,"
+        "ageMin=(ageMinRaw===null||ageMinRaw===undefined||ageMinRaw==='')?18:Number(ageMinRaw),"
+        "ageMax=(ageMaxRaw===null||ageMaxRaw===undefined||ageMaxRaw==='')?65:Number(ageMaxRaw),"
+        "budget=budgetRaw===''?null:Number(budgetRaw??0);"
+        "return !Number.isFinite(ageMin)||!Number.isFinite(ageMax)||ageMin<18||ageMin>65||ageMax<18||ageMax>65||ageMin>ageMax||(budget!==null&&(!Number.isFinite(budget)||budget<0));"
+        "});"
+        "if(adPlanInvalid){this.notify('请输入有效的广告方案年龄范围和预算');return;}"
+        "campaign.adSets=adPlanSets.map(adset=>({...adset,"
+        "ageMin:(adset.ageMin===null||adset.ageMin===undefined||adset.ageMin==='')?18:Number(adset.ageMin),"
+        "ageMax:(adset.ageMax===null||adset.ageMax===undefined||adset.ageMax==='')?65:Number(adset.ageMax),"
+        "budget:adset.budget===''?'':Number(adset.budget??0)}));"
+    )
+    if source.count(anchor) != 1:
+        fail(f'saveAdsPlan normalization anchor count={source.count(anchor)}')
+    return source.replace(anchor, replacement, 1)
+
+
+found = {'saveAdDataRecord': 0, 'deleteAdDataRecord': 0, 'saveAdSpend': 0, 'saveAdsPlan': 0}
 changed = []
 for path in files:
     text = path.read_text(encoding='utf-8')
@@ -113,6 +135,9 @@ for path in files:
     text, did_spend = replace_method(text, 'saveAdSpend', patch_save_spend)
     if did_spend:
         found['saveAdSpend'] += 1
+    text, did_plan = replace_method(text, 'saveAdsPlan', patch_save_plan)
+    if did_plan:
+        found['saveAdsPlan'] += 1
     if text != original:
         path.write_text(text, encoding='utf-8')
         changed.append((path.name, hashlib.sha256(text.encode('utf-8')).hexdigest()))
@@ -125,9 +150,10 @@ if len(changed) != 1:
 
 print(
     'AD_DATA_INPUT_GUARD_FINALIZE_OK: '
-    'record-input=spend+impressions+clicks+leads+conversions+revenue+fb-reach-finite-nonnegative; '
-    'record-delete=stale-target-denied-before-confirm+rechecked-on-confirm+month-lock-rechecked-on-confirm; '
+    'record-input=finite-nonnegative; '
+    'record-delete=stale-target-denied+confirm-recheck+month-lock-recheck; '
     'account-ad-spend=finite-nonnegative+empty-zero-default; '
-    'invalid-values=denied-before-mutation+sync+persist+audit; '
+    'ad-plan=budget-finite-nonnegative+age-18-65+ordered+pre-mutation-validation; '
+    'valid-normalization+persistence=preserved; '
     f'artifact={changed[0][0]}:{changed[0][1][:12]}'
 )
