@@ -89,4 +89,4 @@ await import('./test_business_adapter_confirmation_integrity.mjs');
 await import('./test_business_backup_persistence_ack.mjs');
 await import('./test_business_logout_persistence_barrier.mjs');
 await import('./test_business_logout_audit_truthfulness.mjs');
-await import('./test_business_backup_snapshot_persistence_ack_probe.mjs');
+await import('./test_business_backup_snapshot_persistence_ack.mjs');
