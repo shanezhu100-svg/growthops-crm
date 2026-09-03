@@ -94,17 +94,27 @@ def patch_delete_media_tool(source: str) -> str:
     if source.count(head) != 1:
         fail(f'deleteMediaTool live-target head anchor count={source.count(head)}')
     source = source.replace(head, replacement, 1)
-    source = source.replace("tool.name", "currentTool.name", 1)
-    callback_old = "confirmText:'确认删除'},()=>{this.mediaTools=this.mediaTools.filter(t=>t.id!==tool.id);delete this.toolPasswordVisible[tool.id];this.persist();this.logAudit('删除投放工具',tool.name);"
+    message_anchor = "${tool.name}"
+    if source.count(message_anchor) != 1:
+        fail(f'deleteMediaTool message name anchor count={source.count(message_anchor)}')
+    source = source.replace(message_anchor, "${currentTool.name}", 1)
+    callback_head = "()=>{this.mediaTools=this.mediaTools.filter(t=>t.id!==tool.id);"
     callback_new = (
-        "confirmText:'确认删除'},()=>{const liveTool=mediaToolById();"
+        "()=>{const liveTool=mediaToolById();"
         "if(!liveTool){this.notify('该投放工具已不存在，请刷新页面后重试');return;}"
         "this.mediaTools=this.mediaTools.filter(t=>String(t.id)!==String(liveTool.id));"
-        "delete this.toolPasswordVisible[liveTool.id];this.persist();this.logAudit('删除投放工具',liveTool.name);"
     )
-    if source.count(callback_old) != 1:
-        fail(f'deleteMediaTool confirmation recheck anchor count={source.count(callback_old)}')
-    return source.replace(callback_old, callback_new, 1)
+    if source.count(callback_head) != 1:
+        fail(f'deleteMediaTool callback head anchor count={source.count(callback_head)}')
+    source = source.replace(callback_head, callback_new, 1)
+    password_anchor = "delete this.toolPasswordVisible[tool.id];"
+    if source.count(password_anchor) != 1:
+        fail(f'deleteMediaTool password cleanup anchor count={source.count(password_anchor)}')
+    source = source.replace(password_anchor, "delete this.toolPasswordVisible[liveTool.id];", 1)
+    audit_anchor = "this.logAudit('删除投放工具',tool.name);"
+    if source.count(audit_anchor) != 1:
+        fail(f'deleteMediaTool audit anchor count={source.count(audit_anchor)}')
+    return source.replace(audit_anchor, "this.logAudit('删除投放工具',liveTool.name);", 1)
 
 
 found = {'saveExternalAsset': 0, 'deleteExternalAsset': 0, 'saveMediaTool': 0, 'deleteMediaTool': 0}
