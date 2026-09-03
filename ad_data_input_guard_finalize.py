@@ -4,8 +4,6 @@ import re
 
 ROOT = Path(__file__).resolve().parent
 APP_DIR = ROOT / 'dist' / 'app'
-METHOD = 'saveAdDataRecord'
-GUARD_MARKER = 'const adRawNumericFields='
 
 
 def fail(message: str) -> None:
@@ -26,27 +24,31 @@ def method_bounds(text: str, name: str):
     return start, end
 
 
+def replace_method(text: str, name: str, patcher):
+    bounds = method_bounds(text, name)
+    if bounds is None:
+        return text, False
+    start, end = bounds
+    source = text[start:end]
+    patched = patcher(source)
+    if patched == source:
+        fail(f'{name} patch made no change')
+    return text[:start] + patched + text[end:], True
+
+
 if not APP_DIR.is_dir():
     fail('dist/app missing; run final runtime build first')
 files = sorted(APP_DIR.glob('app-inline-*.js'))
 if not files:
     fail('no final app-inline JS artifacts found')
 
-found = 0
-changed = []
-for path in files:
-    text = path.read_text(encoding='utf-8')
-    bounds = method_bounds(text, METHOD)
-    if bounds is None:
-        continue
-    found += 1
-    start, end = bounds
-    source = text[start:end]
-    if GUARD_MARKER in source:
-        fail(f'{METHOD} already contains ad raw numeric guard')
+
+def patch_save_record(source: str) -> str:
+    if 'const adRawNumericFields=' in source:
+        fail('saveAdDataRecord already contains ad raw numeric guard')
     anchor = 'if(!client||!account)return;'
     if source.count(anchor) != 1:
-        fail(f'{METHOD} expected one client/account anchor, found {source.count(anchor)}')
+        fail(f'saveAdDataRecord expected one client/account anchor, found {source.count(anchor)}')
     guard = (
         "const adRawNumericFields=['spend','impressions','clicks','leads','conversions','revenue'];"
         "if(this.selectedAdsPlatform==='FB')adRawNumericFields.push('reach');"
@@ -55,20 +57,103 @@ for path in files:
         "const numeric=Number(value);return !Number.isFinite(numeric)||numeric<0}))"
         "{this.notify('请输入有效的广告投放数值');return;}"
     )
-    patched = source.replace(anchor, anchor + guard, 1)
-    text = text[:start] + patched + text[end:]
-    path.write_text(text, encoding='utf-8')
-    changed.append((path.name, hashlib.sha256(text.encode('utf-8')).hexdigest()))
+    return source.replace(anchor, anchor + guard, 1)
 
-if found != 1:
-    fail(f'{METHOD} expected in exactly one app-inline artifact, found {found}')
+
+def patch_delete_record(source: str) -> str:
+    initial_anchor = "if(!client||!account||!record)return;if(!this.assertMonthUnlocked(String(record.date||'').slice(0,7),'删除广告数据'))return;"
+    initial_replacement = (
+        "if(!client||!account||!record)return;"
+        "const adDeleteRecordExists=()=>Array.isArray(account.adDataRecords)&&account.adDataRecords.some(r=>String(r.id)===String(record.id));"
+        "if(!adDeleteRecordExists()){this.notify('该广告数据记录已不存在，请刷新页面后重试');return;}"
+        "if(!this.assertMonthUnlocked(String(record.date||'').slice(0,7),'删除广告数据'))return;"
+    )
+    if source.count(initial_anchor) != 1:
+        fail(f'deleteAdDataRecord initial stale-target anchor count={source.count(initial_anchor)}')
+    source = source.replace(initial_anchor, initial_replacement, 1)
+
+    callback_anchor = "confirmText:'确认删除'},()=>{account.adDataRecords="
+    callback_replacement = (
+        "confirmText:'确认删除'},()=>{"
+        "if(!adDeleteRecordExists()){this.notify('该广告数据记录已不存在，请刷新页面后重试');return;}"
+        "if(!this.assertMonthUnlocked(String(record.date||'').slice(0,7),'删除广告数据'))return;"
+        "account.adDataRecords="
+    )
+    if source.count(callback_anchor) != 1:
+        fail(f'deleteAdDataRecord confirm callback anchor count={source.count(callback_anchor)}')
+    return source.replace(callback_anchor, callback_replacement, 1)
+
+
+def patch_save_spend(source: str) -> str:
+    anchor = "if(!account)return;account.adSpend=Number(account.adSpend||0);account.adSpendCurrency=account.adSpendCurrency||'USD';"
+    replacement = (
+        "if(!account)return;"
+        "const adSpendRaw=account.adSpend,adSpendValue=(adSpendRaw===null||adSpendRaw===undefined||adSpendRaw==='')?0:Number(adSpendRaw);"
+        "if(!Number.isFinite(adSpendValue)||adSpendValue<0){this.notify('请输入有效的广告消耗金额');return;}"
+        "account.adSpend=adSpendValue;account.adSpendCurrency=account.adSpendCurrency||'USD';"
+    )
+    if source.count(anchor) != 1:
+        fail(f'saveAdSpend numeric anchor count={source.count(anchor)}')
+    return source.replace(anchor, replacement, 1)
+
+
+def patch_save_plan(source: str) -> str:
+    # Validate every ad-set before replacing campaign.adSets or touching saved flags,
+    # dates, persistence, or audit. Empty budget remains a deliberate blank; empty
+    # age bounds retain the legacy 18/65 defaults.
+    anchor = "campaign.adSets=(campaign.adSets||[]).map(adset=>({...adset,ageMin:Number(adset.ageMin||18),ageMax:Number(adset.ageMax||65),budget:adset.budget===''?'':Number(adset.budget||0)}));"
+    replacement = (
+        "const adPlanSets=campaign.adSets||[],adPlanInvalid=adPlanSets.some(adset=>{"
+        "const ageMinRaw=adset?.ageMin,ageMaxRaw=adset?.ageMax,budgetRaw=adset?.budget,"
+        "ageMin=(ageMinRaw===null||ageMinRaw===undefined||ageMinRaw==='')?18:Number(ageMinRaw),"
+        "ageMax=(ageMaxRaw===null||ageMaxRaw===undefined||ageMaxRaw==='')?65:Number(ageMaxRaw),"
+        "budget=budgetRaw===''?null:Number(budgetRaw??0);"
+        "return !Number.isFinite(ageMin)||!Number.isFinite(ageMax)||ageMin<18||ageMin>65||ageMax<18||ageMax>65||ageMin>ageMax||(budget!==null&&(!Number.isFinite(budget)||budget<0));"
+        "});"
+        "if(adPlanInvalid){this.notify('请输入有效的广告方案年龄范围和预算');return;}"
+        "campaign.adSets=adPlanSets.map(adset=>({...adset,"
+        "ageMin:(adset.ageMin===null||adset.ageMin===undefined||adset.ageMin==='')?18:Number(adset.ageMin),"
+        "ageMax:(adset.ageMax===null||adset.ageMax===undefined||adset.ageMax==='')?65:Number(adset.ageMax),"
+        "budget:adset.budget===''?'':Number(adset.budget??0)}));"
+    )
+    if source.count(anchor) != 1:
+        fail(f'saveAdsPlan normalization anchor count={source.count(anchor)}')
+    return source.replace(anchor, replacement, 1)
+
+
+found = {'saveAdDataRecord': 0, 'deleteAdDataRecord': 0, 'saveAdSpend': 0, 'saveAdsPlan': 0}
+changed = []
+for path in files:
+    text = path.read_text(encoding='utf-8')
+    original = text
+    text, did_save = replace_method(text, 'saveAdDataRecord', patch_save_record)
+    if did_save:
+        found['saveAdDataRecord'] += 1
+    text, did_delete = replace_method(text, 'deleteAdDataRecord', patch_delete_record)
+    if did_delete:
+        found['deleteAdDataRecord'] += 1
+    text, did_spend = replace_method(text, 'saveAdSpend', patch_save_spend)
+    if did_spend:
+        found['saveAdSpend'] += 1
+    text, did_plan = replace_method(text, 'saveAdsPlan', patch_save_plan)
+    if did_plan:
+        found['saveAdsPlan'] += 1
+    if text != original:
+        path.write_text(text, encoding='utf-8')
+        changed.append((path.name, hashlib.sha256(text.encode('utf-8')).hexdigest()))
+
+for name, count in found.items():
+    if count != 1:
+        fail(f'{name} expected in exactly one app-inline artifact, found {count}')
 if len(changed) != 1:
     fail(f'expected exactly one changed artifact, found {len(changed)}')
 
 print(
     'AD_DATA_INPUT_GUARD_FINALIZE_OK: '
-    'common=spend+impressions+clicks+leads+conversions+revenue; fb=reach; '
-    'finite-nonnegative=required; empty+zero=preserved; '
-    'negative+nan+infinity=denied-before-month-lock+mutation+sync+persist+audit; '
+    'record-input=finite-nonnegative; '
+    'record-delete=stale-target-denied+confirm-recheck+month-lock-recheck; '
+    'account-ad-spend=finite-nonnegative+empty-zero-default; '
+    'ad-plan=budget-finite-nonnegative+age-18-65+ordered+pre-mutation-validation; '
+    'valid-normalization+persistence=preserved; '
     f'artifact={changed[0][0]}:{changed[0][1][:12]}'
 )
