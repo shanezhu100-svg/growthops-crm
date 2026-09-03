@@ -53,7 +53,7 @@ function makeRuntime(saveOutcome){
 {
   const {subject,calls}=makeRuntime('fail');
   await subject.logout();
-  eq(calls.requests.map(x=>x.rpc).join(','),'crm_save_state','failed logout RPC sequence');
+  eq(calls.requests.map(x=>x.rpc).join(','),'crm_save_state',`failed logout RPC sequence; notices=${calls.notify.join(' | ')}`);
   eq(subject.currentUser?.id,'admin-current','failed logout preserves active user');
   eq(subject.clients[0]?.id,'client-unsaved','failed logout preserves unsaved business state');
   eq(subject.currentPage,'system','failed logout preserves route');
@@ -67,7 +67,7 @@ function makeRuntime(saveOutcome){
 {
   const {subject,calls}=makeRuntime('success');
   await subject.logout();
-  eq(calls.requests.map(x=>x.rpc).join(','),'crm_save_state,crm_logout','successful logout RPC order');
+  eq(calls.requests.map(x=>x.rpc).join(','),'crm_save_state,crm_logout',`successful logout RPC order; notices=${calls.notify.join(' | ')}`);
   const save=calls.requests[0];
   const savedState=save.args?.p_state;
   ok(savedState&&Array.isArray(savedState.auditLogs),'successful logout save must include audit state');
