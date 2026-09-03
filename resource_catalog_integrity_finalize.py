@@ -94,23 +94,30 @@ def patch_delete_media_tool(source: str) -> str:
     if source.count(head) != 1:
         fail(f'deleteMediaTool live-target head anchor count={source.count(head)}')
     source = source.replace(head, replacement, 1)
-    callback_head = "()=>{this.mediaTools=this.mediaTools.filter(t=>t.id!==tool.id);"
-    callback_new = (
-        "()=>{const liveTool=mediaToolById();"
+
+    delete_pattern = re.compile(r"this\.mediaTools\s*=\s*this\.mediaTools\.filter\(t\s*=>\s*[^;]+\);")
+    matches = list(delete_pattern.finditer(source))
+    if len(matches) != 1:
+        fail(f'deleteMediaTool delete assignment count={len(matches)}')
+    delete_new = (
+        "const liveTool=mediaToolById();"
         "if(!liveTool){this.notify('该投放工具已不存在，请刷新页面后重试');return;}"
         "this.mediaTools=this.mediaTools.filter(t=>String(t.id)!==String(liveTool.id));"
     )
-    if source.count(callback_head) != 1:
-        fail(f'deleteMediaTool callback head anchor count={source.count(callback_head)}')
-    source = source.replace(callback_head, callback_new, 1)
-    password_anchor = "delete this.toolPasswordVisible[tool.id];"
-    if source.count(password_anchor) != 1:
-        fail(f'deleteMediaTool password cleanup anchor count={source.count(password_anchor)}')
-    source = source.replace(password_anchor, "delete this.toolPasswordVisible[liveTool.id];", 1)
-    audit_anchor = "this.logAudit('删除投放工具',tool.name);"
-    if source.count(audit_anchor) != 1:
-        fail(f'deleteMediaTool audit anchor count={source.count(audit_anchor)}')
-    return source.replace(audit_anchor, "this.logAudit('删除投放工具',liveTool.name);", 1)
+    source = delete_pattern.sub(delete_new, source, count=1)
+
+    password_pattern = re.compile(r"delete\s+this\.toolPasswordVisible\[[^\]]+\];")
+    password_matches = list(password_pattern.finditer(source))
+    if len(password_matches) != 1:
+        fail(f'deleteMediaTool password cleanup count={len(password_matches)}')
+    source = password_pattern.sub("delete this.toolPasswordVisible[liveTool.id];", source, count=1)
+
+    audit_pattern = re.compile(r"this\.logAudit\('删除投放工具'\s*,\s*[^)]+\);")
+    audit_matches = list(audit_pattern.finditer(source))
+    if len(audit_matches) != 1:
+        fail(f'deleteMediaTool audit count={len(audit_matches)}')
+    source = audit_pattern.sub("this.logAudit('删除投放工具',liveTool.name);", source, count=1)
+    return source
 
 
 found = {'saveExternalAsset': 0, 'deleteExternalAsset': 0, 'saveMediaTool': 0, 'deleteMediaTool': 0}
