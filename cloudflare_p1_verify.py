@@ -14,7 +14,7 @@ EXPECTED_SHA256 = {
     'app/app-style-01.css': '33a4a117d6b9e820b389e09d87a4ccb94242fb043e80ea087f72c17f46861a70',
     'app/app-style-02.css': '01ed16d03067a8879b877440574fbc6d98af53e0909685e1a23271169c149997',
     'app/app-style-03.css': '64bd5db676657f40c7962080ce62f3b74125865c3f084a67ce21d0fc77ed00b6',
-    'app/app-style-04.css': '59de39d8388f561c5229cfa39f7d4c5299b34997c21e3c142d9ced067850a11e/201B'.split('/')[0],
+    'app/app-style-04.css': '59de39d8388f561c5229cfa39f7d4c5299b34997c21e3c142d9ced067850a11e',
     'vendor/vue-3.5.41.runtime.global.js': '45c904194aaf24112c8f4fc4386b87e107a32eede80c410ce93be459ebdee088',
     'vendor/vue-3.5.41.renders.js': '732e24b96d4c1a280026d58cb6edb485afbfe6feffb5284df27123360bdb2cc4',
     'vendor/xlsx-0.18.5.full.min.js': 'c9506197caf809a075b6dee1da0d36fb19da7158ffe8a88e7b0c96c5d8623c99',
