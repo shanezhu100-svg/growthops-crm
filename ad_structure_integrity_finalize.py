@@ -138,7 +138,40 @@ def patch_add_creative(source: str) -> str:
     return source.replace(anchor, replacement, 1)
 
 
-found = {'editAdCampaign': 0, 'removeAdCampaign': 0, 'addAdSet': 0, 'removeAdSet': 0, 'addCreative': 0}
+def patch_remove_creative(source: str) -> str:
+    head_anchor = "if(!adset||!ad)return;this.askConfirm("
+    head_replacement = (
+        "if(!adset||!ad)return;"
+        "const adSetById=()=>{const matches=(this.selectedAdsClient?.adCampaigns||[]).flatMap(c=>(c.adSets||[]).filter(s=>String(s.id)===String(adset.id)));return matches.length===1?matches[0]:null;};"
+        "const adById=()=>{const liveAdSet=adSetById(),matches=(liveAdSet?.ads||[]).filter(x=>String(x.id)===String(ad.id));return matches.length===1?matches[0]:null;};"
+        "const currentAdSet=adSetById(),currentAd=adById();"
+        "if(!currentAdSet||!currentAd){this.notify('该广告已不存在或无法唯一定位，请刷新页面后重试');return;}"
+        "this.askConfirm("
+    )
+    if source.count(head_anchor) != 1:
+        fail(f'removeCreative live-target head anchor count={source.count(head_anchor)}')
+    source = source.replace(head_anchor, head_replacement, 1)
+    source = source.replace("ad.name||'未命名广告'", "currentAd.name||'未命名广告'", 1)
+    callback_old = "confirmText:'确认删除'},()=>{adset.ads=(adset.ads||[]).filter(x=>String(x.id)!==String(ad.id));this.persist();this.logAudit('删除广告',ad.name||'未命名广告');"
+    callback_new = (
+        "confirmText:'确认删除'},()=>{const liveAdSet=adSetById(),liveAd=adById();"
+        "if(!liveAdSet||!liveAd){this.notify('该广告已不存在或无法唯一定位，请刷新页面后重试');return;}"
+        "liveAdSet.ads=(liveAdSet.ads||[]).filter(x=>String(x.id)!==String(liveAd.id));"
+        "this.persist();this.logAudit('删除广告',liveAd.name||'未命名广告');"
+    )
+    if source.count(callback_old) != 1:
+        fail(f'removeCreative confirmation recheck anchor count={source.count(callback_old)}')
+    return source.replace(callback_old, callback_new, 1)
+
+
+found = {
+    'editAdCampaign': 0,
+    'removeAdCampaign': 0,
+    'addAdSet': 0,
+    'removeAdSet': 0,
+    'addCreative': 0,
+    'removeCreative': 0,
+}
 changed = []
 for path in files:
     text = path.read_text(encoding='utf-8')
@@ -158,6 +191,9 @@ for path in files:
     text, did_add_creative = replace_method(text, 'addCreative', patch_add_creative)
     if did_add_creative:
         found['addCreative'] += 1
+    text, did_remove_creative = replace_method(text, 'removeCreative', patch_remove_creative)
+    if did_remove_creative:
+        found['removeCreative'] += 1
     if text != original:
         path.write_text(text, encoding='utf-8')
         changed.append((path.name, hashlib.sha256(text.encode('utf-8')).hexdigest()))
@@ -175,6 +211,7 @@ print(
     'adset-add=live-campaign-required; '
     'adset-delete=live-target-before-confirm+rechecked-on-confirm; '
     'creative-add=unique-live-adset-required; '
+    'creative-delete=unique-live-target-before-confirm+rechecked-on-confirm; '
     'stale=denied-before-mutation+persist+audit; '
     f'artifact={changed[0][0]}:{changed[0][1][:12]}'
 )
