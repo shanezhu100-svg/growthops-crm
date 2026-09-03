@@ -53,10 +53,11 @@ function makeRuntime({role='ADMIN',confirm=true,backupSnapshots=[],payload=null}
   eq(subject.backupSnapshots.length,5,'snapshot cap');ok(subject.backupSnapshots[0]===snap,'snapshot newest first');eq(snap.backupDate,'2026-09-01','snapshot date');
   eq(snap.payload.version,'growth-ops-cloud-backup-v4-redacted','snapshot version');eq(snap.payload.redacted,true,'snapshot redacted marker');ok(!('authUsers' in snap.payload),'snapshot auth isolation');ok(!('backupSnapshots' in snap.payload),'snapshot nesting isolation');
   ok(!('loginAccount' in snap.payload.clients[0]),'snapshot loginAccount redacted');ok(!('password' in snap.payload.clients[0]),'snapshot password redacted');ok(!('twoFactor' in snap.payload.clients[0].nested),'snapshot 2FA redacted');
-  eq(calls.persist,1,'snapshot persist');eq(calls.storage,1,'snapshot storage');eq(calls.audit.length,0,'silent snapshot audit');eq(calls.fetch,0,'snapshot network');
+  eq(calls.persist,1,'silent protection snapshot persist signal');eq(calls.storage,1,'snapshot storage');eq(calls.audit.length,0,'silent snapshot audit');eq(calls.fetch,0,'silent protection snapshot network remains deferred for enclosing atomic operation');
 }
 {
-  const {subject,calls}=makeRuntime();subject.createBackupSnapshot(true);eq(calls.persist,2,'notified snapshot persist');eq(calls.audit[0][0],'创建数据快照','snapshot audit');eq(calls.notify.at(-1),'已创建云端数据快照','snapshot notice');eq(calls.fetch,0,'notified snapshot remains debounced in harness');
+  const {subject,calls}=makeRuntime();const pending=subject.createBackupSnapshot(true);ok(pending&&typeof pending.then==='function','manual snapshot create async ACK');ok(!calls.notify.includes('已创建云端数据快照'),'manual snapshot notice waits for ACK');await pending;
+  eq(calls.audit[0][0],'创建数据快照','snapshot audit');eq(calls.notify.at(-1),'已创建云端数据快照','snapshot notice after ACK');eq(calls.fetch,1,'manual snapshot create acknowledged save');
 }
 {
   const {subject,calls}=makeRuntime({role:'OPS',backupSnapshots:[{id:'a',name:'A'}]});subject.deleteBackupSnapshot(subject.backupSnapshots[0]);eq(subject.backupSnapshots.length,1,'non-admin delete');eq(calls.confirm.length,0,'non-admin confirm');eq(calls.persist,0,'non-admin persist');eq(calls.fetch,0,'non-admin delete network');
@@ -65,7 +66,7 @@ function makeRuntime({role='ADMIN',confirm=true,backupSnapshots=[],payload=null}
   const {subject,calls,waitConfirm}=makeRuntime({confirm:false,backupSnapshots:[{id:'a',name:'A'}]});subject.deleteBackupSnapshot(subject.backupSnapshots[0]);await waitConfirm();eq(subject.backupSnapshots.length,1,'cancel delete');eq(calls.persist,0,'cancel delete persist');eq(calls.fetch,0,'cancel delete network');
 }
 {
-  const {subject,calls,waitConfirm}=makeRuntime({backupSnapshots:[{id:'a',name:'A'},{id:'b',name:'B'}]});subject.deleteBackupSnapshot(subject.backupSnapshots[0]);await waitConfirm();eq(subject.backupSnapshots.length,1,'delete length');eq(subject.backupSnapshots[0].id,'b','delete scope');eq(calls.persist,1,'delete persist');eq(calls.audit.length,1,'delete audit');eq(calls.fetch,0,'delete remains debounced in harness');
+  const {subject,calls,waitConfirm}=makeRuntime({backupSnapshots:[{id:'a',name:'A'},{id:'b',name:'B'}]});subject.deleteBackupSnapshot(subject.backupSnapshots[0]);await waitConfirm();eq(subject.backupSnapshots.length,1,'delete length');eq(subject.backupSnapshots[0].id,'b','delete scope');eq(calls.audit.length,1,'delete audit');eq(calls.notify.at(-1),'云端快照已删除','delete notice after ACK');eq(calls.fetch,1,'manual snapshot delete acknowledged save');
 }
 
 const restorePayload={clients:[{id:'client-restored',name:'Restored Client'}],standaloneAlerts:[],reminderTypes:[],dismissedAlerts:[],leads:[],openingProviders:[],openingDeals:[],financeActualRebates:[],financeReceivables:[],financeCosts:[],
@@ -103,4 +104,4 @@ const importPayload={...restorePayload,clients:[{id:'client-restored',name:'Rest
   eq(calls.audit.at(-1)[0],'导入脱敏全量备份','import audit');eq(calls.audit.at(-1)[1],'backup.json','import filename');eq(calls.notify.at(-1),'脱敏备份已导入并同步云端；Vault 凭证未由备份覆盖','import notice');eq(calls.fetch,1,'import acknowledged final cloud save');
 }
 
-console.log('BUSINESS_BACKUP_MUTATIONS_OK: authority=final-cloud-adapter; snapshot=v4-redacted+cap+debounced; delete=admin+confirm+id-scope; restore=protect+apply+auth-isolated+ack-save; export=redacted+download; import=redacted+admin+parse+confirm+protect+auth-isolated+ack-save; cancel+deny=zero-network');
+console.log('BUSINESS_BACKUP_MUTATIONS_OK: authority=final-cloud-adapter; snapshot=v4-redacted+cap+silent-protection-debounced+manual-ack-save; delete=admin+confirm+id-scope+ack-save; restore=protect+apply+auth-isolated+ack-save; export=redacted+download; import=redacted+admin+parse+confirm+protect+auth-isolated+ack-save; cancel+deny=zero-network');
