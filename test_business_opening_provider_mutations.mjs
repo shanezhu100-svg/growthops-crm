@@ -92,7 +92,9 @@ for(const badDate of ['2026-02-30','2026/09/01']){
 }
 
 // Existing percentage and per-contact same-day uniqueness boundaries remain enforced.
-for(const invalidRate of [-1,101,Number.NaN,Number.POSITIVE_INFINITY]){
+// Blank values normalize to the allowed 0% policy; non-numeric form text and
+// non-finite/range-invalid numeric values must not persist.
+for(const invalidRate of [-1,101,'not-a-number',Number.POSITIVE_INFINITY]){
   const s=subject({providerForm:form({contacts:[contact({rebatePolicies:[policy({rebateRate:invalidRate})]})]})});
   s.saveOpeningProvider();
   eq(s.openingProviders.length,0,`invalid rebate rate blocked: ${String(invalidRate)}`);
@@ -138,4 +140,4 @@ for(const invalidRate of [-1,101,Number.NaN,Number.POSITIVE_INFINITY]){
   eq(audits[0][0],'修改开户商资料','valid provider edit audit action');
 }
 
-console.log('BUSINESS_OPENING_PROVIDER_MUTATIONS_OK: stale-edit=fail-closed; policy-date=yyyy-mm-dd+calendar-valid; rebate-rate=finite-0-100; duplicate-date=blocked; create+edit=single-write; linked-deal-name-sync=preserved; provenance=final-shipped-vm');
+console.log('BUSINESS_OPENING_PROVIDER_MUTATIONS_OK: stale-edit=fail-closed; policy-date=yyyy-mm-dd+calendar-valid; rebate-rate=0-100+nonfinite-deny; duplicate-date=blocked; create+edit=single-write; linked-deal-name-sync=preserved; provenance=final-shipped-vm');
