@@ -27,7 +27,7 @@ function makeRuntime({backupSnapshots=[]}={}){
     currentUser:{id:'admin-current',name:'Current Admin',role:'ADMIN',enabled:true},currentPage:'system',
     backupSnapshots:backupSnapshots.map(x=>structuredClone(x)),clients:[{id:'client-before',name:'Before'}],standaloneAlerts:[],reminderTypes:[],dismissedAlerts:[],leads:[],openingProviders:[],openingDeals:[],financeActualRebates:[],financeReceivables:[],financeCosts:[],financeReconciliations:[],financeMonthLocks:{},financeMonthSnapshots:{},auditLogs:[],mediaTools:[],sopProgress:{},authUsers:[],
     collectBackupPayload:()=>({clients:structuredClone(subject.clients),standaloneAlerts:[],reminderTypes:[],dismissedAlerts:[],leads:[],openingProviders:[],openingDeals:[],financeActualRebates:[],financeReceivables:[],financeCosts:[],financeReconciliations:[],financeMonthLocks:{},financeMonthSnapshots:{},sopProgress:structuredClone(subject.sopProgress),mediaTools:[],auditLogs:[]}),
-    accountUid:prefix=>`${prefix}-probe`,localDateKey:()=> '2026-09-03',defaultReminderTypes:()=>[],
+    accountUid:prefix=>`${prefix}-probe`,localDateKey:()=> '2026-09-03',defaultReminderTypes:()=>[],ensureDailyBackup:()=>{},
     normalizeClient:value=>({...value}),normalizeStandaloneAlert:value=>({...value}),normalizeReminderTypes:value=>structuredClone(value||[]),normalizeOpeningProvider:value=>({...value}),normalizeFinanceActualRebates:value=>structuredClone(value||[]),normalizeReceivable:value=>({...value}),normalizeFinanceCost:value=>({...value}),normalizeMediaTool:value=>({...value}),
     migrateLegacyAccountSpendRecords:()=>{},migrateOpeningDeals:()=>{},migrateLegacyActualRebatesToReconciliations:()=>{},ensureAutomaticReceivables:()=>{},ensureAutomaticAssetCosts:()=>{},ensureAutomaticOpeningFeeCosts:()=>{},ensureReceivableLinkedCosts:()=>{},ensureFinanceSnapshotsForLocks:()=>{},restoreSopProgress:value=>{subject.sopProgress=structuredClone(value||{});},syncAnalyticsAccountSelection:()=>{},syncAdsAccountSelection:()=>{},syncSopAccountSelection:()=>{},canViewPage:()=>true,
     askConfirm:(config,callback)=>{calls.confirm.push(config);callbacks.push(callback);},notify:message=>calls.notify.push(String(message)),logAudit:(...args)=>calls.audit.push(args),updateStorageUsage:()=>{calls.storage+=1;},
@@ -49,7 +49,7 @@ const laterFailure=calls.notify.some(message=>message.includes('云端保存失�
 if(premature||laterFailure){
   console.error(`BUSINESS_BACKUP_PERSISTENCE_ACK_PROBE_FINDINGS: premature-success=${premature}; later-cloud-failure=${laterFailure}; fetches=${calls.fetch.length}`);
   console.error(' - restore claims cloud synchronization before the debounced save is acknowledged');
-  if(laterFailure)console.error(' - the same operation can subsequently report a cloud-save failure after already claiming success');
+  if(laterFailure)console.error(' - the same operation subsequently reports cloud-save failure after already claiming success');
   process.exitCode=1;
 }else{
   console.log('BUSINESS_BACKUP_PERSISTENCE_ACK_PROBE_OK: restore success is emitted only after final cloud save acknowledgement');
