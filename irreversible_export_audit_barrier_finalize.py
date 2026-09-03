@@ -32,14 +32,39 @@ def method_bounds(text: str, name: str):
     return start, end
 
 
-def statement(source: str, marker: str, start_at: int = 0):
+def call_statement(source: str, marker: str, start_at: int = 0):
     start = source.find(marker, start_at)
     if start < 0:
-        fail(f'statement marker missing: {marker}')
-    end = source.find(';', start)
-    if end < 0:
-        fail(f'statement terminator missing: {marker}')
-    return start, end + 1, source[start:end + 1]
+        fail(f'call marker missing: {marker}')
+    open_idx = source.find('(', start + len(marker) - 1)
+    if open_idx < 0:
+        fail(f'call opening parenthesis missing: {marker}')
+    depth = 0
+    quote = None
+    escaped = False
+    for i in range(open_idx, len(source)):
+        ch = source[i]
+        if quote is not None:
+            if escaped:
+                escaped = False
+            elif ch == '\\':
+                escaped = True
+            elif ch == quote:
+                quote = None
+            continue
+        if ch in ("'", '"', '`'):
+            quote = ch
+            continue
+        if ch == '(':
+            depth += 1
+        elif ch == ')':
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                if end < len(source) and source[end] == ';':
+                    end += 1
+                return start, end, source[start:end]
+    fail(f'call closing parenthesis missing: {marker}')
 
 
 if not ADAPTER.is_file():
@@ -94,12 +119,13 @@ for path in files:
         source = text[start:end]
         if 'persistExportAuditBarrier' in source or 'exportAuditBefore=' in source:
             fail(f'{name} already contains export audit barrier')
-        write_start, write_end, write_stmt = statement(source, 'XLSX.writeFile(')
-        audit_start, audit_end, audit_stmt = statement(source, 'this.logAudit(', write_end)
-        notify_start, notify_end, notify_stmt = statement(source, 'this.notify(', audit_end)
+        write_start, write_end, write_stmt = call_statement(source, 'XLSX.writeFile(')
+        audit_start, audit_end, audit_stmt = call_statement(source, 'this.logAudit(', write_end)
+        notify_start, notify_end, notify_stmt = call_statement(source, 'this.notify(', audit_end)
         if not (write_start < audit_start < notify_start):
             fail(f'{name} expected reviewed write -> audit -> success-notify ordering')
-        pieces = [source[:write_start], source[write_end:audit_start], source[audit_end:notify_start], source[notify_end:]]
+        if source[write_end:audit_start].strip() or source[audit_end:notify_start].strip():
+            fail(f'{name} reviewed write/audit/notify adjacency drifted')
         replacement = (
             "const exportAuditBefore=new Set(Array.isArray(this.auditLogs)?this.auditLogs:[]);"
             + audit_stmt +
@@ -110,7 +136,7 @@ for path in files:
             "return Promise.resolve(this.persistExportAuditBarrier(exportAuditRows)).then(exportAuditCommitted=>{if(!exportAuditCommitted)return;"
             + write_stmt + notify_stmt + "});"
         )
-        source = pieces[0] + replacement + pieces[1] + pieces[2] + pieces[3]
+        source = source[:write_start] + replacement + source[notify_end:]
         text = text[:start] + source + text[end:]
     if text != original:
         path.write_text(text, encoding='utf-8')
