@@ -35,7 +35,7 @@ function baseSubject(overrides={}){
     clients:[],standaloneAlerts:[],reminderTypes:[],dismissedAlerts:[],leads:[],openingProviders:[],openingDeals:[],financeActualRebates:[],financeReceivables:[],financeCosts:[],financeReconciliations:[],financeMonthLocks:{},financeMonthSnapshots:{},authUsers:[{id:'admin-1',name:'Admin One',role:'ADMIN',enabled:true}],auditLogs:[],mediaTools:[],
     normalizeClient:v=>({...v,normalizedClient:true}),normalizeStandaloneAlert:v=>({...v,normalizedAlert:true}),normalizeReminderTypes:v=>structuredClone(v||[]),defaultReminderTypes:()=>[{key:'RENEWAL',label:'Renewal'}],normalizeOpeningProvider:v=>({...v,normalizedProvider:true}),normalizeFinanceActualRebates:v=>structuredClone(v||[]),normalizeReceivable:v=>({...v,normalizedReceivable:true}),normalizeFinanceCost:v=>({...v,normalizedCost:true}),normalizeMediaTool:v=>({...v,normalizedTool:true}),
     migrateLegacyAccountSpendRecords:()=>calls.push(['migrate-spend']),migrateOpeningDeals:()=>calls.push(['migrate-opening']),migrateLegacyActualRebatesToReconciliations:()=>calls.push(['migrate-rebate']),restoreSopProgress:v=>calls.push(['restore-sop',structuredClone(v||{})]),ensureReceivableLinkedCosts:()=>calls.push(['ensure-cost']),ensureFinanceSnapshotsForLocks:()=>calls.push(['ensure-snapshot']),syncAnalyticsAccountSelection:()=>calls.push(['sync-analytics']),syncAdsAccountSelection:()=>calls.push(['sync-ads']),syncSopAccountSelection:v=>calls.push(['sync-sop',v]),
-    persist:()=>{calls.push(['persist']);return true;},logAudit:(...a)=>calls.push(['audit',...a]),notify:(...a)=>calls.push(['notify',...a]),askConfirm:(spec,cb)=>{calls.push(['confirm',spec]);confirmCallback=cb;},
+    persist:()=>{calls.push(['persist']);return true;},persistExportAuditBarrier:async rows=>{calls.push(['export-barrier',Array.isArray(rows)?rows.length:0]);return true;},logAudit:(...a)=>calls.push(['audit',...a]),notify:(...a)=>calls.push(['notify',...a]),askConfirm:(spec,cb)=>{calls.push(['confirm',spec]);confirmCallback=cb;},
     autoDueReminderStage:date=>date?{reminderIndex:2}:null,financeReceivableUnpaid:r=>Number(r.unpaid??r.amount??0),
     canManageFinance:()=>true,canManageProviders:()=>true,excelLibraryReady:()=>true,excelAppendJsonSheet:(wb,name,rows,widths)=>calls.push(['sheet',name,rows.length,widths.length]),excelSafeFilePart:v=>String(v).replace(/[^\w\u4e00-\u9fff-]+/g,'_'),
     financePeriodLabel:'2026-09',financeClientFilter:'ALL',financeProviderFilter:'ALL',financeTotals:{spend:{},expected:{},actual:{}},financeReceivableTotals:{expected:{},paid:{},unpaid:{}},financeCostGroups:{},financeExpectedNetProfitGroups:{},financeActualNetProfitGroups:{},financeCashReceivedGroups:{},financeTotalAdSpendGroups:{},financeAttributedSpendGroups:{},financeUnassignedSpendGroups:{},financeNoRebateSpendGroups:{},financeActualProfitLabel:'待确认',financeRows:[],financeVisibleReceivables:[],financeVisibleCosts:[],financeReconciliationRows:[],
@@ -81,21 +81,21 @@ function baseSubject(overrides={}){
   reset();const {subject,calls}=baseSubject({currentUser:null});subject.logout();eq(count(calls,'audit'),0,'logout without active user has no audit');
 }
 
-// Excel exports: permissions/library gates precede generation; valid minimal state writes once, audits once, and notifies once.
+// Excel exports: permissions/library gates precede generation; valid state waits for the audit barrier, then writes once.
 {
-  reset();const {subject,calls}=baseSubject({canManageFinance:()=>false});subject.exportFinanceExcel();eq(xlsxCalls.length,0,'finance export denied no file');eq(count(calls,'audit'),0,'finance export denied no audit');eq(count(calls,'notify'),1,'finance export denied notice');
+  reset();const {subject,calls}=baseSubject({canManageFinance:()=>false});await subject.exportFinanceExcel();eq(xlsxCalls.length,0,'finance export denied no file');eq(count(calls,'audit'),0,'finance export denied no audit');eq(count(calls,'notify'),1,'finance export denied notice');
 }
 {
-  reset();const {subject,calls}=baseSubject({excelLibraryReady:()=>false});subject.exportFinanceExcel();eq(xlsxCalls.length,0,'finance export missing library no file');eq(count(calls,'audit'),0,'finance export missing library no audit');
+  reset();const {subject,calls}=baseSubject({excelLibraryReady:()=>false});await subject.exportFinanceExcel();eq(xlsxCalls.length,0,'finance export missing library no file');eq(count(calls,'audit'),0,'finance export missing library no audit');
 }
 {
-  reset();const {subject,calls}=baseSubject();subject.exportFinanceExcel();eq(xlsxCalls.length,1,'finance export writes one workbook');eq(xlsxCalls[0].filename,'财务核算_2026-09_全部客户.xlsx','finance export filename');eq(xlsxCalls[0].opts.compression,true,'finance export compression');eq(count(calls,'sheet'),6,'finance export six sheets');eq(count(calls,'audit'),1,'finance export audit once');eq(count(calls,'notify'),1,'finance export success notice');
+  reset();const {subject,calls}=baseSubject();await subject.exportFinanceExcel();eq(xlsxCalls.length,1,'finance export writes one workbook');eq(xlsxCalls[0].filename,'财务核算_2026-09_全部客户.xlsx','finance export filename');eq(xlsxCalls[0].opts.compression,true,'finance export compression');eq(count(calls,'sheet'),6,'finance export six sheets');eq(count(calls,'audit'),1,'finance export audit once');eq(count(calls,'export-barrier'),1,'finance export audit barrier once');eq(count(calls,'notify'),1,'finance export success notice');
 }
 {
-  reset();const {subject,calls}=baseSubject({canManageProviders:()=>false});subject.exportRebateExcel();eq(xlsxCalls.length,0,'rebate export denied no file');eq(count(calls,'audit'),0,'rebate export denied no audit');eq(count(calls,'notify'),1,'rebate export denied notice');
+  reset();const {subject,calls}=baseSubject({canManageProviders:()=>false});await subject.exportRebateExcel();eq(xlsxCalls.length,0,'rebate export denied no file');eq(count(calls,'audit'),0,'rebate export denied no audit');eq(count(calls,'notify'),1,'rebate export denied notice');
 }
 {
-  reset();const {subject,calls}=baseSubject();subject.exportRebateExcel();eq(xlsxCalls.length,1,'rebate export writes one workbook');eq(xlsxCalls[0].filename,'返点统计_2026-09_全部开户商.xlsx','rebate export filename');eq(xlsxCalls[0].opts.compression,true,'rebate export compression');eq(count(calls,'sheet'),5,'rebate export five sheets');eq(count(calls,'audit'),1,'rebate export audit once');eq(count(calls,'notify'),1,'rebate export success notice');
+  reset();const {subject,calls}=baseSubject();await subject.exportRebateExcel();eq(xlsxCalls.length,1,'rebate export writes one workbook');eq(xlsxCalls[0].filename,'返点统计_2026-09_全部开户商.xlsx','rebate export filename');eq(xlsxCalls[0].opts.compression,true,'rebate export compression');eq(count(calls,'sheet'),5,'rebate export five sheets');eq(count(calls,'audit'),1,'rebate export audit once');eq(count(calls,'export-barrier'),1,'rebate export audit barrier once');eq(count(calls,'notify'),1,'rebate export success notice');
 }
 
 // Reminder restore: valid current-stage rows are restored, unrelated dismissals survive.
@@ -118,4 +118,4 @@ function baseSubject(overrides={}){
   reset();const date='2026-09-10',later='2026-09-11',a={id:'a',endDate:date,archived:false,networkEnvironments:[]},b={id:'b',endDate:'',archived:false,networkEnvironments:[]};const dismissed=[{key:`CONTRACT-a|${date}|2`},{key:`CONTRACT-b|${later}|2`}];const {subject,getConfirm}=baseSubject({clients:[a,b],dismissedAlerts:dismissed});subject.restoreDismissedAlerts();b.endDate=later;getConfirm()();eq(subject.dismissedAlerts.length,1,'newly active reminder remains dismissed');eq(subject.dismissedAlerts[0].key,`CONTRACT-b|${later}|2`,'newly active key not added to prior confirmation');
 }
 
-console.log('BUSINESS_REMAINING_MUTATIONS_OK: backup-apply=invalid+admin-lockout+normalize+session; load=stored+seed-fallback; logout=local-session+audit; exports=permission+library+write+audit; dismissed-restore=active-only+confirm-time-recheck; provenance=final-shipped-vm');
+console.log('BUSINESS_REMAINING_MUTATIONS_OK: backup-apply=invalid+admin-lockout+normalize+session; load=stored+seed-fallback; logout=local-session+audit; exports=permission+library+audit-barrier+write; dismissed-restore=active-only+confirm-time-recheck; provenance=final-shipped-vm');
