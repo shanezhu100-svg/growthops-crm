@@ -83,7 +83,31 @@ def patch_save_media_tool(source: str) -> str:
     return source.replace(old, new, 1)
 
 
-found = {'saveExternalAsset': 0, 'deleteExternalAsset': 0, 'saveMediaTool': 0}
+def patch_delete_media_tool(source: str) -> str:
+    head = "if(!tool)return;const bindingCount=(tool.bindings||[]).length;this.askConfirm("
+    replacement = (
+        "if(!tool)return;"
+        "const mediaToolById=()=>((this.mediaTools||[]).find(t=>String(t.id)===String(tool.id))),currentTool=mediaToolById();"
+        "if(!currentTool){this.notify('该投放工具已不存在，请刷新页面后重试');return;}"
+        "const bindingCount=(currentTool.bindings||[]).length;this.askConfirm("
+    )
+    if source.count(head) != 1:
+        fail(f'deleteMediaTool live-target head anchor count={source.count(head)}')
+    source = source.replace(head, replacement, 1)
+    source = source.replace("tool.name", "currentTool.name", 1)
+    callback_old = "confirmText:'确认删除'},()=>{this.mediaTools=this.mediaTools.filter(t=>t.id!==tool.id);delete this.toolPasswordVisible[tool.id];this.persist();this.logAudit('删除投放工具',tool.name);"
+    callback_new = (
+        "confirmText:'确认删除'},()=>{const liveTool=mediaToolById();"
+        "if(!liveTool){this.notify('该投放工具已不存在，请刷新页面后重试');return;}"
+        "this.mediaTools=this.mediaTools.filter(t=>String(t.id)!==String(liveTool.id));"
+        "delete this.toolPasswordVisible[liveTool.id];this.persist();this.logAudit('删除投放工具',liveTool.name);"
+    )
+    if source.count(callback_old) != 1:
+        fail(f'deleteMediaTool confirmation recheck anchor count={source.count(callback_old)}')
+    return source.replace(callback_old, callback_new, 1)
+
+
+found = {'saveExternalAsset': 0, 'deleteExternalAsset': 0, 'saveMediaTool': 0, 'deleteMediaTool': 0}
 changed = []
 for path in files:
     text = path.read_text(encoding='utf-8')
@@ -97,6 +121,9 @@ for path in files:
     text, did_save_tool = replace_method(text, 'saveMediaTool', patch_save_media_tool)
     if did_save_tool:
         found['saveMediaTool'] += 1
+    text, did_delete_tool = replace_method(text, 'deleteMediaTool', patch_delete_media_tool)
+    if did_delete_tool:
+        found['deleteMediaTool'] += 1
     if text != original:
         path.write_text(text, encoding='utf-8')
         changed.append((path.name, hashlib.sha256(text.encode('utf-8')).hexdigest()))
@@ -112,6 +139,7 @@ print(
     'external-asset-edit=existing-id-required; '
     'external-asset-delete=live-target-before-confirm+rechecked-on-confirm; '
     'media-tool-edit=existing-id-required; '
+    'media-tool-delete=live-target-before-confirm+rechecked-on-confirm; '
     'stale=denied-before-insert+persist+audit; '
     f'artifact={changed[0][0]}:{changed[0][1][:12]}'
 )
