@@ -103,6 +103,19 @@ def patch_save(source: str) -> str:
     return source.replace(old, new, 1)
 
 
+def patch_provider(source: str) -> str:
+    # Provider editors can likewise become stale after a refresh/import/session
+    # reconciliation. Never let an absent provider id rewrite linked opening deals,
+    # persist, or emit a false successful edit audit.
+    old = "if(payload.id){const i=this.openingProviders.findIndex(p=>String(p.id)===String(payload.id));if(i>-1)this.openingProviders[i]=payload;"
+    new = "if(payload.id){const i=this.openingProviders.findIndex(p=>String(p.id)===String(payload.id));if(i<0){this.notify('该开户商记录已不存在，请刷新页面后重试');return}this.openingProviders[i]=payload;"
+    if '该开户商记录已不存在' in source:
+        fail('saveOpeningProvider already contains stale-edit guard')
+    if source.count(old) != 1:
+        fail(f'saveOpeningProvider stale-edit anchor count={source.count(old)}')
+    return source.replace(old, new, 1)
+
+
 def patch_delete(source: str) -> str:
     # A locked OPENING_DEAL cost and its source opening row form one historical fact.
     # Block before confirmation and re-check inside the callback to avoid a TOCTOU
@@ -131,7 +144,7 @@ def patch_delete(source: str) -> str:
     return source.replace(old_inner, new_inner, 1)
 
 
-found = {'saveOpeningDeal': 0, 'deleteOpeningDeal': 0}
+found = {'saveOpeningDeal': 0, 'saveOpeningProvider': 0, 'deleteOpeningDeal': 0}
 changed = []
 for path in files:
     text = path.read_text(encoding='utf-8')
@@ -139,6 +152,9 @@ for path in files:
     text, save_changed = replace_method(text, 'saveOpeningDeal', patch_save)
     if save_changed:
         found['saveOpeningDeal'] += 1
+    text, provider_changed = replace_method(text, 'saveOpeningProvider', patch_provider)
+    if provider_changed:
+        found['saveOpeningProvider'] += 1
     text, delete_changed = replace_method(text, 'deleteOpeningDeal', patch_delete)
     if delete_changed:
         found['deleteOpeningDeal'] += 1
@@ -154,7 +170,8 @@ if len(changed) != 1:
 
 print(
     'OPENING_DEAL_LIFECYCLE_GUARD_FINALIZE_OK: '
-    'stale-edit=denied-before-cost-sync+persist+audit; '
+    'deal-stale-edit=denied-before-cost-sync+persist+audit; '
+    'provider-stale-edit=denied-before-linked-deal-rewrite+persist+audit; '
     'locked-linked-cost=delete-denied-before-confirm+rechecked-on-confirm; '
     'create+existing-edit+unlocked-delete=preserved; '
     + 'artifact=' + ','.join(f'{name}:{sha[:12]}' for name, sha in changed)
