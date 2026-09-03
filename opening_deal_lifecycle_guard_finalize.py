@@ -107,13 +107,30 @@ def patch_provider(source: str) -> str:
     # Provider editors can likewise become stale after a refresh/import/session
     # reconciliation. Never let an absent provider id rewrite linked opening deals,
     # persist, or emit a false successful edit audit.
-    old = "if(payload.id){const i=this.openingProviders.findIndex(p=>String(p.id)===String(payload.id));if(i>-1)this.openingProviders[i]=payload;"
-    new = "if(payload.id){const i=this.openingProviders.findIndex(p=>String(p.id)===String(payload.id));if(i<0){this.notify('该开户商记录已不存在，请刷新页面后重试');return}this.openingProviders[i]=payload;"
+    stale_old = "if(payload.id){const i=this.openingProviders.findIndex(p=>String(p.id)===String(payload.id));if(i>-1)this.openingProviders[i]=payload;"
+    stale_new = "if(payload.id){const i=this.openingProviders.findIndex(p=>String(p.id)===String(payload.id));if(i<0){this.notify('该开户商记录已不存在，请刷新页面后重试');return}this.openingProviders[i]=payload;"
     if '该开户商记录已不存在' in source:
         fail('saveOpeningProvider already contains stale-edit guard')
-    if source.count(old) != 1:
-        fail(f'saveOpeningProvider stale-edit anchor count={source.count(old)}')
-    return source.replace(old, new, 1)
+    if source.count(stale_old) != 1:
+        fail(f'saveOpeningProvider stale-edit anchor count={source.count(stale_old)}')
+    source = source.replace(stale_old, stale_new, 1)
+
+    # Rebate-policy effective dates are finance policy history. Reject malformed or
+    # impossible calendar dates before duplicate-date checks and before any provider
+    # or linked-deal mutation.
+    date_old = "if(!p.effectiveDate){this.notify(`对接人【${c.name}】的返点政策需要填写生效日期`);return}if(dates.has(p.effectiveDate))"
+    date_new = (
+        "if(!p.effectiveDate){this.notify(`对接人【${c.name}】的返点政策需要填写生效日期`);return}"
+        "const openingProviderPolicyDate=String(p.effectiveDate),openingProviderPolicyMatch=/^(\\d{4})-(\\d{2})-(\\d{2})$/.exec(openingProviderPolicyDate),"
+        "openingProviderPolicyObj=openingProviderPolicyMatch?new Date(Date.UTC(Number(openingProviderPolicyMatch[1]),Number(openingProviderPolicyMatch[2])-1,Number(openingProviderPolicyMatch[3]))):null;"
+        "if(!openingProviderPolicyMatch||openingProviderPolicyObj.getUTCFullYear()!==Number(openingProviderPolicyMatch[1])||openingProviderPolicyObj.getUTCMonth()!==Number(openingProviderPolicyMatch[2])-1||openingProviderPolicyObj.getUTCDate()!==Number(openingProviderPolicyMatch[3])){this.notify(`对接人【${c.name}】的返点政策请输入有效生效日期`);return}"
+        "if(dates.has(p.effectiveDate))"
+    )
+    if '返点政策请输入有效生效日期' in source:
+        fail('saveOpeningProvider already contains policy calendar guard')
+    if source.count(date_old) != 1:
+        fail(f'saveOpeningProvider policy date anchor count={source.count(date_old)}')
+    return source.replace(date_old, date_new, 1)
 
 
 def patch_delete(source: str) -> str:
@@ -172,6 +189,7 @@ print(
     'OPENING_DEAL_LIFECYCLE_GUARD_FINALIZE_OK: '
     'deal-stale-edit=denied-before-cost-sync+persist+audit; '
     'provider-stale-edit=denied-before-linked-deal-rewrite+persist+audit; '
+    'provider-policy-date=yyyy-mm-dd+calendar-valid-before-mutation; '
     'locked-linked-cost=delete-denied-before-confirm+rechecked-on-confirm; '
     'create+existing-edit+unlocked-delete=preserved; '
     + 'artifact=' + ','.join(f'{name}:{sha[:12]}' for name, sha in changed)
