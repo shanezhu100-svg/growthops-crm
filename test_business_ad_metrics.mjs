@@ -87,3 +87,4 @@ await import('./test_business_financial_input_bounds.mjs');
 await import('./test_business_ad_input_bounds.mjs');
 await import('./test_business_adapter_confirmation_integrity.mjs');
 await import('./test_business_backup_persistence_ack.mjs');
+await import('./test_business_logout_pending_save_probe.mjs');
