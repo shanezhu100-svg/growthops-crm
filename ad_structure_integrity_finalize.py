@@ -82,7 +82,21 @@ def patch_remove_campaign(source: str) -> str:
     return source.replace(callback_old, callback_new, 1)
 
 
-found = {'editAdCampaign': 0, 'removeAdCampaign': 0}
+def patch_add_set(source: str) -> str:
+    anchor = "if(!campaign)return;campaign.adSets=Array.isArray(campaign.adSets)?campaign.adSets:[];campaign.adSets.push(this.emptyAdSet());"
+    replacement = (
+        "if(!campaign)return;"
+        "const currentCampaign=(this.selectedAdsClient?.adCampaigns||[]).find(x=>String(x.id)===String(campaign.id));"
+        "if(!currentCampaign){this.notify('该广告系列已不存在，请刷新页面后重试');return;}"
+        "currentCampaign.adSets=Array.isArray(currentCampaign.adSets)?currentCampaign.adSets:[];"
+        "currentCampaign.adSets.push(this.emptyAdSet());"
+    )
+    if source.count(anchor) != 1:
+        fail(f'addAdSet live-parent anchor count={source.count(anchor)}')
+    return source.replace(anchor, replacement, 1)
+
+
+found = {'editAdCampaign': 0, 'removeAdCampaign': 0, 'addAdSet': 0}
 changed = []
 for path in files:
     text = path.read_text(encoding='utf-8')
@@ -93,6 +107,9 @@ for path in files:
     text, did_remove = replace_method(text, 'removeAdCampaign', patch_remove_campaign)
     if did_remove:
         found['removeAdCampaign'] += 1
+    text, did_add_set = replace_method(text, 'addAdSet', patch_add_set)
+    if did_add_set:
+        found['addAdSet'] += 1
     if text != original:
         path.write_text(text, encoding='utf-8')
         changed.append((path.name, hashlib.sha256(text.encode('utf-8')).hexdigest()))
@@ -107,6 +124,7 @@ print(
     'AD_STRUCTURE_INTEGRITY_FINALIZE_OK: '
     'campaign-edit=live-selected-client-id-required; '
     'campaign-delete=live-target-before-confirm+rechecked-on-confirm; '
+    'adset-add=live-campaign-required; '
     'stale=denied-before-mutation+persist+audit; '
     f'artifact={changed[0][0]}:{changed[0][1][:12]}'
 )
