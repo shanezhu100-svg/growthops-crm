@@ -5,7 +5,7 @@ import vm from 'node:vm';
 const adapterPath=path.join(process.cwd(),'dist','cloud-adapter.js');
 if(!fs.existsSync(adapterPath))throw new Error('BUSINESS_BACKUP_MUTATIONS_FAILED: dist/cloud-adapter.js missing; run canonical build first');
 const adapter=fs.readFileSync(adapterPath,'utf8');
-for(const marker of ['vm.createBackupSnapshot=','vm.deleteBackupSnapshot=','vm.restoreBackupSnapshot=','vm.downloadFullBackup=','vm.importFullBackup=','function sanitizedBackupPayload()','function applyBusinessBackup(','growth-ops-cloud-backup-v4-redacted','redactBackupSecrets','async function flushSave()']){
+for(const marker of ['vm.createBackupSnapshot=','vm.deleteBackupSnapshot=','vm.restoreBackupSnapshot=','vm.downloadFullBackup=','vm.importFullBackup=','function sanitizedBackupPayload()','function applyBusinessBackup(','growth-ops-cloud-backup-v4-redacted','redactBackupSecrets','async function flushSave()','vm.persistExportAuditBarrier=async']){
   if(!adapter.includes(marker))throw new Error(`BUSINESS_BACKUP_MUTATIONS_FAILED: authoritative adapter marker missing: ${marker}`);
 }
 const bootAnchor='\n  boot();\n})();';
@@ -83,9 +83,9 @@ const restorePayload={clients:[{id:'client-restored',name:'Restored Client'}],st
 }
 
 {
-  const {subject,calls,getCapturedBlob}=makeRuntime();subject.downloadFullBackup();eq(calls.click,1,'export click');eq(calls.remove,1,'export cleanup');eq(calls.revoke.length,1,'export revoke');const exported=JSON.parse(await getCapturedBlob().text());
+  const {subject,calls,getCapturedBlob}=makeRuntime();const pending=subject.downloadFullBackup();ok(pending&&typeof pending.then==='function','export exposes audit ACK completion');eq(calls.click,0,'export no click before ACK');await pending;eq(calls.click,1,'export click after ACK');eq(calls.remove,1,'export cleanup');eq(calls.revoke.length,1,'export revoke');const exported=JSON.parse(await getCapturedBlob().text());
   eq(exported.version,'growth-ops-cloud-backup-v4-redacted','export version');eq(exported.redacted,true,'export redacted');ok(!('authUsers' in exported),'export auth isolation');ok(!('backupSnapshots' in exported),'export nesting isolation');ok(!('loginAccount' in exported.clients[0]),'export login redaction');ok(!('password' in exported.clients[0]),'export password redaction');
-  eq(calls.audit[0][0],'导出脱敏全量备份','export audit');eq(calls.persist,1,'export persist');eq(calls.notify.at(-1),'脱敏业务备份已导出；不包含登录账号、密码、2FA 或恢复码','export notice');eq(calls.fetch,0,'export network');
+  eq(calls.audit[0][0],'导出脱敏全量备份','export audit');eq(calls.persist,0,'export no debounced persist');eq(calls.notify.at(-1),'脱敏业务备份已导出；不包含登录账号、密码、2FA 或恢复码','export notice');eq(calls.fetch,1,'export acknowledged audit save');
 }
 
 const importPayload={...restorePayload,clients:[{id:'client-restored',name:'Restored Client',loginAccount:'leak@example.test',password:'leak-password',nested:{twoFactor:'leak-2fa'}}]};
@@ -104,4 +104,4 @@ const importPayload={...restorePayload,clients:[{id:'client-restored',name:'Rest
   eq(calls.audit.at(-1)[0],'导入脱敏全量备份','import audit');eq(calls.audit.at(-1)[1],'backup.json','import filename');eq(calls.notify.at(-1),'脱敏备份已导入并同步云端；Vault 凭证未由备份覆盖','import notice');eq(calls.fetch,1,'import acknowledged final cloud save');
 }
 
-console.log('BUSINESS_BACKUP_MUTATIONS_OK: authority=final-cloud-adapter; snapshot=v4-redacted+cap+silent-protection-debounced+manual-ack-save; delete=admin+confirm+id-scope+ack-save; restore=protect+apply+auth-isolated+ack-save; export=redacted+download; import=redacted+admin+parse+confirm+protect+auth-isolated+ack-save; cancel+deny=zero-network');
+console.log('BUSINESS_BACKUP_MUTATIONS_OK: authority=final-cloud-adapter; snapshot=v4-redacted+cap+silent-protection-debounced+manual-ack-save; delete=admin+confirm+id-scope+ack-save; restore=protect+apply+auth-isolated+ack-save; export=redacted+audit-ack-before-download; import=redacted+admin+parse+confirm+protect+auth-isolated+ack-save; cancel+deny=zero-network');
