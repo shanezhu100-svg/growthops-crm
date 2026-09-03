@@ -4,8 +4,6 @@ import re
 
 ROOT = Path(__file__).resolve().parent
 APP_DIR = ROOT / 'dist' / 'app'
-METHOD = 'saveAdDataRecord'
-GUARD_MARKER = 'const adRawNumericFields='
 
 
 def fail(message: str) -> None:
@@ -26,27 +24,31 @@ def method_bounds(text: str, name: str):
     return start, end
 
 
+def replace_method(text: str, name: str, patcher):
+    bounds = method_bounds(text, name)
+    if bounds is None:
+        return text, False
+    start, end = bounds
+    source = text[start:end]
+    patched = patcher(source)
+    if patched == source:
+        fail(f'{name} patch made no change')
+    return text[:start] + patched + text[end:], True
+
+
 if not APP_DIR.is_dir():
     fail('dist/app missing; run final runtime build first')
 files = sorted(APP_DIR.glob('app-inline-*.js'))
 if not files:
     fail('no final app-inline JS artifacts found')
 
-found = 0
-changed = []
-for path in files:
-    text = path.read_text(encoding='utf-8')
-    bounds = method_bounds(text, METHOD)
-    if bounds is None:
-        continue
-    found += 1
-    start, end = bounds
-    source = text[start:end]
-    if GUARD_MARKER in source:
-        fail(f'{METHOD} already contains ad raw numeric guard')
+
+def patch_save_record(source: str) -> str:
+    if 'const adRawNumericFields=' in source:
+        fail('saveAdDataRecord already contains ad raw numeric guard')
     anchor = 'if(!client||!account)return;'
     if source.count(anchor) != 1:
-        fail(f'{METHOD} expected one client/account anchor, found {source.count(anchor)}')
+        fail(f'saveAdDataRecord expected one client/account anchor, found {source.count(anchor)}')
     guard = (
         "const adRawNumericFields=['spend','impressions','clicks','leads','conversions','revenue'];"
         "if(this.selectedAdsPlatform==='FB')adRawNumericFields.push('reach');"
@@ -55,20 +57,49 @@ for path in files:
         "const numeric=Number(value);return !Number.isFinite(numeric)||numeric<0}))"
         "{this.notify('请输入有效的广告投放数值');return;}"
     )
-    patched = source.replace(anchor, anchor + guard, 1)
-    text = text[:start] + patched + text[end:]
-    path.write_text(text, encoding='utf-8')
-    changed.append((path.name, hashlib.sha256(text.encode('utf-8')).hexdigest()))
+    return source.replace(anchor, anchor + guard, 1)
 
-if found != 1:
-    fail(f'{METHOD} expected in exactly one app-inline artifact, found {found}')
+
+def patch_delete_record(source: str) -> str:
+    marker = "confirmText:'确认删除'},()=>{if(!this.assertMonthUnlocked(String(record.date||'').slice(0,7),'删除广告数据'))return;"
+    if marker in source:
+        fail('deleteAdDataRecord already contains confirmation-time lock recheck')
+    anchor = "confirmText:'确认删除'},()=>{account.adDataRecords="
+    if source.count(anchor) != 1:
+        fail(f'deleteAdDataRecord confirm callback anchor count={source.count(anchor)}')
+    replacement = (
+        "confirmText:'确认删除'},()=>{"
+        "if(!this.assertMonthUnlocked(String(record.date||'').slice(0,7),'删除广告数据'))return;"
+        "account.adDataRecords="
+    )
+    return source.replace(anchor, replacement, 1)
+
+
+found = {'saveAdDataRecord': 0, 'deleteAdDataRecord': 0}
+changed = []
+for path in files:
+    text = path.read_text(encoding='utf-8')
+    original = text
+    text, did_save = replace_method(text, 'saveAdDataRecord', patch_save_record)
+    if did_save:
+        found['saveAdDataRecord'] += 1
+    text, did_delete = replace_method(text, 'deleteAdDataRecord', patch_delete_record)
+    if did_delete:
+        found['deleteAdDataRecord'] += 1
+    if text != original:
+        path.write_text(text, encoding='utf-8')
+        changed.append((path.name, hashlib.sha256(text.encode('utf-8')).hexdigest()))
+
+for name, count in found.items():
+    if count != 1:
+        fail(f'{name} expected in exactly one app-inline artifact, found {count}')
 if len(changed) != 1:
     fail(f'expected exactly one changed artifact, found {len(changed)}')
 
 print(
     'AD_DATA_INPUT_GUARD_FINALIZE_OK: '
-    'common=spend+impressions+clicks+leads+conversions+revenue; fb=reach; '
-    'finite-nonnegative=required; empty+zero=preserved; '
-    'negative+nan+infinity=denied-before-month-lock+mutation+sync+persist+audit; '
+    'record-input=spend+impressions+clicks+leads+conversions+revenue+fb-reach-finite-nonnegative; '
+    'record-delete=month-lock-rechecked-on-confirm; '
+    'invalid-record-input=denied-before-month-lock+mutation+sync+persist+audit; '
     f'artifact={changed[0][0]}:{changed[0][1][:12]}'
 )
