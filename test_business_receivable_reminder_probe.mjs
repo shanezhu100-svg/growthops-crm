@@ -13,4 +13,4 @@ await import('./test_business_client_reminder_money_mutations.mjs');
 await import('./test_business_client_reminder_date_mutations.mjs');
 await import('./test_business_bulk_receivable_generation.mjs');
 await import('./test_business_ad_persisted_mutations.mjs');
-await import('./test_business_mutation_debt_probe_2.mjs');
+await import('./test_business_ad_structure_probe.mjs');
