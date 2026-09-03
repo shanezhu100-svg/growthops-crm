@@ -61,18 +61,31 @@ def patch_save_record(source: str) -> str:
 
 
 def patch_delete_record(source: str) -> str:
-    marker = "confirmText:'确认删除'},()=>{if(!this.assertMonthUnlocked(String(record.date||'').slice(0,7),'删除广告数据'))return;"
-    if marker in source:
-        fail('deleteAdDataRecord already contains confirmation-time lock recheck')
-    anchor = "confirmText:'确认删除'},()=>{account.adDataRecords="
-    if source.count(anchor) != 1:
-        fail(f'deleteAdDataRecord confirm callback anchor count={source.count(anchor)}')
-    replacement = (
+    # The UI can hold a stale row while account data changes, and both the row and
+    # finance-month lock can change while a confirmation dialog is open. Validate
+    # current account membership before confirmation and again inside the callback;
+    # re-check the month lock at the actual mutation boundary as well.
+    initial_anchor = "if(!client||!account||!record)return;if(!this.assertMonthUnlocked(String(record.date||'').slice(0,7),'删除广告数据'))return;"
+    initial_replacement = (
+        "if(!client||!account||!record)return;"
+        "const adDeleteRecordExists=()=>Array.isArray(account.adDataRecords)&&account.adDataRecords.some(r=>String(r.id)===String(record.id));"
+        "if(!adDeleteRecordExists()){this.notify('该广告数据记录已不存在，请刷新页面后重试');return;}"
+        "if(!this.assertMonthUnlocked(String(record.date||'').slice(0,7),'删除广告数据'))return;"
+    )
+    if source.count(initial_anchor) != 1:
+        fail(f'deleteAdDataRecord initial stale-target anchor count={source.count(initial_anchor)}')
+    source = source.replace(initial_anchor, initial_replacement, 1)
+
+    callback_anchor = "confirmText:'确认删除'},()=>{account.adDataRecords="
+    callback_replacement = (
         "confirmText:'确认删除'},()=>{"
+        "if(!adDeleteRecordExists()){this.notify('该广告数据记录已不存在，请刷新页面后重试');return;}"
         "if(!this.assertMonthUnlocked(String(record.date||'').slice(0,7),'删除广告数据'))return;"
         "account.adDataRecords="
     )
-    return source.replace(anchor, replacement, 1)
+    if source.count(callback_anchor) != 1:
+        fail(f'deleteAdDataRecord confirm callback anchor count={source.count(callback_anchor)}')
+    return source.replace(callback_anchor, callback_replacement, 1)
 
 
 found = {'saveAdDataRecord': 0, 'deleteAdDataRecord': 0}
@@ -99,7 +112,7 @@ if len(changed) != 1:
 print(
     'AD_DATA_INPUT_GUARD_FINALIZE_OK: '
     'record-input=spend+impressions+clicks+leads+conversions+revenue+fb-reach-finite-nonnegative; '
-    'record-delete=month-lock-rechecked-on-confirm; '
+    'record-delete=stale-target-denied-before-confirm+rechecked-on-confirm+month-lock-rechecked-on-confirm; '
     'invalid-record-input=denied-before-month-lock+mutation+sync+persist+audit; '
     f'artifact={changed[0][0]}:{changed[0][1][:12]}'
 )
