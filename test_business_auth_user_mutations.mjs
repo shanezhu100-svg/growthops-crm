@@ -33,10 +33,23 @@ const saveSource=extractAssignment('saveAuthUser');
 const deleteSource=extractAssignment('deleteAuthUser');
 for(const [source,markers,label] of [
   [saveSource,["rpc('crm_upsert_user'",'new TextEncoder().encode(f.password).byteLength>72','await loadUsers()','routeFromHash()'],'saveAuthUser'],
-  [deleteSource,['vm.canDeleteAuthUser(user)',"rpc('crm_delete_user'",'await loadUsers()','vm.askConfirm('],'deleteAuthUser'],
+  [deleteSource,[
+    'const resolve=()=>Array.isArray(vm.authUsers)&&vm.authUsers.length?',
+    'vm.authUsers.find(u=>String(u?.id)===String(user?.id))',
+    "vm.currentUser?.role!=='ADMIN'",
+    'vm.canDeleteAuthUser(target)',
+    "vm.askConfirm({title:'删除系统用户'",
+    "rpc('crm_delete_user'",
+    'p_user_id:target.id',
+    'await loadUsers()',
+    "vm.logAudit('删除系统用户'",
+    'vm.persist()',
+  ],'deleteAuthUser'],
 ]){
   for(const marker of markers)if(!source.includes(marker))throw new Error(`BUSINESS_AUTH_USER_MUTATIONS_FAILED: ${label} authoritative marker missing: ${marker}`);
 }
+if((deleteSource.match(/vm\.currentUser\?\.role!=='ADMIN'/g)||[]).length<2)throw new Error('BUSINESS_AUTH_USER_MUTATIONS_FAILED: deleteAuthUser must re-check ADMIN authority inside confirmation callback');
+if((deleteSource.match(/vm\.canDeleteAuthUser\(target\)/g)||[]).length<2)throw new Error('BUSINESS_AUTH_USER_MUTATIONS_FAILED: deleteAuthUser must re-check delete eligibility inside confirmation callback');
 
 const factorySource=`(function(vm,rpc,loadUsers,routeFromHash,token,TextEncoder){\n${saveSource}\n${deleteSource}\nreturn {saveAuthUser:vm.saveAuthUser,deleteAuthUser:vm.deleteAuthUser};\n})`;
 let factory;
@@ -212,4 +225,4 @@ function makeRuntime({role='ADMIN',userForm={},savedUser=null,rpcError=null,canD
   equal(calls.notify.at(-1),'DELETE_FAILED','failed delete must surface adapter error');
 }
 
-console.log('BUSINESS_AUTH_USER_MUTATIONS_OK: authority=final-cloud-adapter; save=admin+validation+rpc+refresh+self-edit+failure; delete=permission+can-delete+confirmation+rpc+refresh+failure; persist+audit=success-only');
+console.log('BUSINESS_AUTH_USER_MUTATIONS_OK: authority=final-cloud-adapter; save=admin+validation+rpc+refresh+self-edit+failure; delete=admin+live-user+can-delete-recheck+confirmation+rpc+refresh+failure; persist+audit=success-only');

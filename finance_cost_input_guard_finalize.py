@@ -6,6 +6,7 @@ import resource_catalog_integrity_finalize  # noqa: F401
 import ad_structure_integrity_finalize  # noqa: F401
 import sop_mutation_integrity_finalize  # noqa: F401
 import dismissed_alert_restore_integrity_finalize  # noqa: F401
+import adapter_confirmation_integrity_finalize  # noqa: F401
 
 ROOT = Path(__file__).resolve().parent
 APP_DIR = ROOT / 'dist' / 'app'

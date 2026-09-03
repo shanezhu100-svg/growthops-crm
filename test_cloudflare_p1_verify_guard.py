@@ -29,7 +29,7 @@ EXPECTED_PINS = {
     'vendor/inter/inter.css': 'a9173515531a1bb9820b2adce8e7df7a3cb3b4d114894f836c74ed0fdcafc144',
     'vendor/inter/inter-latin.woff2': '3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62',
     'vendor/inter/inter-latin-ext.woff2': '34b9c504cab7a73e37b746343a449132e56cf7b5481af2cb81dc74dcff25c956',
-    'cloud-adapter.js': '9713943a80008f625000d6fac2440fb9395f9e6e2c1fd09e820a399c5c34379f',
+    'cloud-adapter.js': 'cd5466bb3560e6bbf20e79afa4ea9a4b388f610c7566d7f8cf2785619655bb38',
     'cloud-security-hotfix.js': '157c43b5db3f3c79e29895bed720d72dd86bc3ddf110c32bdc833f4a0a5f0fb8',
     'cloud-p1-overrides.js': 'e50e05322a0d56e78bf112a52be08ff54263f4ce88cb0b9b91f6613722b8ccab',
     'cloud-ui-action-bridge.js': '12258783b11b7ddb5193f20abedabc4234731b4f11c3f5f00016f9ae4483cb72',
