@@ -12,4 +12,4 @@ await import('./test_business_opening_provider_mutations.mjs');
 await import('./test_business_client_reminder_money_mutations.mjs');
 await import('./test_business_client_reminder_date_mutations.mjs');
 await import('./test_business_bulk_receivable_generation.mjs');
-await import('./test_business_ad_persisted_mutation_probe.mjs');
+await import('./test_business_ad_persisted_mutations.mjs');
