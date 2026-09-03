@@ -94,10 +94,10 @@ def patch_delete_media_tool(source: str) -> str:
     if source.count(head) != 1:
         fail(f'deleteMediaTool live-target head anchor count={source.count(head)}')
     source = source.replace(head, replacement, 1)
-    message_anchor = "${tool.name}"
+    message_anchor = "message:`确定删除【${tool.name}】吗？"
     if source.count(message_anchor) != 1:
-        fail(f'deleteMediaTool message name anchor count={source.count(message_anchor)}')
-    source = source.replace(message_anchor, "${currentTool.name}", 1)
+        fail(f'deleteMediaTool message anchor count={source.count(message_anchor)}')
+    source = source.replace(message_anchor, "message:`确定删除【${currentTool.name}】吗？", 1)
     callback_head = "()=>{this.mediaTools=this.mediaTools.filter(t=>t.id!==tool.id);"
     callback_new = (
         "()=>{const liveTool=mediaToolById();"
