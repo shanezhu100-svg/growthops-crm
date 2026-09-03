@@ -123,7 +123,22 @@ def patch_remove_set(source: str) -> str:
     return source.replace(callback_old, callback_new, 1)
 
 
-found = {'editAdCampaign': 0, 'removeAdCampaign': 0, 'addAdSet': 0, 'removeAdSet': 0}
+def patch_add_creative(source: str) -> str:
+    anchor = "if(!adset)return;adset.ads=Array.isArray(adset.ads)?adset.ads:[];adset.ads.push(this.emptyCreative());"
+    replacement = (
+        "if(!adset)return;"
+        "const adSetMatches=(this.selectedAdsClient?.adCampaigns||[]).flatMap(c=>(c.adSets||[]).filter(s=>String(s.id)===String(adset.id)));"
+        "if(adSetMatches.length!==1){this.notify('该广告组已不存在或无法唯一定位，请刷新页面后重试');return;}"
+        "const currentAdSet=adSetMatches[0];"
+        "currentAdSet.ads=Array.isArray(currentAdSet.ads)?currentAdSet.ads:[];"
+        "currentAdSet.ads.push(this.emptyCreative());"
+    )
+    if source.count(anchor) != 1:
+        fail(f'addCreative live-parent anchor count={source.count(anchor)}')
+    return source.replace(anchor, replacement, 1)
+
+
+found = {'editAdCampaign': 0, 'removeAdCampaign': 0, 'addAdSet': 0, 'removeAdSet': 0, 'addCreative': 0}
 changed = []
 for path in files:
     text = path.read_text(encoding='utf-8')
@@ -140,6 +155,9 @@ for path in files:
     text, did_remove_set = replace_method(text, 'removeAdSet', patch_remove_set)
     if did_remove_set:
         found['removeAdSet'] += 1
+    text, did_add_creative = replace_method(text, 'addCreative', patch_add_creative)
+    if did_add_creative:
+        found['addCreative'] += 1
     if text != original:
         path.write_text(text, encoding='utf-8')
         changed.append((path.name, hashlib.sha256(text.encode('utf-8')).hexdigest()))
@@ -156,6 +174,7 @@ print(
     'campaign-delete=live-target-before-confirm+rechecked-on-confirm; '
     'adset-add=live-campaign-required; '
     'adset-delete=live-target-before-confirm+rechecked-on-confirm; '
+    'creative-add=unique-live-adset-required; '
     'stale=denied-before-mutation+persist+audit; '
     f'artifact={changed[0][0]}:{changed[0][1][:12]}'
 )
