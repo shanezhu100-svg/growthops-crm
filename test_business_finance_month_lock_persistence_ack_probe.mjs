@@ -53,7 +53,7 @@ function makeRuntime({locked}){
     auditLogs:[],backupSnapshots:[],clients:[],
     canManageFinance:()=>true,
     isMonthLocked:key=>Boolean(subject.financeMonthLocks[key]),
-    ensureAutomaticReceivables:()=>{},ensureAutomaticAssetCosts:()=>{},
+    ensureAutomaticReceivables:()=>{},ensureAutomaticAssetCosts:()=>{},ensureDailyBackup:()=>{},
     runFinanceMonthCheck:()=>({issues:[]}),getFinanceMonthCheck:()=>({issues:[]}),
     buildFinanceMonthSnapshot:()=>({createdAt:'2026-09-03T00:00:00.000Z',income:456}),
     askConfirm:(_config,action)=>{confirmAction=action;},
@@ -64,7 +64,6 @@ function makeRuntime({locked}){
   return {subject,calls,month,existingLock,existingSnapshot,getConfirm:()=>confirmAction};
 }
 
-// Lock: final UI currently claims success before the debounced cloud save is acknowledged.
 {
   const {subject,calls,month,getConfirm}=makeRuntime({locked:false});
   subject.toggleFinanceMonthLock(month);
@@ -78,7 +77,6 @@ function makeRuntime({locked}){
   if(later?.financeMonthLocks?.[month]&&later?.auditLogs?.some(row=>row.action==='完成财务月结'))findings.push('lock: later ordinary persist can resurrect the previously failed lock operation');
 }
 
-// Unlock has the symmetric failure mode: local accounting protection disappears before durable ACK.
 {
   const {subject,calls,month,getConfirm}=makeRuntime({locked:true});
   subject.toggleFinanceMonthLock(month);
