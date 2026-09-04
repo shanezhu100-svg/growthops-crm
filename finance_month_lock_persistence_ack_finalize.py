@@ -106,3 +106,6 @@ import reconciliation_persistence_ack_finalize  # noqa: E402,F401
 # Cash receipt creation/deletion runs after reconciliation so it sees the final shared
 # serialized save queue and the already-hardened confirmation-time payment delete.
 import receivable_payment_persistence_ack_finalize  # noqa: E402,F401
+# Manual finance-cost durability runs last in the finance write chain so it sees the
+# final receivable/payment/reconciliation save barriers and cannot be overwritten later.
+import finance_cost_persistence_ack_finalize  # noqa: E402,F401
