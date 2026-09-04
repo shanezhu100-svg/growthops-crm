@@ -50,3 +50,7 @@ print(
 # Provider create/edit mutates its own source plus denormalized linked opening-deal
 # display fields, so its durability barrier must observe the fully finalized deal path.
 import opening_provider_persistence_ack_finalize  # noqa: F401,E402
+
+# Confirmation-gated lifecycle writes reuse the same final serialized save queue but
+# remain a separate rollback domain from opening/provider accounting mutations.
+import client_lifecycle_persistence_ack_finalize  # noqa: F401,E402
