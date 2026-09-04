@@ -94,12 +94,13 @@ function makeRuntime(kind){
   finding(Number(later.openingDeals?.[0]?.fee)===220&&Number(later.financeCosts?.[0]?.amount)===220,'edit-later-persist-resurrects-failed-mutation');
 }
 
-// DELETE: after confirmation, source and linked cost disappear and success is emitted
-// before ACK; a 503 leaves that false deletion in memory and a later persist commits it.
+// DELETE: the original shipped method emits its success notice immediately after the
+// optimistic deletion. Durable semantics may keep the reversible local deletion while
+// awaiting ACK, but must hold the success notice and roll back on a failed save.
 {
   const {subject,calls,existing,getConfirm}=makeRuntime('delete');
   subject.deleteOpeningDeal(existing);const action=getConfirm();if(typeof action!=='function')throw new Error('BUSINESS_OPENING_DEAL_PERSISTENCE_ACK_PROBE_FAILED: delete confirmation missing');action();
-  finding(subject.openingDeals.length===0&&subject.financeCosts.length===0,'delete-success-before-ack');
+  finding(calls.notify.length>0,'delete-success-before-ack');
   await sleep(240);
   finding(subject.openingDeals.length===0&&subject.financeCosts.length===0&&subject.auditLogs.some(a=>a.action==='删除客户开户渠道'),'delete-failed-save-leaves-local-deletion');
   subject.persist();await sleep(240);const later=parseState(calls.fetch.at(-1));
