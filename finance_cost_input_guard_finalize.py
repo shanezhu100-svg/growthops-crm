@@ -12,6 +12,7 @@ import logout_persistence_barrier_finalize  # noqa: F401
 import logout_audit_truthfulness_finalize  # noqa: F401
 import backup_snapshot_persistence_ack_finalize  # noqa: F401
 import irreversible_export_audit_barrier_finalize  # noqa: F401
+import client_save_persistence_ack_finalize  # noqa: F401
 
 ROOT = Path(__file__).resolve().parent
 APP_DIR = ROOT / 'dist' / 'app'
