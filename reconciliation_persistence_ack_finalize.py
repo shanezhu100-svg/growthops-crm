@@ -66,7 +66,7 @@ for path in files:
     if bounds is not None:
         found_save += 1
         start, end = bounds
-        source = text[start:end].rstrip(',').strip()
+        source = text[start:end].strip().rstrip(',').strip()
         required = (
             'this.reconciliationSelectedOption',
             'this.reconciliationForm',
