@@ -42,6 +42,7 @@ if(typeof methods.deleteClient!=='function')throw new Error('BUSINESS_CLIENT_DEL
 const fail=message=>{throw new Error('BUSINESS_CLIENT_DELETE_INTEGRITY_FAILED: '+message)};
 const eq=(actual,expected,label)=>{if(actual!==expected)fail(`${label}; expected=${expected}; actual=${actual}`)};
 const hasId=(rows,id,key='clientId')=>rows.some(row=>String(row?.[key]??'')===String(id));
+const settle=()=>new Promise(resolve=>setTimeout(resolve,0));
 
 {
   store.clear();
@@ -57,7 +58,7 @@ const hasId=(rows,id,key='clientId')=>rows.some(row=>String(row?.[key]??'')===St
   const survivor={id:2,name:'Survivor',archived:false};
   const linkedLead={id:'lead-1',stage:'WON',convertedClientId:1,convertedAt:'2026-08-01T00:00:00.000Z'};
   const unrelatedLead={id:'lead-2',stage:'WON',convertedClientId:2,convertedAt:'2026-08-02T00:00:00.000Z'};
-  let persisted=0,audited=0,confirmed=0,syncs=0,notice='';
+  let persisted=0,durable=0,audited=0,confirmed=0,syncs=0,notice='';
   const subject={
     deleteClient:methods.deleteClient,
     currentUser:{role:'ADMIN'},clients:[client,survivor],leads:[linkedLead,unrelatedLead],
@@ -67,17 +68,20 @@ const hasId=(rows,id,key='clientId')=>rows.some(row=>String(row?.[key]??'')===St
     standaloneAlerts:[{id:'a1',clientId:1},{id:'a2',clientId:2}],
     dismissedAlerts:[{id:'d1',clientId:1},{id:'d2',clientId:2}],
     mediaTools:[{id:'t1',bindings:[{clientId:1,accountKey:'ALL'},{clientId:2,accountKey:'ALL'}]}],
-    financeMonthSnapshots:{},
+    financeMonthSnapshots:{},auditLogs:[],
     selectedClientId:1,selectedAssetsClientId:1,selectedSopClientId:1,selectedAnalyticsClientId:1,selectedAdsClientId:1,
     clientRelationSummary:()=>({adRecords:1,campaigns:1,openings:1,receivables:1,costs:1,tools:1,total:6}),
-    askConfirm:(opts,callback)=>{confirmed+=1;callback()},
-    persist:()=>{persisted+=1},logAudit:()=>{audited+=1},notify:msg=>{notice=msg},
+    askConfirm:(opts,callback)=>{confirmed+=1;return callback()},
+    persist:()=>{persisted+=1},persistClientDeleteBarrier:()=>{durable+=1;return Promise.resolve()},
+    logAudit:()=>{audited+=1},notify:msg=>{notice=msg},
     syncAnalyticsAccountSelection:()=>{syncs+=1},syncAdsAccountSelection:()=>{syncs+=1},syncSopAccountSelection:()=>{syncs+=1},
   };
 
   subject.deleteClient(client);
+  await settle();
   eq(confirmed,1,'allowed permanent delete confirms exactly once');
-  eq(persisted,1,'allowed permanent delete persists exactly once');
+  eq(durable,1,'allowed permanent delete durably acknowledges exactly once');
+  eq(persisted,0,'allowed permanent delete bypasses legacy debounced persist');
   eq(audited,1,'allowed permanent delete audits exactly once');
   eq(syncs,3,'allowed permanent delete repairs all module selections');
   eq(subject.clients.length,1,'deleted client removed from client collection');
@@ -104,27 +108,29 @@ const hasId=(rows,id,key='clientId')=>rows.some(row=>String(row?.[key]??'')===St
   for(const key of ['selectedClientId','selectedAssetsClientId','selectedSopClientId','selectedAnalyticsClientId','selectedAdsClientId']){
     eq(String(subject[key]),'2',`${key} falls back to surviving client`);
   }
-  if(!notice.includes('已删除'))fail('success notification missing after permanent delete');
+  if(!notice.includes('已删除'))fail('success notification missing after permanent delete ACK');
 }
 
 {
   store.clear();
   localStorage.setItem('growthOpsSop-1-FB:acct-2026-09-01','keep');
   const client={id:1,name:'Locked Client',archived:true};
-  let confirmed=0,persisted=0,notified='';
+  let confirmed=0,persisted=0,durable=0,notified='';
   const linkedLead={id:'lead-lock',stage:'WON',convertedClientId:1,convertedAt:'2026-08-01T00:00:00.000Z'};
   const subject={
     deleteClient:methods.deleteClient,currentUser:{role:'ADMIN'},clients:[client],leads:[linkedLead],
-    openingDeals:[],financeReceivables:[{id:'r1',clientId:1,payments:[{amount:1}]}],financeCosts:[],standaloneAlerts:[],dismissedAlerts:[],mediaTools:[],financeMonthSnapshots:{},
-    askConfirm:()=>{confirmed+=1},persist:()=>{persisted+=1},notify:msg=>{notified=msg},
+    openingDeals:[],financeReceivables:[{id:'r1',clientId:1,payments:[{amount:1}]}],financeCosts:[],standaloneAlerts:[],dismissedAlerts:[],mediaTools:[],financeMonthSnapshots:{},auditLogs:[],
+    askConfirm:()=>{confirmed+=1},persist:()=>{persisted+=1},persistClientDeleteBarrier:()=>{durable+=1;return Promise.resolve()},notify:msg=>{notified=msg},
   };
   subject.deleteClient(client);
+  await settle();
   eq(confirmed,0,'payment-history blocker prevents confirmation');
   eq(persisted,0,'payment-history blocker prevents persistence');
+  eq(durable,0,'payment-history blocker prevents durable save');
   eq(subject.clients.length,1,'payment-history blocker preserves client');
   eq(String(linkedLead.convertedClientId),'1','payment-history blocker preserves lead link');
   if(localStorage.getItem('growthOpsSop-1-FB:acct-2026-09-01')===null)fail('payment-history blocker removed SOP progress');
   if(!/不能永久删除/.test(notified))fail('payment-history blocker notification missing');
 }
 
-console.log('BUSINESS_CLIENT_DELETE_INTEGRITY_OK: permanent-delete=cascade+lead-pointer+SOP-cleanup; unrelated-data=preserved; won-history=preserved; payment-history=blocks-without-side-effects');
+console.log('BUSINESS_CLIENT_DELETE_INTEGRITY_OK: permanent-delete=cascade+lead-pointer+SOP-cleanup+durable-ACK; unrelated-data=preserved; won-history=preserved; payment-history=blocks-without-side-effects');
