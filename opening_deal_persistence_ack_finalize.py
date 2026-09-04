@@ -46,3 +46,7 @@ print(
     'ack-wait-unrelated-audits=preserved; durability+rollback=unchanged; '
     f'app={changed[0][0]}:{changed[0][1]}'
 )
+
+# Provider create/edit mutates its own source plus denormalized linked opening-deal
+# display fields, so its durability barrier must observe the fully finalized deal path.
+import opening_provider_persistence_ack_finalize  # noqa: F401,E402
