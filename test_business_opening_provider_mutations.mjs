@@ -30,7 +30,7 @@ function extractMethod(name){
 }
 
 let methods;
-try{methods=vm.runInNewContext(`({${extractMethod('saveOpeningProvider')}})`,{Number,String,Object,Array,Math,Set,JSON,Date},{timeout:1000})}
+try{methods=vm.runInNewContext(`({${extractMethod('saveOpeningProvider')}})`,{Number,String,Object,Array,Math,Set,JSON,Date,Promise},{timeout:1000})}
 catch(error){throw new Error(`BUSINESS_OPENING_PROVIDER_MUTATIONS_FAILED: unable to execute final method: ${error.message}`)}
 if(typeof methods.saveOpeningProvider!=='function')throw new Error('BUSINESS_OPENING_PROVIDER_MUTATIONS_FAILED: saveOpeningProvider not executable');
 
@@ -48,7 +48,7 @@ function subject(overrides={}){
   return Object.assign({},methods,{
     providerForm:form(),openingProviders:[],openingDeals:[],showProviderModal:true,
     canManageProviders:()=>true,accountUid:prefix=>`${prefix}-new`,
-    normalizeOpeningProvider:value=>clone(value),persist:()=>{},logAudit:()=>{},notify:()=>{},
+    normalizeOpeningProvider:value=>clone(value),persist:()=>{},persistOpeningProviderBarrier:async function(){return this.persist()},logAudit:()=>{},notify:()=>{},
     ...overrides,
   });
 }
@@ -105,21 +105,21 @@ for(const invalidRate of [-1,101,'not-a-number',Number.POSITIVE_INFINITY]){
   eq(s.openingProviders.length,0,'duplicate effective date within one contact blocked');
 }
 
-// Valid create allocates one provider id and performs one durable success write.
+// Valid create allocates one provider id and completes only after the durable barrier.
 {
   let persisted=0;const audits=[];
   const s=subject({persist:()=>{persisted+=1},logAudit:(a,t)=>audits.push([a,t])});
-  s.saveOpeningProvider();
+  await s.saveOpeningProvider();
   eq(s.openingProviders.length,1,'valid provider create inserts once');
   eq(s.openingProviders[0].id,'provider-new','valid provider create allocates id');
-  eq(persisted,1,'valid provider create persists once');
+  eq(persisted,1,'valid provider create crosses durable barrier once');
   eq(audits.length,1,'valid provider create audits once');
   eq(audits[0][0],'新增开户商','valid provider create audit action');
-  eq(s.showProviderModal,false,'valid provider create closes editor');
+  eq(s.showProviderModal,false,'valid provider create closes editor after ACK');
 }
 
 // Valid edit updates exactly the existing provider and propagates current names to
-// linked opening deals without duplicating provider state.
+// linked opening deals without duplicating provider state, then waits for ACK.
 {
   let persisted=0;const audits=[];
   const existing=provider({name:'Old Provider'});
@@ -129,15 +129,16 @@ for(const invalidRate of [-1,101,'not-a-number',Number.POSITIVE_INFINITY]){
     openingDeals:[{id:'deal-1',providerId:'provider-1',contactId:'contact-1',partnerName:'Old Provider',contactName:'Alice',contactInfo:'legacy'}],
     persist:()=>{persisted+=1},logAudit:(a,t)=>audits.push([a,t]),
   });
-  s.saveOpeningProvider();
+  await s.saveOpeningProvider();
   eq(s.openingProviders.length,1,'valid provider edit does not duplicate');
   eq(s.openingProviders[0].name,'Provider Updated','valid provider edit updates provider');
   eq(s.openingDeals[0].partnerName,'Provider Updated','valid provider edit propagates provider name');
   eq(s.openingDeals[0].contactName,'Alice Updated','valid provider edit propagates contact name');
   eq(s.openingDeals[0].contactInfo,'','valid provider edit clears legacy contact info when contact matches');
-  eq(persisted,1,'valid provider edit persists once');
+  eq(persisted,1,'valid provider edit crosses durable barrier once');
   eq(audits.length,1,'valid provider edit audits once');
   eq(audits[0][0],'修改开户商资料','valid provider edit audit action');
+  eq(s.showProviderModal,false,'valid provider edit closes editor after ACK');
 }
 
-console.log('BUSINESS_OPENING_PROVIDER_MUTATIONS_OK: stale-edit=fail-closed; policy-date=yyyy-mm-dd+calendar-valid; rebate-rate=0-100+nonfinite-deny; duplicate-date=blocked; create+edit=single-write; linked-deal-name-sync=preserved; provenance=final-shipped-vm');
+console.log('BUSINESS_OPENING_PROVIDER_MUTATIONS_OK: stale-edit=fail-closed; policy-date=yyyy-mm-dd+calendar-valid; rebate-rate=0-100+nonfinite-deny; duplicate-date=blocked; create+edit=single-write+durable-ACK; linked-deal-name-sync=preserved; provenance=final-shipped-vm');
