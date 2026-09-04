@@ -22,11 +22,11 @@ function extractMethod(name){
 
 const names=['alertList','financeReceivablePaid','financeReceivableUnpaid','saveReceivablePayment'];
 const source=Object.fromEntries(names.map(name=>[name,extractMethod(name)]));
-const subject=vm.runInNewContext(`({${names.map(name=>source[name]).join(',')}})`,{Number,String,Object,Array,Math,Date},{timeout:1000});
+const subject=vm.runInNewContext(`({${names.map(name=>source[name]).join(',')}})`,{Number,String,Object,Array,Math,Date,JSON,Set,Promise},{timeout:1000});
 
 let uid=0;
 Object.assign(subject,{
-  clients:[],financeReceivables:[],standaloneAlerts:[],dismissedAlerts:[],
+  clients:[],financeReceivables:[],standaloneAlerts:[],dismissedAlerts:[],auditLogs:[],
   pushDueAlert(){},pushRechargeAlert(){},
   daysUntil(){return 1;},
   autoDueReminderStage(){return{reminderIndex:3,reminderTotal:3,reminderDaysBefore:1,reminderDate:'2026-08-29'};},
@@ -38,13 +38,12 @@ Object.assign(subject,{
   localDateKey(){return '2026-08-30';},
   assertMonthUnlocked(){return true;},
   accountUid(prefix){uid+=1;return `${prefix}-${uid}`;},
-  persist(){return true;},logAudit(){},notify(){},
+  persist(){return true;},persistReceivablePaymentBarrier:async()=>{},logAudit(){},notify(){},
 });
 
 const fail=(label,expected,actual)=>{throw new Error(`BUSINESS_RECEIVABLE_REMINDER_CLOSE_FAILED: ${label}; expected=${expected}; actual=${actual}`);};
 const eq=(actual,expected,label)=>{if(actual!==expected)fail(label,expected,actual);};
 const has=(id)=>subject.alertList().some(item=>String(item.id)===String(id));
-const ids=()=>subject.alertList().map(item=>String(item.id));
 const client=(id,name)=>({id,name,archived:false,networkEnvironments:[],fbAccounts:[],tkAccounts:[]});
 const bill=(id,clientId,amount=100,payments=[])=>({id,clientId,amount,payments,currency:'USD',settlementMonth:'2026-08',dueDate:'2026-08-30',incomeType:'SERVICE_FEE'});
 const reminder=(id,overrides={})=>({id,typeKey:'RECEIVABLE',clientName:'Alpha',dueDate:'2026-08-30',cost:'',target:'',...overrides});
@@ -53,13 +52,14 @@ function reset(){
   subject.clients=[client('c1','Alpha'),client('c2','Beta')];
   subject.financeReceivables=[];
   subject.standaloneAlerts=[];
+  subject.auditLogs=[];
   subject.paymentTargetReceivable=null;
   subject.paymentForm={date:'2026-08-30',amount:'',method:'银行转账',account:'',note:''};
 }
-function pay(row,amount){
+async function pay(row,amount){
   subject.paymentTargetReceivable=row;
   subject.paymentForm={date:'2026-08-30',amount,method:'银行转账',account:'acct',note:''};
-  subject.saveReceivablePayment();
+  await subject.saveReceivablePayment();
 }
 
 // Formal financeReceivables are the single reminder authority once a standalone
@@ -72,7 +72,7 @@ subject.standaloneAlerts=[reminder('sa-alpha'),{id:'sa-ip',typeKey:'IP',clientNa
 eq(has('RECEIVABLE-r1'),true,'automatic reminder exists before payment');
 eq(has('sa-alpha'),false,'linked standalone reminder suppressed before payment');
 eq(has('sa-ip'),true,'non-receivable reminder remains unchanged');
-pay(r1,40);
+await pay(r1,40);
 eq(subject.financeReceivableUnpaid(r1),60,'partial payment leaves outstanding amount');
 eq(has('RECEIVABLE-r1'),true,'automatic reminder remains after partial payment');
 eq(has('sa-alpha'),false,'linked standalone reminder stays suppressed after partial payment');
@@ -80,7 +80,7 @@ eq(has('sa-ip'),true,'non-receivable reminder remains unchanged after partial pa
 
 // Completing the outstanding balance removes the automatic bill reminder. The
 // linked standalone reminder stays suppressed, so settled receivables never reappear.
-pay(r1,60);
+await pay(r1,60);
 eq(subject.financeReceivableUnpaid(r1),0,'full payment settles bill');
 eq(has('RECEIVABLE-r1'),false,'automatic reminder closes after full payment');
 eq(has('sa-alpha'),false,'linked standalone reminder remains suppressed after full payment');
@@ -122,4 +122,4 @@ reset();
 subject.standaloneAlerts=[reminder('sa-no-bill',{clientName:'Alpha'})];
 eq(has('sa-no-bill'),true,'no linked receivable rows keeps reminder');
 
-console.log('BUSINESS_RECEIVABLE_REMINDER_CLOSE_OK: formal-receivable=single-authority; linked-standalone=suppressed; partial=automatic-preserved; settled=closed; unresolved=fail-safe; other-types=unchanged');
+console.log('BUSINESS_RECEIVABLE_REMINDER_CLOSE_OK: formal-receivable=single-authority; linked-standalone=suppressed; partial=automatic-preserved; settled=closed; unresolved=fail-safe; other-types=unchanged; payment=ACK-aware');

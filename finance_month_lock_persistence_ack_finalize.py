@@ -103,3 +103,6 @@ print(
 # Reconciliation confirmation/void must run after both the destructive confirmation
 # hardening and this month-lock acknowledgement stage, but before business VM gates.
 import reconciliation_persistence_ack_finalize  # noqa: E402,F401
+# Cash receipt creation/deletion runs after reconciliation so it sees the final shared
+# serialized save queue and the already-hardened confirmation-time payment delete.
+import receivable_payment_persistence_ack_finalize  # noqa: E402,F401
