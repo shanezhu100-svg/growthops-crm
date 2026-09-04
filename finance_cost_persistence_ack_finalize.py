@@ -73,7 +73,7 @@ for path in files:
             'this.normalizeFinanceCost(',
             'this.financeCosts',
             'this.persist()',
-            "this.logAudit(isEdit?'修改成本':'新增成本'",
+            "this.logAudit(editing?'修改成本':'新增成本'",
             'this.showCostModal=false',
             '成本已保存',
         )
