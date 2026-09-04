@@ -29,7 +29,7 @@ function extractMethod(name){
 }
 
 const sideEffects=new Set([
-  'persist','logAudit','notify','navigateTo',
+  'persist','persistClientSaveBarrier','logAudit','notify','navigateTo',
   'ensureAutomaticAssetCosts','ensureAutomaticReceivables','ensureClientFirstReceivable',
 ]);
 const pureStubs=new Set(['localDateKey']);
