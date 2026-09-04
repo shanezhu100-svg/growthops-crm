@@ -30,11 +30,11 @@ for(const name of methodNames)if(typeof methods[name]!=='function')throw new Err
 
 const fail=message=>{throw new Error('BUSINESS_CLIENT_LIFECYCLE_MUTATIONS_FAILED: '+message)};
 const eq=(actual,expected,label)=>{if(actual!==expected)fail(`${label}; expected=${expected}; actual=${actual}`)};
-const makeSubject=extra=>Object.assign({},methods,extra||{});
+const makeSubject=extra=>Object.assign({},methods,{persistClientLifecycleBarrier:async function(){return this.persist()}},extra||{});
 
 // Archive is permission-gated and confirmation-gated. Nothing durable may happen
 // before the user confirms; confirmed archive preserves the record and changes only
-// lifecycle state while persisting/auditing exactly once.
+// lifecycle state while persisting/auditing exactly once after ACK.
 {
   const client={id:'client-a',name:'Client A',archived:false,status:'ACTIVE',archivedAt:''};
   let confirmConfig=null,confirmAction=null,persisted=0,audited=[],notifications=[];
@@ -52,15 +52,15 @@ const makeSubject=extra=>Object.assign({},methods,extra||{});
   eq(audited.length,0,'archive must not audit before confirmation');
   eq(confirmConfig?.title,'归档客户','archive confirmation title');
   if(typeof confirmAction!=='function')fail('archive confirmation callback missing');
-  confirmAction();
+  await confirmAction();
   eq(client.archived,true,'confirmed archive marks client archived');
   eq(client.status,'PAUSED','confirmed archive pauses client');
   if(!/^\d{4}-\d{2}-\d{2}T/.test(client.archivedAt))fail('confirmed archive must record ISO archivedAt');
-  eq(persisted,1,'confirmed archive persistence count');
+  eq(persisted,1,'confirmed archive durable barrier count');
   eq(audited.length,1,'confirmed archive audit count');
   eq(audited[0][0],'归档客户','confirmed archive audit action');
   eq(audited[0][1],'Client A','confirmed archive audit target');
-  if(!notifications.some(message=>message.includes('已归档')))fail('confirmed archive success notification missing');
+  if(!notifications.some(message=>message.includes('已归档')))fail('confirmed archive success notification missing after ACK');
 }
 {
   const client={id:'client-denied',name:'Denied',archived:false,status:'ACTIVE'};
@@ -85,7 +85,7 @@ const makeSubject=extra=>Object.assign({},methods,extra||{});
 }
 
 // Restore mirrors archive: permission + confirmation first, then exact lifecycle
-// reset and one durable/audit write.
+// reset and one acknowledged/audit write.
 {
   const client={id:'client-r',name:'Client R',archived:true,status:'PAUSED',archivedAt:'2026-08-01T00:00:00.000Z'};
   let confirmConfig=null,confirmAction=null,persisted=0,audited=[],notifications=[];
@@ -101,15 +101,15 @@ const makeSubject=extra=>Object.assign({},methods,extra||{});
   eq(persisted,0,'restore must not persist before confirmation');
   eq(confirmConfig?.title,'恢复归档客户','restore confirmation title');
   if(typeof confirmAction!=='function')fail('restore confirmation callback missing');
-  confirmAction();
+  await confirmAction();
   eq(client.archived,false,'confirmed restore clears archived flag');
   eq(client.archivedAt,'','confirmed restore clears archived timestamp');
   eq(client.status,'ACTIVE','confirmed restore reactivates client');
-  eq(persisted,1,'confirmed restore persistence count');
+  eq(persisted,1,'confirmed restore durable barrier count');
   eq(audited.length,1,'confirmed restore audit count');
   eq(audited[0][0],'恢复归档客户','confirmed restore audit action');
   eq(audited[0][1],'Client R','confirmed restore audit target');
-  if(!notifications.some(message=>message.includes('已恢复')))fail('confirmed restore success notification missing');
+  if(!notifications.some(message=>message.includes('已恢复')))fail('confirmed restore success notification missing after ACK');
 }
 {
   const client={id:'client-r-denied',name:'Denied R',archived:true,status:'PAUSED',archivedAt:'x'};
@@ -133,7 +133,7 @@ const makeSubject=extra=>Object.assign({},methods,extra||{});
   eq(confirms,0,'null/active client must be restore no-op');
 }
 
-// Lead deletion must be confirmation-gated, ID-scoped, and durable/audited once.
+// Lead deletion remains confirmation-gated, ID-scoped, and completes only after ACK.
 {
   const target={id:7,company:'Target Lead'};
   const other={id:'8',company:'Other Lead'};
@@ -151,14 +151,14 @@ const makeSubject=extra=>Object.assign({},methods,extra||{});
   eq(audited.length,0,'lead delete must not audit before confirmation');
   eq(confirmConfig?.title,'删除潜在客户','lead delete confirmation title');
   if(typeof confirmAction!=='function')fail('lead delete confirmation callback missing');
-  confirmAction();
+  await confirmAction();
   eq(s.leads.length,1,'confirmed lead delete removes exactly matching id');
   eq(String(s.leads[0].id),'8','confirmed lead delete preserves unrelated lead');
-  eq(persisted,1,'confirmed lead delete persistence count');
+  eq(persisted,1,'confirmed lead delete durable barrier count');
   eq(audited.length,1,'confirmed lead delete audit count');
   eq(audited[0][0],'删除潜在客户','confirmed lead delete audit action');
   eq(audited[0][1],'Target Lead','confirmed lead delete audit target');
-  if(!notifications.some(message=>message.includes('已删除')))fail('confirmed lead delete success notification missing');
+  if(!notifications.some(message=>message.includes('已删除')))fail('confirmed lead delete success notification missing after ACK');
 }
 {
   let confirms=0,persisted=0,audited=0;
@@ -169,4 +169,4 @@ const makeSubject=extra=>Object.assign({},methods,extra||{});
   eq(audited,0,'null lead delete must not audit');
 }
 
-console.log('BUSINESS_CLIENT_LIFECYCLE_MUTATIONS_OK: archive=permission+confirmation+pause; restore=permission+confirmation+active; lead-delete=confirmation+id-scope; persist+audit=exact-on-confirm');
+console.log('BUSINESS_CLIENT_LIFECYCLE_MUTATIONS_OK: archive=permission+confirmation+pause+durable-ACK; restore=permission+confirmation+active+durable-ACK; lead-delete=confirmation+id-scope+durable-ACK; persist+audit=ACK-pinned');
