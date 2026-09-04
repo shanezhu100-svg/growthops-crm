@@ -99,3 +99,7 @@ print(
     'concurrency=same-month-identity/absence-guarded; save-queue=shared-flushSave; '
     f'adapter={adapter_sha}; app={changed[0][0]}:{changed[0][1]}'
 )
+
+# Reconciliation confirmation/void must run after both the destructive confirmation
+# hardening and this month-lock acknowledgement stage, but before business VM gates.
+import reconciliation_persistence_ack_finalize  # noqa: E402,F401
