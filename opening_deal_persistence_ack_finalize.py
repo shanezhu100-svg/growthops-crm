@@ -19,17 +19,65 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
 
 
 def method_bounds(text: str, name: str):
-    signature = re.compile(rf'(?:^|[,\n])\s*({re.escape(name)}\([^)]*\)\s*\{{)', re.M)
-    match = signature.search(text)
+    match = re.search(rf'(?:^|[,\n])\s*({re.escape(name)}\([^)]*\)\s*\{{)', text, flags=re.M)
     if not match:
         return None
     start = match.start() + match.group(0).index(match.group(1))
-    tail = text[start:]
-    defs = list(re.finditer(r'(?:^|[,]\s*|\n\s*)([A-Za-z_$][A-Za-z0-9_$]*)\s*\([^)]*\)\s*\{', tail))
-    if len(defs) < 2 or defs[0].group(1) != name:
-        fail(f'{name} boundary parser drifted')
-    end = start + defs[1].start() + defs[1].group(0).index(defs[1].group(1))
-    return start, end
+    open_pos = text.find('{', start)
+    if open_pos < 0:
+        fail(f'{name} opening brace missing')
+    depth = 0
+    quote = ''
+    escaped = False
+    line_comment = False
+    block_comment = False
+    i = open_pos
+    while i < len(text):
+        ch = text[i]
+        nxt = text[i + 1] if i + 1 < len(text) else ''
+        if line_comment:
+            if ch == '\n':
+                line_comment = False
+            i += 1
+            continue
+        if block_comment:
+            if ch == '*' and nxt == '/':
+                block_comment = False
+                i += 2
+                continue
+            i += 1
+            continue
+        if quote:
+            if escaped:
+                escaped = False
+            elif ch == '\\':
+                escaped = True
+            elif ch == quote:
+                quote = ''
+            i += 1
+            continue
+        if ch == '/' and nxt == '/':
+            line_comment = True
+            i += 2
+            continue
+        if ch == '/' and nxt == '*':
+            block_comment = True
+            i += 2
+            continue
+        if ch in ('"', "'", '`'):
+            quote = ch
+            i += 1
+            continue
+        if ch == '{':
+            depth += 1
+        elif ch == '}':
+            depth -= 1
+            if depth == 0:
+                return start, i + 1
+            if depth < 0:
+                break
+        i += 1
+    fail(f'{name} closing brace missing')
 
 
 if not ADAPTER.is_file():
