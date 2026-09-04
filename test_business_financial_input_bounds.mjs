@@ -63,7 +63,7 @@ function runClient(monthlyFee){
     ensureClientFirstReceivable:()=>{billing+=1;return 1},
     ensureAutomaticReceivables:()=>{billing+=1;return 1},
     ensureAutomaticAssetCosts:()=>{billing+=1;return 1},
-    localDateKey:()=> '2026-08-31',persist:()=>{persisted+=1},logAudit:()=>{audited+=1},
+    localDateKey:()=> '2026-08-31',persist:()=>{persisted+=1},persistClientSaveBarrier:()=>{persisted+=1;return Promise.resolve(true)},logAudit:()=>{audited+=1},
     formatMoney:(value,currency)=>`${currency}:${value}`,notify:msg=>{notified=String(msg??'')},navigateTo:page=>{navigated=page},
   });
   s.saveClient();
@@ -88,6 +88,6 @@ eq(zero.persisted,1,'zero expected budget remains valid');
 zero=runLead('adQuote','0');
 eq(zero.persisted,1,'zero ad quote remains valid');
 let zeroClient=runClient('0');
-eq(zeroClient.persisted,1,'zero monthly fee remains valid');
+eq(zeroClient.persisted,1,'zero monthly fee remains valid through durable client-save barrier');
 
-console.log('BUSINESS_FINANCIAL_INPUT_BOUNDS_OK: lead-budget+quote+client-fee=finite-nonnegative; negative+nan+infinity=denied-before-persist/audit/billing; zero=preserved');
+console.log('BUSINESS_FINANCIAL_INPUT_BOUNDS_OK: lead-budget+quote+client-fee=finite-nonnegative; negative+nan+infinity=denied-before-persist/audit/billing; zero=preserved+client-durable-ACK');
