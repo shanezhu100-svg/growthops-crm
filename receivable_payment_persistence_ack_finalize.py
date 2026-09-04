@@ -131,3 +131,7 @@ print(
     'concurrency=receivable-identity+payment-id+same-id-replacement-guarded; save-queue=shared-flushSave; '
     f'adapter={adapter_sha}; app={changed[0][0]}:{changed[0][1]}'
 )
+
+# Receivable master create/edit/delete runs after payment-ledger hardening so all
+# finance mutations share the same final serialized cloud save queue.
+import receivable_persistence_ack_finalize  # noqa: E402,F401
