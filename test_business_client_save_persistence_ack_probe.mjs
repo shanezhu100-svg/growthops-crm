@@ -81,10 +81,11 @@ const successUi=calls=>calls.navigate.includes('client-detail')||calls.notify.so
 const savedClient=(subject,kind)=>kind==='edit'?subject.clients.find(c=>String(c.id)==='client-save-1'):subject.clients.find(c=>c.name==='Created Client');
 const failedStatePresent=(subject,kind)=>{
   const c=savedClient(subject,kind);if(!c)return false;
-  const linked=subject.financeReceivables.some(x=>String(x.clientId)===String(c.id))||subject.financeCosts.some(x=>String(x.clientId)===String(c.id));
   const audit=subject.auditLogs.length>0;
-  const leadChanged=kind==='create'?subject.leads[0]?.stage==='WON'&&String(subject.leads[0]?.convertedClientId||'')===String(c.id):true;
-  return linked&&audit&&leadChanged&&(kind==='create'||c.name==='After Edit');
+  if(kind==='edit')return c.name==='After Edit'&&audit;
+  const linked=subject.financeReceivables.some(x=>String(x.clientId)===String(c.id))||subject.financeCosts.some(x=>String(x.clientId)===String(c.id));
+  const leadChanged=subject.leads[0]?.stage==='WON'&&String(subject.leads[0]?.convertedClientId||'')===String(c.id);
+  return linked&&audit&&leadChanged;
 };
 
 for(const kind of ['create','edit']){
@@ -100,10 +101,14 @@ for(const kind of ['create','edit']){
   subject.persist();await sleep(240);
   const later=parseState(calls.fetch.at(-1));
   const c=kind==='edit'?(later.clients||[]).find(x=>String(x.id)==='client-save-1'):(later.clients||[]).find(x=>x.name==='Created Client');
-  const linked=c&&((later.financeReceivables||[]).some(x=>String(x.clientId)===String(c.id))||(later.financeCosts||[]).some(x=>String(x.clientId)===String(c.id)));
   const audit=(later.auditLogs||[]).length>0;
-  const leadChanged=kind==='create'?(later.leads||[]).some(x=>x.id==='lead-source'&&x.stage==='WON'&&String(x.convertedClientId||'')===String(c?.id||'')):true;
-  if(c&&linked&&audit&&leadChanged&&(kind==='create'||c.name==='After Edit'))finding(`${kind}-later-persist-resurrects-failed-save`);
+  if(kind==='edit'){
+    if(c&&c.name==='After Edit'&&audit)finding('edit-later-persist-resurrects-failed-save');
+  }else{
+    const linked=c&&((later.financeReceivables||[]).some(x=>String(x.clientId)===String(c.id))||(later.financeCosts||[]).some(x=>String(x.clientId)===String(c.id)));
+    const leadChanged=(later.leads||[]).some(x=>x.id==='lead-source'&&x.stage==='WON'&&String(x.convertedClientId||'')===String(c?.id||''));
+    if(c&&linked&&audit&&leadChanged)finding('create-later-persist-resurrects-failed-save');
+  }
 }
 
 if(findings.length){console.error(`BUSINESS_CLIENT_SAVE_PERSISTENCE_ACK_PROBE_FINDINGS: count=${findings.length}; ${findings.join(';')}`);process.exitCode=1}
