@@ -161,6 +161,9 @@ python3 destructive_confirmation_integrity_finalize.py
 # Finance month lock/unlock is an accounting write boundary. Do not announce success
 # until the final cloud save queue acknowledges the state and its audit record.
 python3 finance_month_lock_persistence_ack_finalize.py
+# Permanent client deletion is a broad cascade. Keep its existing blocker/reference
+# semantics, but require the complete cascade to be durably acknowledged before success.
+python3 client_delete_persistence_ack_finalize.py
 # Browser liveness is verified by the required GitHub CI after this portable
 # build completes. Hosting builds must not depend on a Chromium executable.
 # Business-semantic regression gates execute the final shipped application logic,
