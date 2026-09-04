@@ -98,7 +98,7 @@ function makeRuntime(first){
   return {subject,client,calls,resolveFirst:status=>gate?.resolve(response(status))};
 }
 
-async function confirm(subject){if(typeof subject.__confirm?.action!=='function')throw new Error('BUSINESS_CLIENT_DELETE_PERSISTENCE_ACK_PROBE_FAILED: confirmation callback missing');return subject.__confirm.action()}
+function confirm(subject){if(typeof subject.__confirm?.action!=='function')throw new Error('BUSINESS_CLIENT_DELETE_PERSISTENCE_ACK_PROBE_FAILED: confirmation callback missing');return subject.__confirm.action()}
 const findings=[];
 const finding=label=>findings.push(label);
 const successNotice=calls=>calls.notify.some(m=>m.includes('已删除'));
@@ -107,14 +107,14 @@ const hasClientRef=(rows,id)=>Array.isArray(rows)&&rows.some(row=>String(row?.cl
 
 {
   const {subject,client,calls,resolveFirst}=makeRuntime('deferred');
-  subject.deleteClient(client);await confirm(subject);await sleep(210);
+  subject.deleteClient(client);const pending=confirm(subject);await sleep(210);
   if(calls.fetch.length===1&&successNotice(calls))finding('delete-success-before-ack');
-  resolveFirst(200);await sleep(20);
+  resolveFirst(200);await Promise.resolve(pending);await sleep(20);
 }
 
 {
   const {subject,client,calls}=makeRuntime('fail');
-  subject.deleteClient(client);await confirm(subject);await sleep(240);
+  subject.deleteClient(client);await Promise.resolve(confirm(subject));await sleep(240);
   if(!hasClient(subject.clients,1))finding('failed-save-client-remains-deleted');
   const linkedLead=subject.leads.find(row=>String(row?.id)==='lead-1');
   const cascadeStillApplied=!hasClientRef(subject.openingDeals,1)&&!hasClientRef(subject.financeReceivables,1)&&!hasClientRef(subject.financeCosts,1)&&!hasClientRef(subject.standaloneAlerts,1)&&!hasClientRef(subject.dismissedAlerts,1)&&linkedLead?.convertedClientId==null&&subject.mediaTools[0]?.bindings?.every(row=>String(row?.clientId)!=='1');
