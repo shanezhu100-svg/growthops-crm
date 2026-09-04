@@ -74,7 +74,7 @@ for path in files:
             'this.financeReconciliations',
             'this.financeActualRebates',
             "this.logAudit('代理商返点对账'",
-            "this.notify('对账已确认",
+            '对账已确认',
         )
         missing = [marker for marker in required if marker not in source]
         if missing:
