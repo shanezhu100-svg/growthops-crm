@@ -4,4 +4,4 @@ import './test_business_receivable_payment_bounds.mjs';
 import './test_business_receivable_payment_date_probe.mjs';
 import './test_business_destructive_confirmation_integrity.mjs';
 import './test_business_receivable_payment_persistence_ack.mjs';
-import './test_business_receivable_persistence_ack_probe.mjs';
+import './test_business_receivable_persistence_ack.mjs';
