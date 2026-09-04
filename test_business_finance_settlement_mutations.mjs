@@ -64,7 +64,7 @@ const makeSubject=extra=>Object.assign({},methods,extra||{});
 }
 
 // Lock/unlock is finance-permission gated. Unlock additionally requires ADMIN and
-// both paths remain confirmation-gated before durable lifecycle mutation.
+// both paths remain confirmation-gated; success is emitted only after durable ACK.
 {
   let lockedChecks=0,confirms=0,persisted=0; let notified='';
   const s=makeSubject({
@@ -92,22 +92,24 @@ const makeSubject=extra=>Object.assign({},methods,extra||{});
   const month='2026-08';
   const locks={[month]:{lockedAt:'old'}};
   const snapshots={[month]:{createdAt:'old'}};
-  let confirmConfig=null,confirmAction=null,persisted=0; const audited=[]; const notifications=[];
+  let confirmConfig=null,confirmAction=null,persisted=0,barrierCalls=0; const audited=[]; const notifications=[];
   const s=makeSubject({
-    financeMonthLocks:locks,financeMonthSnapshots:snapshots,
+    financeMonthLocks:locks,financeMonthSnapshots:snapshots,auditLogs:[],
     canManageFinance:()=>true,isMonthLocked:()=>true,currentUser:{role:'ADMIN',name:'Admin'},
     askConfirm:(config,action)=>{confirmConfig=config;confirmAction=action},
-    persist:()=>{persisted+=1},logAudit:(action,target)=>audited.push([action,target]),notify:message=>notifications.push(message),
+    persist:()=>{persisted+=1},persistFinanceMonthLockBarrier:async()=>{barrierCalls+=1},
+    logAudit:(action,target)=>audited.push([action,target]),notify:message=>notifications.push(message),
   });
   s.toggleFinanceMonthLock(month);
   ok(locks[month]&&snapshots[month],'unlock must not mutate month state before confirmation');
   eq(persisted,0,'unlock must not persist before confirmation');
   eq(confirmConfig?.title,'解除财务月结','unlock confirmation title');
   ok(typeof confirmAction==='function','unlock confirmation callback missing');
-  confirmAction();
+  await confirmAction();
   eq(Object.hasOwn(locks,month),false,'confirmed unlock removes lock');
   eq(Object.hasOwn(snapshots,month),false,'confirmed unlock removes frozen snapshot');
-  eq(persisted,1,'confirmed unlock persistence count');
+  eq(barrierCalls,1,'confirmed unlock durable barrier count');
+  eq(persisted,0,'confirmed unlock uses ACK barrier instead of debounced persist');
   eq(audited.length,1,'confirmed unlock audit count');
   eq(audited[0][0],'解除财务月结','confirmed unlock audit action');
   eq(audited[0][1],month,'confirmed unlock audit target');
@@ -134,27 +136,29 @@ const makeSubject=extra=>Object.assign({},methods,extra||{});
 }
 {
   const month='2026-08';
-  let confirmConfig=null,confirmAction=null,persisted=0; const audited=[]; const notifications=[];
+  let confirmConfig=null,confirmAction=null,persisted=0,barrierCalls=0; const audited=[]; const notifications=[];
   const snapshot={createdAt:'2026-09-01T00:00:00.000Z',income:100};
   const s=makeSubject({
-    financeMonthLocks:{},financeMonthSnapshots:{},currentUser:{role:'FINANCE',name:'Finance User'},
+    financeMonthLocks:{},financeMonthSnapshots:{},auditLogs:[],currentUser:{role:'FINANCE',name:'Finance User'},
     canManageFinance:()=>true,isMonthLocked:()=>false,
     ensureAutomaticReceivables:()=>{},ensureAutomaticAssetCosts:()=>{},
     getFinanceMonthCheck:()=>({issues:[]}),buildFinanceMonthSnapshot:key=>{eq(key,month,'lock snapshot month');return snapshot},
     askConfirm:(config,action)=>{confirmConfig=config;confirmAction=action},
-    persist:()=>{persisted+=1},logAudit:(action,target)=>audited.push([action,target]),notify:message=>notifications.push(message),
+    persist:()=>{persisted+=1},persistFinanceMonthLockBarrier:async()=>{barrierCalls+=1},
+    logAudit:(action,target)=>audited.push([action,target]),notify:message=>notifications.push(message),
   });
   s.toggleFinanceMonthLock(month);
   eq(persisted,1,'successful lock preflight persists automatic-cost refresh only');
   eq(confirmConfig?.title,'完成财务月结','lock confirmation title');
   eq(Object.hasOwn(s.financeMonthLocks,month),false,'lock must not be created before confirmation');
   ok(typeof confirmAction==='function','lock confirmation callback missing');
-  confirmAction();
+  await confirmAction();
   eq(s.financeMonthSnapshots[month],snapshot,'confirmed lock stores frozen snapshot');
   eq(s.financeMonthLocks[month].lockedBy,'Finance User','confirmed lock records actor');
   eq(s.financeMonthLocks[month].snapshotAt,snapshot.createdAt,'confirmed lock records snapshot timestamp');
   ok(/^\d{4}-\d{2}-\d{2}T/.test(s.financeMonthLocks[month].lockedAt),'confirmed lock must record ISO lockedAt');
-  eq(persisted,2,'confirmed lock persists once after preflight persistence');
+  eq(barrierCalls,1,'confirmed lock durable barrier count');
+  eq(persisted,1,'confirmed lock uses ACK barrier after preflight persistence');
   eq(audited.length,1,'confirmed lock audit count');
   eq(audited[0][0],'完成财务月结','confirmed lock audit action');
   ok(String(audited[0][1]).includes(month),'confirmed lock audit target includes month');
@@ -304,4 +308,4 @@ const makeSubject=extra=>Object.assign({},methods,extra||{});
   ok(notifications.some(message=>message.includes('对账已撤销')),'confirmed void notification missing');
 }
 
-console.log('BUSINESS_FINANCE_SETTLEMENT_MUTATIONS_OK: month-lock=permission+admin-unlock+check+confirmation+snapshot; month-check=asset-refresh+persist; reconciliation=lock+numeric-guard+upsert+rebate-replace; void=lock+confirmation+rebate-remove; persist+audit=phase-pinned');
+console.log('BUSINESS_FINANCE_SETTLEMENT_MUTATIONS_OK: month-lock=permission+admin-unlock+check+confirmation+snapshot+cloud-ack; month-check=asset-refresh+persist; reconciliation=lock+numeric-guard+upsert+rebate-replace; void=lock+confirmation+rebate-remove; persist+audit=phase-pinned');
