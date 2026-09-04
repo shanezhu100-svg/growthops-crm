@@ -87,7 +87,7 @@ function makeRuntime(first){
     clientRelationSummary:()=>({adRecords:1,campaigns:1,openings:1,receivables:1,costs:1,tools:1,total:6}),
     askConfirm:(config,action)=>{subject.__confirm={config,action}},
     logAudit:(action,target)=>{const row={id:`audit-${++auditId}`,action:String(action),target:String(target)};subject.auditLogs.push(row);return row},
-    notify:m=>calls.notify.push(String(m)),
+    notify:m=>calls.notify.push(String(m)),ensureDailyBackup:()=>{},
     syncAnalyticsAccountSelection:()=>{},syncAdsAccountSelection:()=>{},syncSopAccountSelection:()=>{},
     collectBackupPayload:()=>({
       clients:clone(subject.clients),leads:clone(subject.leads),openingProviders:clone(subject.openingProviders),openingDeals:clone(subject.openingDeals),
