@@ -71,7 +71,6 @@ for path in files:
             '该开户渠道记录已不存在',
             'syncOpeningFeeCost',
             'this.openingDeals',
-            'this.financeCosts',
             'this.persist()',
             'this.logAudit(',
             'this.showOpeningModal=false',
