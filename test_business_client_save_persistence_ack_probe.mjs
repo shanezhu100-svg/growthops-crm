@@ -24,7 +24,7 @@ function extractMethod(name){
   throw new Error(`BUSINESS_CLIENT_SAVE_PERSISTENCE_ACK_PROBE_FAILED: ${name} boundary missing`);
 }
 
-const sideEffects=new Set(['persist','logAudit','notify','navigateTo','ensureAutomaticAssetCosts','ensureAutomaticReceivables','ensureClientFirstReceivable']);
+const sideEffects=new Set(['persist','persistClientSaveBarrier','logAudit','notify','navigateTo','ensureAutomaticAssetCosts','ensureAutomaticReceivables','ensureClientFirstReceivable']);
 const pureStubs=new Set(['localDateKey']);
 const methodSources=new Map();
 function collectMethod(name){
