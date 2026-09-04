@@ -41,7 +41,7 @@ function extractMethod(name){
 
 const names=['saveOpeningDeal','deleteOpeningDeal'];
 let methods;
-try{methods=vm.runInNewContext(`({${names.map(extractMethod).join(',\n')}})`,{Number,String,Object,Array,Math,Set,JSON,Date},{timeout:1000})}
+try{methods=vm.runInNewContext(`({${names.map(extractMethod).join(',\n')}})`,{Number,String,Object,Array,Math,Set,JSON,Date,Promise},{timeout:1000})}
 catch(error){throw new Error(`BUSINESS_OPENING_DEAL_MUTATIONS_FAILED: unable to execute final methods: ${error.message}`)}
 for(const name of names)if(typeof methods[name]!=='function')throw new Error(`BUSINESS_OPENING_DEAL_MUTATIONS_FAILED: ${name} is not executable`);
 
@@ -69,7 +69,7 @@ function saveSubject(overrides={}){
     openingProviderContacts:()=>[],openingContact:()=>null,
     openingDealUnmatchedIds:()=>[],openingDealMatchedAccounts:()=>[],accountRebateMode:()=> 'CHANNEL',
     localDateKey:()=> '2026-09-02',accountUid:()=> 'deal-new',
-    syncOpeningFeeCost:()=>0,persist:()=>{},logAudit:()=>{},notify:()=>{},
+    syncOpeningFeeCost:()=>0,persist:()=>{},persistOpeningDealBarrier:async()=>true,logAudit:()=>{},notify:()=>{},
     openingClientName:row=>row?.clientId||row?.externalClientName||'',
     ...overrides,
   });
@@ -79,55 +79,58 @@ function saveSubject(overrides={}){
 // syncOpeningFeeCost can still create an orphan OPENING_DEAL finance cost, followed
 // by persistence, an incorrect "edit" audit event, and a success notice.
 {
-  let syncs=0,persisted=0,audited=0;const notices=[];
+  let syncs=0,persisted=0,barriers=0,audited=0;const notices=[];
   const s=saveSubject({
     openingForm:validForm({id:'missing-deal',status:'OPENED',fee:250}),
     openingDeals:[],financeCosts:[],
     syncOpeningFeeCost:payload=>{syncs+=1;s.financeCosts.push({id:'orphan-cost',sourceType:'OPENING_DEAL',sourceId:String(payload.id)});return 1},
-    persist:()=>{persisted+=1},logAudit:()=>{audited+=1},notify:m=>notices.push(m),
+    persist:()=>{persisted+=1},persistOpeningDealBarrier:async()=>{barriers+=1},logAudit:()=>{audited+=1},notify:m=>notices.push(m),
   });
-  s.saveOpeningDeal();
+  await s.saveOpeningDeal();
   eq(s.openingDeals.length,0,'stale opening edit must not recreate or mutate source rows');
   eq(syncs,0,'stale opening edit must stop before cost sync');
   eq(s.financeCosts.length,0,'stale opening edit must not create orphan finance cost');
   eq(persisted,0,'stale opening edit must not persist');
+  eq(barriers,0,'stale opening edit must not enter durable barrier');
   eq(audited,0,'stale opening edit must not audit success');
   eq(s.showOpeningModal,true,'stale opening edit must keep editor open');
   ok(notices.some(m=>m.includes('不存在')||m.includes('刷新')),'stale opening edit should explain stale record');
 }
 
-// Normal edit remains a single-row upsert with cost synchronization and one durable write.
+// Normal edit remains a single-row upsert with cost synchronization and one durable ACK.
 {
-  const existing=deal({fee:100,status:'OPENED'});let syncs=0,persisted=0;const audits=[];
+  const existing=deal({fee:100,status:'OPENED'});let syncs=0,persisted=0,barriers=0;const audits=[];
   const s=saveSubject({
     openingForm:validForm({id:'deal-1',fee:220,status:'OPENED'}),openingDeals:[clone(existing)],
     syncOpeningFeeCost:payload=>{syncs+=1;eq(payload.id,'deal-1','edit cost sync id');return 1},
-    persist:()=>{persisted+=1},logAudit:(a,t)=>audits.push([a,t]),
+    persist:()=>{persisted+=1},persistOpeningDealBarrier:async()=>{barriers+=1},logAudit:(a,t)=>audits.push([a,t]),
   });
-  s.saveOpeningDeal();
+  await s.saveOpeningDeal();
   eq(s.openingDeals.length,1,'valid opening edit must not duplicate');
   eq(s.openingDeals[0].id,'deal-1','valid opening edit preserves id');
   eq(s.openingDeals[0].fee,220,'valid opening edit updates fee');
   eq(syncs,1,'valid opening edit syncs cost once');
-  eq(persisted,1,'valid opening edit persists once');
+  eq(persisted,0,'valid opening edit suppresses debounced persist in favor of durable barrier');
+  eq(barriers,1,'valid opening edit awaits durable barrier once');
   eq(audits.length,1,'valid opening edit audits once');
   eq(audits[0][0],'修改客户开户渠道','valid opening edit audit action');
-  eq(s.showOpeningModal,false,'valid opening edit closes editor');
+  eq(s.showOpeningModal,false,'valid opening edit closes editor after ACK');
 }
 
-// New rows allocate an id before cost synchronization and persist/audit exactly once.
+// New rows allocate an id before cost synchronization and durable ACK exactly once.
 {
-  let syncId='',persisted=0;const audits=[];
+  let syncId='',persisted=0,barriers=0;const audits=[];
   const s=saveSubject({
     openingForm:validForm({id:null,status:'PREPARE'}),
     syncOpeningFeeCost:payload=>{syncId=String(payload.id);return 0},
-    persist:()=>{persisted+=1},logAudit:(a,t)=>audits.push([a,t]),
+    persist:()=>{persisted+=1},persistOpeningDealBarrier:async()=>{barriers+=1},logAudit:(a,t)=>audits.push([a,t]),
   });
-  s.saveOpeningDeal();
+  await s.saveOpeningDeal();
   eq(s.openingDeals.length,1,'valid opening create inserts once');
   eq(s.openingDeals[0].id,'deal-new','valid opening create allocates id');
   eq(syncId,'deal-new','valid opening create sync sees allocated id');
-  eq(persisted,1,'valid opening create persists once');
+  eq(persisted,0,'valid opening create suppresses debounced persist in favor of durable barrier');
+  eq(barriers,1,'valid opening create awaits durable barrier once');
   eq(audits[0][0],'新增客户开户渠道','valid opening create audit action');
 }
 
@@ -135,7 +138,7 @@ function deleteSubject(overrides={}){
   return Object.assign({},methods,{
     openingDeals:[],financeCosts:[],
     openingClientName:()=> 'Client A',openingProviderName:()=> 'Provider A',openingContactName:()=> 'Contact A',
-    askConfirm:()=>{},isMonthLocked:()=>false,persist:()=>{},logAudit:()=>{},notify:()=>{},
+    askConfirm:()=>{},isMonthLocked:()=>false,persist:()=>{},persistOpeningDealBarrier:async()=>true,logAudit:()=>{},notify:()=>{},
     ...overrides,
   });
 }
@@ -144,54 +147,57 @@ function deleteSubject(overrides={}){
 // Its source opening deal must remain present; deleting only the source would leave
 // a locked OPENING_DEAL cost whose sourceId no longer resolves.
 {
-  const target=deal(),cost=linkedCost({date:'2026-08-15'});let confirms=0,persisted=0,audited=0;const notices=[];
+  const target=deal(),cost=linkedCost({date:'2026-08-15'});let confirms=0,persisted=0,barriers=0,audited=0;const notices=[];
   const s=deleteSubject({
     openingDeals:[clone(target)],financeCosts:[clone(cost)],
     isMonthLocked:month=>month==='2026-08',
-    askConfirm:()=>{confirms+=1},persist:()=>{persisted+=1},logAudit:()=>{audited+=1},notify:m=>notices.push(m),
+    askConfirm:()=>{confirms+=1},persist:()=>{persisted+=1},persistOpeningDealBarrier:async()=>{barriers+=1},logAudit:()=>{audited+=1},notify:m=>notices.push(m),
   });
   s.deleteOpeningDeal(target);
   eq(confirms,0,'locked linked opening cost must block before destructive confirmation');
   eq(s.openingDeals.length,1,'locked linked opening cost must preserve source deal');
   eq(s.financeCosts.length,1,'locked linked opening cost must preserve finance row');
   eq(persisted,0,'locked linked opening delete must not persist');
+  eq(barriers,0,'locked linked opening delete must not enter durable barrier');
   eq(audited,0,'locked linked opening delete must not audit deletion');
   ok(notices.some(m=>m.includes('已月结')),'locked linked opening delete should explain finance lock');
 }
 
-// Unlocked linked cost and source are deleted together only after confirmation.
+// Unlocked linked cost and source are deleted together only after confirmation and ACK.
 {
   const target=deal(),keep=deal({id:'deal-keep'}),cost=linkedCost(),keepCost=linkedCost({id:'cost-keep',sourceId:'deal-keep'});
-  let action=null,persisted=0;const audits=[];
+  let action=null,persisted=0,barriers=0;const audits=[];
   const s=deleteSubject({
     openingDeals:[clone(target),clone(keep)],financeCosts:[clone(cost),clone(keepCost)],
     askConfirm:(cfg,cb)=>{eq(cfg.title,'删除客户开户渠道记录','opening delete confirmation title');action=cb},
-    persist:()=>{persisted+=1},logAudit:(a,t)=>audits.push([a,t]),
+    persist:()=>{persisted+=1},persistOpeningDealBarrier:async()=>{barriers+=1},logAudit:(a,t)=>audits.push([a,t]),
   });
   s.deleteOpeningDeal(target);
   eq(s.openingDeals.length,2,'opening delete must not mutate before confirmation');
   eq(s.financeCosts.length,2,'opening cost delete must not mutate before confirmation');
   ok(typeof action==='function','opening delete confirmation callback');
-  action();
+  await action();
   eq(s.openingDeals.length,1,'confirmed opening delete removes source once');
   eq(s.openingDeals[0].id,'deal-keep','confirmed opening delete preserves unrelated deal');
   eq(s.financeCosts.length,1,'confirmed opening delete removes linked unlocked cost once');
   eq(s.financeCosts[0].id,'cost-keep','confirmed opening delete preserves unrelated cost');
-  eq(persisted,1,'confirmed opening delete persists once');
+  eq(persisted,0,'confirmed opening delete suppresses debounced persist in favor of durable barrier');
+  eq(barriers,1,'confirmed opening delete awaits durable barrier once');
   eq(audits.length,1,'confirmed opening delete audits once');
   eq(audits[0][0],'删除客户开户渠道','confirmed opening delete audit action');
 }
 
 // A stale delete target is harmless even if the confirmation was opened from old UI state.
 {
-  const stale=deal({id:'missing-deal'});let action=null,persisted=0,audited=0;const notices=[];
+  const stale=deal({id:'missing-deal'});let action=null,persisted=0,barriers=0,audited=0;const notices=[];
   const s=deleteSubject({
     openingDeals:[deal({id:'deal-keep'})],financeCosts:[],askConfirm:(cfg,cb)=>{action=cb},
-    persist:()=>{persisted+=1},logAudit:()=>{audited+=1},notify:m=>notices.push(m),
+    persist:()=>{persisted+=1},persistOpeningDealBarrier:async()=>{barriers+=1},logAudit:()=>{audited+=1},notify:m=>notices.push(m),
   });
-  s.deleteOpeningDeal(stale);ok(typeof action==='function','stale delete still has confirmation callback');action();
+  s.deleteOpeningDeal(stale);ok(typeof action==='function','stale delete still has confirmation callback');await action();
   eq(s.openingDeals.length,1,'stale confirmed delete preserves unrelated source');
   eq(persisted,0,'stale confirmed delete does not persist');
+  eq(barriers,0,'stale confirmed delete does not enter durable barrier');
   eq(audited,0,'stale confirmed delete does not audit');
   ok(notices.some(m=>m.includes('没有找到')||m.includes('刷新')),'stale confirmed delete notice');
 }
@@ -205,4 +211,4 @@ function deleteSubject(overrides={}){
   ok(notices.some(m=>m.includes('未找到')),'missing opening id notice');
 }
 
-console.log('BUSINESS_OPENING_DEAL_MUTATIONS_OK: stale-edit=fail-closed; locked-linked-cost=source-preserved; create+edit=cost-sync; unlocked-delete=atomic-source+cost; stale-delete=harmless; persist+audit=phase-pinned');
+console.log('BUSINESS_OPENING_DEAL_MUTATIONS_OK: stale-edit=fail-closed; locked-linked-cost=source-preserved; create+edit=cost-sync+durable-ACK; unlocked-delete=atomic-source+cost+durable-ACK; stale-delete=harmless; persist+audit=phase-pinned');
