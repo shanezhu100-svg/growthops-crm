@@ -16,7 +16,7 @@ const nextMarker = 'adDataDraftMetrics(){';
 let methodSource = '';
 let sourceFile = '';
 for (const name of files) {
-  const text = fs.readFileSync(path.join(appDir, name), 'utf8');
+  const text = fs.readFileSync(path.join(appDir, name),'utf8');
   const start = text.indexOf(marker);
   if (start < 0) continue;
   const next = text.indexOf(nextMarker, start + marker.length);
@@ -92,3 +92,4 @@ await import('./test_business_logout_audit_truthfulness.mjs');
 await import('./test_business_backup_snapshot_persistence_ack.mjs');
 await import('./test_business_irreversible_export_audit_barrier.mjs');
 await import('./test_business_finance_month_lock_persistence_ack.mjs');
+await import('./test_business_reconciliation_persistence_ack_probe.mjs');
