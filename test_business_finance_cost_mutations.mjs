@@ -40,71 +40,76 @@ function manualCostBase(overrides={}){
     financeCostCategoryText:value=>String(value),
     financeCostScopeText:value=>String(value.scope||''),
     formatMoney:(value,currency)=>`${currency}:${value}`,
-    persist:()=>{},logAudit:()=>{},notify:()=>{},
+    persist:()=>{},persistFinanceCostBarrier:async()=>{},logAudit:()=>{},notify:()=>{},
     ...overrides,
   });
 }
 
 // Manual cost input is finite/nonnegative before month-lock/mutation/persist.
 for(const [raw,label] of [['-1','negative'],['abc','nan'],['Infinity','infinity']]){
-  let lockChecks=0,persisted=0,audited=0; const notices=[];
+  let lockChecks=0,persisted=0,audited=0,barrierCalls=0; const notices=[];
   const s=manualCostBase({
     costForm:{id:'',date:'2026-09-01',category:'OTHER',scope:'COMPANY',currency:'USD',amount:raw},
-    assertMonthUnlocked:()=>{lockChecks+=1;return true},persist:()=>{persisted+=1},logAudit:()=>{audited+=1},notify:m=>notices.push(m),
+    assertMonthUnlocked:()=>{lockChecks+=1;return true},persist:()=>{persisted+=1},persistFinanceCostBarrier:async()=>{barrierCalls+=1},logAudit:()=>{audited+=1},notify:m=>notices.push(m),
   });
   s.saveFinanceCost();
   eq(lockChecks,0,`${label} manual cost stops before month-lock lookup`);
   eq(s.financeCosts.length,0,`${label} manual cost must not mutate costs`);
   eq(persisted,0,`${label} manual cost must not persist`);
+  eq(barrierCalls,0,`${label} manual cost must not cross durable barrier`);
   eq(audited,0,`${label} manual cost must not audit`);
   ok(notices.some(m=>m.includes('有效成本')),`${label} manual cost validation notice missing`);
 }
 {
-  let lockChecks=0,persisted=0;
+  let lockChecks=0,persisted=0,barrierCalls=0;
   const s=manualCostBase({
     costForm:{date:'2026-09-01',category:'OTHER',scope:'CLIENT',clientId:'',currency:'USD',amount:'10'},
-    assertMonthUnlocked:()=>{lockChecks+=1;return true},persist:()=>{persisted+=1},
+    assertMonthUnlocked:()=>{lockChecks+=1;return true},persist:()=>{persisted+=1},persistFinanceCostBarrier:async()=>{barrierCalls+=1},
   });
   const notices=[];s.notify=m=>notices.push(m);s.saveFinanceCost();
   eq(lockChecks,0,'client cost missing client stops before month-lock lookup');
   eq(persisted,0,'client cost missing client must not persist');
+  eq(barrierCalls,0,'client cost missing client must not cross durable barrier');
   ok(notices.some(m=>m.includes('必须选择客户')),'client cost missing-client notice');
 }
 {
-  let persisted=0,audited=0;
-  const s=manualCostBase({assertMonthUnlocked:()=>false,persist:()=>{persisted+=1},logAudit:()=>{audited+=1}});
+  let persisted=0,audited=0,barrierCalls=0;
+  const s=manualCostBase({assertMonthUnlocked:()=>false,persist:()=>{persisted+=1},persistFinanceCostBarrier:async()=>{barrierCalls+=1},logAudit:()=>{audited+=1}});
   s.saveFinanceCost();
   eq(s.financeCosts.length,0,'locked manual cost must not mutate');
   eq(persisted,0,'locked manual cost must not persist');
+  eq(barrierCalls,0,'locked manual cost must not cross durable barrier');
   eq(audited,0,'locked manual cost must not audit');
 }
 {
-  let persisted=0;const audits=[];const notices=[];
-  const s=manualCostBase({persist:()=>{persisted+=1},logAudit:(a,t)=>audits.push([a,t]),notify:m=>notices.push(m)});
-  s.saveFinanceCost();
+  let persisted=0,barrierCalls=0;const audits=[];const notices=[];
+  const s=manualCostBase({persist:()=>{persisted+=1},persistFinanceCostBarrier:async()=>{barrierCalls+=1},logAudit:(a,t)=>audits.push([a,t]),notify:m=>notices.push(m)});
+  await s.saveFinanceCost();
   eq(s.financeCosts.length,1,'valid new manual cost inserts once');
   eq(s.financeCosts[0].id,'cost-new','valid new manual cost allocates id');
   eq(s.financeCosts[0].amount,10,'valid new manual cost normalizes numeric amount');
-  eq(s.showCostModal,false,'valid manual cost closes modal');
-  eq(persisted,1,'valid new manual cost persists once');
+  eq(s.showCostModal,false,'valid manual cost closes modal after ACK');
+  eq(persisted,0,'valid new manual cost uses durable barrier instead of debounced persist');
+  eq(barrierCalls,1,'valid new manual cost crosses durable barrier once');
   eq(audits.length,1,'valid new manual cost audits once');
   eq(audits[0][0],'新增成本','new manual cost audit action');
   ok(notices.some(m=>m.includes('成本已保存')),'valid manual cost success notice');
 }
 {
   const existing={id:'cost-1',date:'2026-08-01',category:'OLD',scope:'COMPANY',currency:'USD',amount:1};
-  let persisted=0;const audits=[];
+  let persisted=0,barrierCalls=0;const audits=[];
   const s=manualCostBase({
     financeCosts:[existing],
     costForm:{id:'cost-1',date:'2026-09-02',category:'NEW',scope:'COMPANY',clientId:'',currency:'CNY',amount:'22'},
-    persist:()=>{persisted+=1},logAudit:(a,t)=>audits.push([a,t]),
+    persist:()=>{persisted+=1},persistFinanceCostBarrier:async()=>{barrierCalls+=1},logAudit:(a,t)=>audits.push([a,t]),
   });
-  s.saveFinanceCost();
+  await s.saveFinanceCost();
   eq(s.financeCosts.length,1,'manual cost edit must not duplicate');
   eq(s.financeCosts[0].id,'cost-1','manual cost edit preserves id');
   eq(s.financeCosts[0].amount,22,'manual cost edit replaces amount');
   eq(s.financeCosts[0].currency,'CNY','manual cost edit replaces currency');
-  eq(persisted,1,'manual cost edit persists once');
+  eq(persisted,0,'manual cost edit uses durable barrier instead of debounced persist');
+  eq(barrierCalls,1,'manual cost edit crosses durable barrier once');
   eq(audits[0][0],'修改成本','manual cost edit audit action');
 }
 
@@ -115,25 +120,25 @@ for(const [sourceType,copy] of [
   ['RECEIVABLE_ITEM','收入项目联动成本不能单独删除'],
   ['IP_ENV_MONTH','自动 IP / 网络成本不能单独删除'],
 ]){
-  let locks=0,confirms=0,persisted=0;const notices=[];
+  let locks=0,confirms=0,persisted=0,barrierCalls=0;const notices=[];
   const cost={id:'auto',autoGenerated:true,sourceType,date:'2026-09-01',category:'IP',currency:'USD',amount:10};
-  const s=manualCostBase({financeCosts:[cost],assertMonthUnlocked:()=>{locks+=1;return true},askConfirm:()=>{confirms+=1},persist:()=>{persisted+=1},notify:m=>notices.push(m)});
+  const s=manualCostBase({financeCosts:[cost],assertMonthUnlocked:()=>{locks+=1;return true},askConfirm:()=>{confirms+=1},persist:()=>{persisted+=1},persistFinanceCostBarrier:async()=>{barrierCalls+=1},notify:m=>notices.push(m)});
   s.deleteFinanceCost(cost);
-  eq(locks,0,`${sourceType} delete stops before month-lock`);eq(confirms,0,`${sourceType} delete does not confirm`);eq(persisted,0,`${sourceType} delete does not persist`);
+  eq(locks,0,`${sourceType} delete stops before month-lock`);eq(confirms,0,`${sourceType} delete does not confirm`);eq(persisted,0,`${sourceType} delete does not persist`);eq(barrierCalls,0,`${sourceType} delete does not cross durable barrier`);
   eq(s.financeCosts.length,1,`${sourceType} delete preserves automatic row`);ok(notices.some(m=>m.includes(copy)),`${sourceType} delete notice`);
 }
 {
   const cost={id:'manual',date:'2026-09-01',category:'OTHER',currency:'USD',amount:10};
-  let confirms=0,persisted=0;
-  const s=manualCostBase({financeCosts:[cost],assertMonthUnlocked:()=>false,askConfirm:()=>{confirms+=1},persist:()=>{persisted+=1}});
-  s.deleteFinanceCost(cost);eq(confirms,0,'locked manual delete must not confirm');eq(persisted,0,'locked manual delete must not persist');eq(s.financeCosts.length,1,'locked manual delete preserves row');
+  let confirms=0,persisted=0,barrierCalls=0;
+  const s=manualCostBase({financeCosts:[cost],assertMonthUnlocked:()=>false,askConfirm:()=>{confirms+=1},persist:()=>{persisted+=1},persistFinanceCostBarrier:async()=>{barrierCalls+=1}});
+  s.deleteFinanceCost(cost);eq(confirms,0,'locked manual delete must not confirm');eq(persisted,0,'locked manual delete must not persist');eq(barrierCalls,0,'locked manual delete must not cross durable barrier');eq(s.financeCosts.length,1,'locked manual delete preserves row');
 }
 {
   const target={id:'manual',date:'2026-09-01',category:'OTHER',currency:'USD',amount:10};const keep={id:'keep'};
-  let action=null,persisted=0;const audits=[];
-  const s=manualCostBase({financeCosts:[target,keep],askConfirm:(cfg,cb)=>{eq(cfg.title,'删除成本记录','manual delete confirmation title');action=cb},persist:()=>{persisted+=1},logAudit:(a,t)=>audits.push([a,t])});
-  s.deleteFinanceCost(target);eq(s.financeCosts.length,2,'manual delete must not mutate before confirmation');eq(persisted,0,'manual delete must not persist before confirmation');ok(typeof action==='function','manual delete confirmation callback');
-  action();eq(s.financeCosts.length,1,'confirmed manual delete removes one row');eq(s.financeCosts[0],keep,'confirmed manual delete preserves unrelated row');eq(persisted,1,'confirmed manual delete persists once');eq(audits[0][0],'删除成本','confirmed manual delete audit action');
+  let action=null,persisted=0,barrierCalls=0;const audits=[];
+  const s=manualCostBase({financeCosts:[target,keep],askConfirm:(cfg,cb)=>{eq(cfg.title,'删除成本记录','manual delete confirmation title');action=cb},persist:()=>{persisted+=1},persistFinanceCostBarrier:async()=>{barrierCalls+=1},logAudit:(a,t)=>audits.push([a,t])});
+  s.deleteFinanceCost(target);eq(s.financeCosts.length,2,'manual delete must not mutate before confirmation');eq(persisted,0,'manual delete must not persist before confirmation');eq(barrierCalls,0,'manual delete must not cross durable barrier before confirmation');ok(typeof action==='function','manual delete confirmation callback');
+  await action();eq(s.financeCosts.length,1,'confirmed manual delete removes one row');eq(s.financeCosts[0],keep,'confirmed manual delete preserves unrelated row');eq(persisted,0,'confirmed manual delete uses durable barrier instead of debounced persist');eq(barrierCalls,1,'confirmed manual delete crosses durable barrier once');eq(audits[0][0],'删除成本','confirmed manual delete audit action');
 }
 
 function autoBase(overrides={}){
@@ -192,4 +197,4 @@ for(const [fee,label] of [[0,'zero'],[-1,'negative'],['abc','nan'],['Infinity','
   let nextTicks=0;const s=subject({financePeriodMonths:null,$nextTick:()=>{nextTicks+=1}});s.syncFinancePeriodAutoCosts();eq(nextTicks,0,'period auto-sync without period source is no-op');
 }
 
-console.log('BUSINESS_FINANCE_COST_MUTATIONS_OK: manual=finite-nonnegative+client+month-lock+upsert; delete=auto-protected+lock+confirm; ip-auto=finite-positive+scope+stale-cleanup+silent; period-sync=nextTick+persist-on-change');
+console.log('BUSINESS_FINANCE_COST_MUTATIONS_OK: manual=finite-nonnegative+client+month-lock+upsert+durable-ACK; delete=auto-protected+lock+confirm+durable-ACK; ip-auto=finite-positive+scope+stale-cleanup+silent; period-sync=nextTick+persist-on-change');
