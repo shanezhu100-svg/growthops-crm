@@ -46,6 +46,7 @@ Object.assign(subject,{
   accountUid(prefix){uid+=1;return `${prefix}-${uid}`;},
   persist(){persists+=1;return true;},
   persistReceivablePaymentBarrier:async()=>{barrierCalls+=1;},
+  persistReceivableBarrier:async()=>{barrierCalls+=1;},
   logAudit(action,detail){const row={action:String(action??''),detail:String(detail??'')};audits.push(row);subject.auditLogs.push(row);return row;},
   askConfirm(_options,callback){confirms+=1;pendingConfirm=Promise.resolve(callback());return pendingConfirm;},
   notify(message,type){notifications.push({message:String(message??''),type:String(type??'')});},
@@ -173,6 +174,7 @@ eq(subject.financeReceivables.length,1,'receivable with payment history must rem
 eq(subject.financeCosts.length,1,'blocked receivable delete must preserve linked cost');
 eq(confirms,0,'receivable with payment history must not confirm deletion');
 eq(persists,0,'receivable with payment history must not persist');
+eq(barrierCalls,0,'receivable with payment history must not cross durable barrier');
 includes(notifications.map(item=>item.message).join('|'),'已有回款流水','payment-history delete block notification preserved');
 
 // A linked project cost in a locked accounting month independently blocks the
@@ -187,10 +189,11 @@ eq(subject.financeReceivables.length,1,'locked linked-cost month must preserve r
 eq(subject.financeCosts.length,1,'locked linked-cost month must preserve cost');
 eq(confirms,0,'locked linked-cost delete must not confirm');
 eq(persists,0,'locked linked-cost delete must not persist');
+eq(barrierCalls,0,'locked linked-cost delete must not cross durable barrier');
 includes(notifications.map(item=>item.message).join('|'),'关联项目成本所在月份已月结','linked-cost lock notification preserved');
 
-// Successful receivable deletion is a separate persisted mutation surface and keeps
-// its existing debounced-persist contract; this ACK audit only changes payment rows.
+// Successful receivable deletion is a separate durable mutation surface and must
+// acknowledge the master-record write before announcing success.
 resetMutationState();
 receivable={id:'r-delete',clientId:'c1',amount:100,currency:'USD',settlementMonth:'2026-08',incomeType:'SERVICE_FEE',projectName:'August',payments:[]};
 const otherReceivable={id:'r-other',clientId:'c1',amount:50,currency:'USD',settlementMonth:'2026-08',incomeType:'OTHER',payments:[]};
@@ -201,13 +204,15 @@ subject.financeCosts=[
   {id:'manual-cost',sourceType:'',sourceId:receivable.id,date:'2026-08-01',amount:7},
 ];
 subject.deleteReceivable(receivable);
+await pendingConfirm;
 eq(subject.financeReceivables.length,1,'confirmed receivable delete removes exactly target row');
 eq(subject.financeReceivables[0].id,'r-other','confirmed receivable delete preserves unrelated receivable');
 eq(subject.financeCosts.some(cost=>cost.id==='linked-delete'),false,'confirmed receivable delete removes own linked generated cost');
 eq(subject.financeCosts.some(cost=>cost.id==='linked-other'),true,'confirmed receivable delete preserves other receivable linked cost');
 eq(subject.financeCosts.some(cost=>cost.id==='manual-cost'),true,'confirmed receivable delete preserves unrelated/manual cost');
 eq(confirms,1,'confirmed receivable delete opens one confirmation');
-eq(persists,1,'confirmed receivable delete persists once');
+eq(persists,0,'confirmed receivable delete uses ACK barrier instead of debounced persist');
+eq(barrierCalls,1,'confirmed receivable delete crosses durable barrier once');
 eq(audits.length,1,'confirmed receivable delete audits once');
 includes(notifications.map(item=>item.message).join('|'),'收入项目及关联成本已删除','confirmed receivable delete success notification preserved');
 
@@ -220,5 +225,6 @@ subject.deleteReceivable(receivable);
 eq(subject.financeReceivables.length,1,'locked receivable month must preserve row');
 eq(confirms,0,'locked receivable delete must not confirm');
 eq(persists,0,'locked receivable delete must not persist');
+eq(barrierCalls,0,'locked receivable delete must not cross durable barrier');
 
-console.log('BUSINESS_RECEIVABLE_PAYMENT_BOUNDS_OK: finite-positive=required; overpayment=denied; payment-save+delete=ACK-aware; payment-delete=recalculates+lock-guarded; receivable-delete=payment+linked-lock-guarded+scoped-cost-cleanup');
+console.log('BUSINESS_RECEIVABLE_PAYMENT_BOUNDS_OK: finite-positive=required; overpayment=denied; payment-save+delete=ACK-aware; payment-delete=recalculates+lock-guarded; receivable-delete=payment+linked-lock-guarded+scoped-cost-cleanup+durable-ACK');
