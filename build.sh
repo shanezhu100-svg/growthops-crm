@@ -158,6 +158,9 @@ python3 test_finance_cost_input_guard_output.py
 # Destructive and privileged confirmation callbacks must re-resolve current records
 # and re-check authority/finance locks when the user finally confirms.
 python3 destructive_confirmation_integrity_finalize.py
+# Finance month lock/unlock is an accounting write boundary. Do not announce success
+# until the final cloud save queue acknowledges the state and its audit record.
+python3 finance_month_lock_persistence_ack_finalize.py
 # Browser liveness is verified by the required GitHub CI after this portable
 # build completes. Hosting builds must not depend on a Chromium executable.
 # Business-semantic regression gates execute the final shipped application logic,
