@@ -158,6 +158,9 @@ python3 test_finance_cost_input_guard_output.py
 # Destructive and privileged confirmation callbacks must re-resolve current records
 # and re-check authority/finance locks when the user finally confirms.
 python3 destructive_confirmation_integrity_finalize.py
+# Lead deletion must keep the confirmation-time live-record semantics above, then
+# wait for the shared cloud save queue before announcing destructive success.
+python3 lead_delete_persistence_ack_finalize.py
 # Finance month lock/unlock is an accounting write boundary. Do not announce success
 # until the final cloud save queue acknowledges the state and its audit record.
 python3 finance_month_lock_persistence_ack_finalize.py
