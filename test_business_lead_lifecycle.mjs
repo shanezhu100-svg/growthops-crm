@@ -46,40 +46,45 @@ eq(defaultLead.convertedClientId,null,'default converted client id');
 eq(defaultLead.convertedAt,'','default converted timestamp');
 
 {
-  let persisted=0,audited=0,notified='';
+  let persisted=0,barriers=0,audited=0,notified='';
   const s=makeSubject({
     leadForm:{...defaultLead,company:'Acme Prospect',budgetCurrency:'CNY',quoteCurrency:'',expectedBudget:'1200.50',adQuote:'',nextFollowUp:'2026-09-03'},
     leads:[],showLeadModal:true,leadPoolFilter:'',leadQuickFilter:'',
     accountUid:kind=>kind==='lead'?'lead-001':'unexpected',localDateKey:()=> '2026-08-30',
-    persist:()=>{persisted+=1},logAudit:()=>{audited+=1},notify:msg=>{notified=msg},leadStageText:value=>value,
+    persist:()=>{persisted+=1},persistLeadSaveBarrier:()=>{barriers+=1;return Promise.resolve(true)},logAudit:()=>{audited+=1},notify:msg=>{notified=msg},leadStageText:value=>value,
   });
-  s.saveLead();
+  await s.saveLead();
   eq(s.leads.length,1,'new lead inserted exactly once');
   eq(s.leads[0].id,'lead-001','new lead id');
   eq(s.leads[0].createdAt,'2026-08-30','new lead created date');
   eq(s.leads[0].expectedBudget,1200.5,'expected budget numeric normalization');
   eq(s.leads[0].adQuote,0,'empty quote numeric normalization');
   eq(s.leads[0].quoteCurrency,'CNY','quote currency falls back to budget currency');
-  eq(persisted,1,'new lead persistence count');
+  eq(persisted,0,'new lead suppresses legacy debounced persistence');
+  eq(barriers,1,'new lead durable barrier count');
   eq(audited,1,'new lead audit count');
-  eq(s.showLeadModal,false,'new lead closes modal');
-  eq(s.leadPoolFilter,'ACTIVE','new lead returns to active pool');
+  eq(s.showLeadModal,false,'new lead closes modal after ACK');
+  eq(s.leadPoolFilter,'ACTIVE','new lead returns to active pool after ACK');
   if(!notified.includes('已保存'))fail('new lead success notification missing');
 }
 
 {
+  let barriers=0;
   const lead={...defaultLead,id:'lead-002',company:'Won Co',stage:'QUALIFIED',nextFollowUp:'2026-09-01',convertedClientId:'client-9'};
-  const s=makeSubject({leadForm:{...lead},leads:[lead],persist:()=>{},logAudit:()=>{},notify:()=>{},leadStageText:v=>v,showLeadModal:true});
-  s.saveLead();
+  const s=makeSubject({leadForm:{...lead},leads:[lead],persist:()=>{},persistLeadSaveBarrier:()=>{barriers+=1;return Promise.resolve(true)},logAudit:()=>{},notify:()=>{},leadStageText:v=>v,showLeadModal:true});
+  await s.saveLead();
+  eq(barriers,1,'converted/WON lead durable barrier count');
   eq(s.leads[0].stage,'WON','converted lead must be WON');
   eq(s.leads[0].nextFollowUp,'','converted/WON lead clears follow-up');
 }
 {
+  let barriers=0;
   const lead={...defaultLead,id:'lead-003',company:'Lost Co',stage:'LOST',nextFollowUp:'2026-09-01'};
-  const s=makeSubject({leadForm:{...lead},leads:[lead],persist:()=>{},logAudit:()=>{},notify:()=>{},leadStageText:v=>v,showLeadModal:true});
-  s.saveLead();
+  const s=makeSubject({leadForm:{...lead},leads:[lead],persist:()=>{},persistLeadSaveBarrier:()=>{barriers+=1;return Promise.resolve(true)},logAudit:()=>{},notify:()=>{},leadStageText:v=>v,showLeadModal:true,leadPoolFilter:'ACTIVE',leadQuickFilter:'ALL'});
+  await s.saveLead();
+  eq(barriers,1,'LOST lead durable barrier count');
   eq(s.leads[0].nextFollowUp,'','LOST lead clears follow-up');
-  eq(s.leadPoolFilter,'LOST','LOST lead moves to lost pool');
+  eq(s.leadPoolFilter,'LOST','LOST lead moves to lost pool after ACK');
 }
 
 {
@@ -223,4 +228,4 @@ eq(defaultLead.convertedAt,'','default converted timestamp');
   if(!/不存在|刷新/.test(notified))fail('stale client edit must notify that record no longer exists');
 }
 
-console.log('BUSINESS_LEAD_LIFECYCLE_OK: default+save+terminal-state+filter+stats+convert+client-link+first-receivable+missing-link-repair+stale-edit-fail-closed+client-durable-ACK=executed');
+console.log('BUSINESS_LEAD_LIFECYCLE_OK: default+save+terminal-state+filter+stats+convert+client-link+first-receivable+missing-link-repair+stale-edit-fail-closed+lead+client-durable-ACK=executed');
