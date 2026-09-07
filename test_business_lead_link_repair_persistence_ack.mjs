@@ -59,6 +59,7 @@ function makeRuntime({first='fail',withBarrier=true,withClient=false}={}){
   Object.assign(subject,{
     openConvertedLeadClient,leads:[target,survivor],clients:withClient?[{id:'client-gone',name:'Existing Client'}]:[],
     openingProviders:[],openingDeals:[],financeReceivables:[],financeCosts:[],standaloneAlerts:[],dismissedAlerts:[],auditLogs:[],backupSnapshots:[],financeMonthLocks:{},financeMonthSnapshots:{},financeReconciliations:[],financeActualRebates:[],
+    currentUser:{id:'admin',name:'Admin',role:'ADMIN',enabled:true},
     notify:m=>calls.notify.push(String(m)),navigateTo:p=>calls.navigate.push(String(p)),ensureDailyBackup:()=>{},
     collectBackupPayload:()=>({clients:clone(subject.clients),leads:clone(subject.leads),openingProviders:[],openingDeals:[],financeReceivables:[],financeCosts:[],standaloneAlerts:[],dismissedAlerts:[],auditLogs:[],backupSnapshots:[],financeMonthLocks:{},financeMonthSnapshots:{},financeReconciliations:[],financeActualRebates:[]}),
   });
