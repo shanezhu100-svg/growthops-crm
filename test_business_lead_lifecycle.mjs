@@ -157,7 +157,7 @@ eq(defaultLead.convertedAt,'','default converted timestamp');
 }
 
 {
-  let persisted=0,audited=0,navigated='',firstBills=0,catchups=0,assetCosts=0;
+  let persisted=0,barriers=0,audited=0,navigated='',firstBills=0,catchups=0,assetCosts=0;
   const lead={id:'lead-link',company:'Lead Link',stage:'QUALIFIED',nextFollowUp:'2026-09-02',convertedClientId:null,convertedAt:''};
   const s=makeSubject({
     form:{id:null,sourceLeadId:'lead-link',name:'Lead Link',billingMode:'FULL_MONTH',monthlyFee:500,currency:'USD'},
@@ -167,10 +167,10 @@ eq(defaultLead.convertedAt,'','default converted timestamp');
     ensureClientFirstReceivable:()=>{firstBills+=1;return 1},
     ensureAutomaticReceivables:()=>{catchups+=1;return 2},
     ensureAutomaticAssetCosts:()=>{assetCosts+=1;return 3},
-    localDateKey:()=> '2026-08-30',persist:()=>{persisted+=1},logAudit:()=>{audited+=1},
+    localDateKey:()=> '2026-08-30',persist:()=>{persisted+=1},persistClientSaveBarrier:()=>{barriers+=1;return Promise.resolve(true)},logAudit:()=>{audited+=1},
     formatMoney:(value,currency)=>`${currency}:${value}`,notify:()=>{},navigateTo:page=>{navigated=page},formDirty:true,
   });
-  s.saveClient();
+  await s.saveClient();
   eq(s.clients.length,1,'lead conversion creates exactly one formal client');
   const client=s.clients[0];
   eq(client.sourceLeadId,'lead-link','formal client retains source lead id');
@@ -186,10 +186,11 @@ eq(defaultLead.convertedAt,'','default converted timestamp');
   eq(String(lead.convertedClientId),String(client.id),'source lead linked to created client');
   if(!lead.convertedAt||!/^\d{4}-\d{2}-\d{2}T/.test(lead.convertedAt))fail('source lead convertedAt not recorded');
   eq(lead.nextFollowUp,'','source lead follow-up cleared after conversion');
-  eq(persisted,1,'new formal client persistence count');
+  eq(persisted,0,'new formal client suppresses legacy debounced persistence');
+  eq(barriers,1,'new formal client durable barrier count');
   eq(audited,1,'new formal client audit count');
-  eq(navigated,'client-detail','new formal client navigates to detail');
-  eq(s.formDirty,false,'new formal client clears dirty flag');
+  eq(navigated,'client-detail','new formal client navigates to detail after ACK');
+  eq(s.formDirty,false,'new formal client clears dirty flag after ACK');
 }
 
 {
@@ -222,4 +223,4 @@ eq(defaultLead.convertedAt,'','default converted timestamp');
   if(!/不存在|刷新/.test(notified))fail('stale client edit must notify that record no longer exists');
 }
 
-console.log('BUSINESS_LEAD_LIFECYCLE_OK: default+save+terminal-state+filter+stats+convert+client-link+first-receivable+missing-link-repair+stale-edit-fail-closed=executed');
+console.log('BUSINESS_LEAD_LIFECYCLE_OK: default+save+terminal-state+filter+stats+convert+client-link+first-receivable+missing-link-repair+stale-edit-fail-closed+client-durable-ACK=executed');

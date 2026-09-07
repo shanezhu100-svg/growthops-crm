@@ -29,7 +29,7 @@ function extractMethod(name){
 }
 
 const sideEffects=new Set([
-  'persist','logAudit','notify','navigateTo',
+  'persist','persistClientSaveBarrier','logAudit','notify','navigateTo',
   'ensureAutomaticAssetCosts','ensureAutomaticReceivables','ensureClientFirstReceivable',
 ]);
 const pureStubs=new Set(['localDateKey']);
@@ -78,7 +78,7 @@ const existing={
   fbAccounts:[],tkAccounts:[{id:'old-tk',bcId:'old-bc',adAccountId:'old-ad',loginAccount:'old-login'}],
   googleAccounts:[],instagramAccounts:[],
 };
-let persisted=0,audited=0,notified=0;
+let persisted=0,barriers=0,audited=0,notified=0;
 const calls=[];
 const target={
   ...methods,
@@ -94,6 +94,7 @@ const target={
   currentUser:{id:'synthetic-user',name:'Synthetic User',role:'ADMIN'},
   localDateKey:()=> '2026-09-01',
   persist:()=>{persisted+=1;calls.push('persist')},
+  persistClientSaveBarrier:()=>{barriers+=1;calls.push('barrier');return Promise.resolve(true)},
   logAudit:(...args)=>{audited+=1;calls.push(['audit',...args])},
   notify:()=>{notified+=1},
   navigateTo:(...args)=>{calls.push(['navigateTo',...args])},
@@ -125,7 +126,8 @@ eq(account.adAccountId,'ad-save-1','TikTok ad account ID preserved by saveClient
 eq(account.loginAccount,'tk-login-save','TikTok login account preserved by saveClient');
 if(account.loginPassword&&String(account.loginPassword).trim())fail('synthetic blank TikTok password unexpectedly became non-empty');
 if(account.twofa&&String(account.twofa).trim())fail('synthetic blank TikTok 2FA unexpectedly became non-empty');
-eq(persisted,1,'saveClient persists exactly once');
+eq(persisted,0,'saveClient suppresses legacy debounced persist inside durable transaction');
+eq(barriers,1,'saveClient crosses durable barrier exactly once');
 eq(audited,1,'saveClient audits exactly once');
 
-console.log(`BUSINESS_CLIENT_TIKTOK_SAVE_OK: source=final-shipped-saveClient+helpers; helpers=${[...methodSources.keys()].sort().join('+')}; tkAccounts=preserved; bcId+adAccountId+loginAccount=preserved; persist=${persisted}; audit=${audited}; notice=${notified}`);
+console.log(`BUSINESS_CLIENT_TIKTOK_SAVE_OK: source=final-shipped-saveClient+helpers; helpers=${[...methodSources.keys()].sort().join('+')}; tkAccounts=preserved; bcId+adAccountId+loginAccount=preserved; persist=${persisted}; barrier=${barriers}; audit=${audited}; notice=${notified}`);
