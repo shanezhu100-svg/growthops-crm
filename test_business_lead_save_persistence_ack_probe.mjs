@@ -56,7 +56,7 @@ function makeRuntime({kind='create',first='fail'}={}){
   Object.assign(subject,{
     saveLead,leads:kind==='edit'?[existing,survivor]:[survivor],clients:[],financeReceivables:[],financeCosts:[],openingProviders:[],openingDeals:[],standaloneAlerts:[],dismissedAlerts:[],auditLogs:[],backupSnapshots:[],financeMonthLocks:{},financeMonthSnapshots:{},financeReconciliations:[],financeActualRebates:[],
     leadForm:clone(form),showLeadModal:true,leadPoolFilter:'ACTIVE',leadQuickFilter:'ALL',
-    currentUser:{id:'admin',name:'Admin',role:'ADMIN',enabled:true},accountUid:()=> 'lead-created-1',localDateKey:()=> '2026-09-07',leadStageText:v=>String(v),
+    currentUser:{id:'admin',name:'Admin',role:'ADMIN',enabled:true},accountUid:()=> 'lead-created-1',localDateKey:()=> '2026-09-07',leadStageText:v=>String(v),ensureDailyBackup:()=>{},
     logAudit:(action,target)=>{const row={id:`audit-${++auditId}`,action:String(action),target:String(target)};subject.auditLogs.push(row);return row},notify:m=>calls.notify.push(String(m)),
     collectBackupPayload:()=>({clients:[],leads:clone(subject.leads),openingProviders:[],openingDeals:[],financeReceivables:[],financeCosts:[],standaloneAlerts:[],dismissedAlerts:[],auditLogs:clone(subject.auditLogs),backupSnapshots:[],financeMonthLocks:{},financeMonthSnapshots:{},financeReconciliations:[],financeActualRebates:[]}),
   });
