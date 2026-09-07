@@ -25,16 +25,18 @@ const methods=vm.runInNewContext(`({${names.map(extractMethod).join(',')}})`,{Nu
 const fail=message=>{throw new Error('BUSINESS_FINANCIAL_INPUT_BOUNDS_FAILED: '+message)};
 const eq=(actual,expected,label)=>{if(actual!==expected)fail(`${label}; expected=${expected}; actual=${actual}`)};
 
-function runLead(field,value){
-  let persisted=0,audited=0,notified='';
+async function runLead(field,value,{withBarrier=false}={}){
+  let persisted=0,barriers=0,audited=0,notified='';
   const leadForm={...methods.defaultLeadForm(),company:'Bounds Lead',expectedBudget:100,adQuote:20,[field]:value};
-  const s=Object.assign({},methods,{
+  const extra={
     leadForm,leads:[],showLeadModal:true,leadPoolFilter:'',leadQuickFilter:'',
     accountUid:()=> 'lead-bounds',localDateKey:()=> '2026-08-31',
     persist:()=>{persisted+=1},logAudit:()=>{audited+=1},notify:msg=>{notified=String(msg??'')},leadStageText:v=>v,
-  });
-  s.saveLead();
-  return {persisted,audited,notified,count:s.leads.length,modal:s.showLeadModal};
+  };
+  if(withBarrier)extra.persistLeadSaveBarrier=()=>{barriers+=1;return Promise.resolve(true)};
+  const s=Object.assign({},methods,extra);
+  const task=s.saveLead();if(task&&typeof task.then==='function')await task;
+  return {persisted,barriers,audited,notified,count:s.leads.length,modal:s.showLeadModal};
 }
 
 for(const [field,value,label] of [
@@ -45,8 +47,9 @@ for(const [field,value,label] of [
   ['adQuote','abc','NaN ad quote'],
   ['adQuote','Infinity','infinite ad quote'],
 ]){
-  const r=runLead(field,value);
+  const r=await runLead(field,value);
   eq(r.persisted,0,`${label} must not persist`);
+  eq(r.barriers,0,`${label} must not invoke durability barrier`);
   eq(r.audited,0,`${label} must not audit success`);
   eq(r.count,0,`${label} must not insert lead`);
   eq(r.modal,true,`${label} keeps edits open`);
@@ -83,11 +86,13 @@ for(const [value,label] of [['-1','negative monthly fee'],['abc','NaN monthly fe
 
 // Zero remains valid for unquoted/free arrangements; existing positive paths are
 // covered by the lead/client lifecycle gate.
-let zero=runLead('expectedBudget','0');
-eq(zero.persisted,1,'zero expected budget remains valid');
-zero=runLead('adQuote','0');
-eq(zero.persisted,1,'zero ad quote remains valid');
+let zero=await runLead('expectedBudget','0',{withBarrier:true});
+eq(zero.persisted,0,'zero expected budget suppresses legacy debounced persistence');
+eq(zero.barriers,1,'zero expected budget remains valid through durable lead-save barrier');
+zero=await runLead('adQuote','0',{withBarrier:true});
+eq(zero.persisted,0,'zero ad quote suppresses legacy debounced persistence');
+eq(zero.barriers,1,'zero ad quote remains valid through durable lead-save barrier');
 let zeroClient=runClient('0');
 eq(zeroClient.persisted,1,'zero monthly fee remains valid through durable client-save barrier');
 
-console.log('BUSINESS_FINANCIAL_INPUT_BOUNDS_OK: lead-budget+quote+client-fee=finite-nonnegative; negative+nan+infinity=denied-before-persist/audit/billing; zero=preserved+client-durable-ACK');
+console.log('BUSINESS_FINANCIAL_INPUT_BOUNDS_OK: lead-budget+quote+client-fee=finite-nonnegative; negative+nan+infinity=denied-before-persist/audit/billing+barrier; zero=preserved+lead/client-durable-ACK');
