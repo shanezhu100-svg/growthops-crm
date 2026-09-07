@@ -119,16 +119,17 @@ function assertBaseUnrelated(subject,label){ok(byId(subject.leads,'lead-survivor
   const later=await laterPersist(subject,calls);same(byId(later.leads,'lead-save-1'),before,'later persist cannot resurrect failed edit');
 }
 
-// Field-level rollback preserves newer edits to the original object, unrelated audit,
-// filter/modal changes, and form edits made while the failed ACK was pending.
+// Field-level rollback preserves newer edits to the current live same-ID object,
+// unrelated audit, filter/modal changes, and form edits made while the failed ACK waits.
 {
-  const {subject,calls,existing,resolveFirst}=makeRuntime({kind:'edit',first:'deferred'});
+  const {subject,calls,resolveFirst}=makeRuntime({kind:'edit',first:'deferred'});
   const task=subject.saveLead();await waitFirstSave(calls);
-  existing.company='Concurrent Company';existing.notes='concurrent-note';
+  const live=byId(subject.leads,'lead-save-1');ok(live,'live edited lead exists while ACK pending');
+  live.company='Concurrent Company';live.notes='concurrent-note';
   const concurrentAudit={id:'audit-concurrent',action:'CONCURRENT'};subject.auditLogs.push(concurrentAudit);
   subject.leadPoolFilter='WON';subject.leadQuickFilter='HIGH';subject.showLeadModal=false;subject.leadForm.contact='typed-concurrently';
   resolveFirst(503);await task;
-  eq(existing.company,'Concurrent Company','field-level rollback preserves concurrent company');eq(existing.notes,'concurrent-note','field-level rollback preserves concurrent notes');eq(subject.auditLogs.includes(concurrentAudit),true,'rollback preserves concurrent audit');eq(subject.auditLogs.some(row=>row.id==='audit-1'),false,'rollback removes only attempt audit');eq(subject.leadPoolFilter,'WON','rollback preserves concurrent pool filter');eq(subject.leadQuickFilter,'HIGH','rollback preserves concurrent quick filter');eq(subject.showLeadModal,false,'rollback preserves concurrent modal state');eq(subject.leadForm.contact,'typed-concurrently','rollback preserves concurrent form edit');
+  eq(byId(subject.leads,'lead-save-1')?.company,'Concurrent Company','field-level rollback preserves concurrent company');eq(byId(subject.leads,'lead-save-1')?.notes,'concurrent-note','field-level rollback preserves concurrent notes');eq(subject.auditLogs.includes(concurrentAudit),true,'rollback preserves concurrent audit');eq(subject.auditLogs.some(row=>row.id==='audit-1'),false,'rollback removes only attempt audit');eq(subject.leadPoolFilter,'WON','rollback preserves concurrent pool filter');eq(subject.leadQuickFilter,'HIGH','rollback preserves concurrent quick filter');eq(subject.showLeadModal,false,'rollback preserves concurrent modal state');eq(subject.leadForm.contact,'typed-concurrently','rollback preserves concurrent form edit');
   const rollback=await waitRollback(calls);eq(byId(rollback.leads,'lead-save-1')?.company,'Concurrent Company','rollback cloud preserves concurrent lead field');ok((rollback.auditLogs||[]).some(row=>row.id==='audit-concurrent'),'rollback cloud preserves concurrent audit');
 }
 
