@@ -23,7 +23,7 @@ EXPECTED_SHA256 = {
     'vendor/fontawesome/webfonts/fa-brands-400.woff2': '232c6f6a7678304f9efaa26f30b1610debc2ba9f4cd636b5e6751c8d73761b92',
     'vendor/fontawesome/webfonts/fa-regular-400.ttf': '9174757efc83e072436e873c22be1663d3c103b0a16d7fb73569af4918d4d351',
     'vendor/fontawesome/webfonts/fa-regular-400.woff2': 'c27da6f833431da5aa295c44540bfac0fd8270ba6a3c4346427006d8a7b34b76',
-    'vendor/fontawesome/webfonts/fa-solid-900.ttf': 'b4990d0d0c5f5d38d62e936eea120674e584c7ee8dcee38a975c0cf9a37539b',
+    'vendor/fontawesome/webfonts/fa-solid-900.ttf': 'b4990d0d0c5f5d38d62e936eea120674e584c7eea8dcee38a975c0cf9a37539b',
     'vendor/fontawesome/webfonts/fa-solid-900.woff2': 'ae17c16afbea216707b2203ea1cf9bdb45b9bfe47d0f4ae3258ddbc6294dd02f',
     'vendor/fontawesome/webfonts/fa-v4compatibility.ttf': 'ff8f525fb050c5d24519ccc8f5723d85b2e51edd3f9bc6548af55aebadd4f269',
     'vendor/fontawesome/webfonts/fa-v4compatibility.woff2': 'c7a869faca299d15be10a01f19d0765a7c4d46d8922d9b9317235c1e4a6f0982',
