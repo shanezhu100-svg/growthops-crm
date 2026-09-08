@@ -28,7 +28,7 @@ function extractMethod(name){
 }
 
 let methods;
-try{methods=vm.runInNewContext(`({${['deleteAdDataRecord','saveAdSpend','saveAdsPlan'].map(extractMethod).join(',')}})`,{Number,String,Object,Array,Math,JSON,Date,Set},{timeout:1000})}
+try{methods=vm.runInNewContext(`({${['deleteAdDataRecord','saveAdSpend','saveAdsPlan'].map(extractMethod).join(',')}})`,{Number,String,Object,Array,Math,JSON,Date,Set,Promise},{timeout:1000})}
 catch(error){throw new Error(`BUSINESS_AD_PERSISTED_MUTATIONS_FAILED: compile: ${error.message}`)}
 const fail=m=>{throw new Error('BUSINESS_AD_PERSISTED_MUTATIONS_FAILED: '+m)};
 const eq=(a,b,m)=>{if(a!==b)fail(`${m}; expected=${b}; actual=${a}`)};
@@ -90,17 +90,17 @@ for(const bad of [-1,'not-a-number','Infinity',Number.POSITIVE_INFINITY]){
 }
 
 function planSubject(campaign){
-  const counters={persist:0,audit:0,notify:[]};const s=Object.assign({},methods,{selectedAdsClient:{name:'Client'},localDateKey(){return '2026-09-03';},persist(){counters.persist+=1;},logAudit(){counters.audit+=1;},notify(m){counters.notify.push(String(m));}});return {s,counters};
+  const counters={persist:0,barrier:0,audit:0,notify:[]};const s=Object.assign({},methods,{selectedAdsClient:{name:'Client'},localDateKey(){return '2026-09-03';},persist(){counters.persist+=1;},persistAdStructureBarrier(){counters.barrier+=1;return Promise.resolve(true);},logAudit(){counters.audit+=1;},notify(m){counters.notify.push(String(m));}});return {s,counters};
 }
 const basePlan=()=>({planName:'Plan',name:'Campaign',adSets:[{ageMin:18,ageMax:65,budget:10}],isSaved:false,savedAt:'',updatedAt:''});
 for(const mutate of [
   p=>p.adSets[0].budget='not-a-number',p=>p.adSets[0].budget=-1,p=>p.adSets[0].budget='Infinity',
   p=>p.adSets[0].ageMin='abc',p=>p.adSets[0].ageMin=17,p=>p.adSets[0].ageMax=66,p=>{p.adSets[0].ageMin=50;p.adSets[0].ageMax=30;}
 ]){
-  const p=basePlan();mutate(p);const before=JSON.stringify(p);const {s,counters}=planSubject(p);s.saveAdsPlan(p);eq(JSON.stringify(p),before,'invalid ad plan must remain unchanged');eq(counters.persist,0,'invalid ad plan must not persist');eq(counters.audit,0,'invalid ad plan must not audit');
+  const p=basePlan();mutate(p);const before=JSON.stringify(p);const {s,counters}=planSubject(p);s.saveAdsPlan(p);eq(JSON.stringify(p),before,'invalid ad plan must remain unchanged');eq(counters.persist,0,'invalid ad plan must not persist');eq(counters.barrier,0,'invalid ad plan must not cross durable barrier');eq(counters.audit,0,'invalid ad plan must not audit');
 }
 {
-  const p=basePlan();p.adSets[0].budget='12.5';p.adSets[0].ageMin='20';p.adSets[0].ageMax='60';const {s,counters}=planSubject(p);s.saveAdsPlan(p);eq(p.adSets[0].budget,12.5,'valid plan budget normalized');eq(p.adSets[0].ageMin,20,'valid plan min age normalized');eq(p.adSets[0].ageMax,60,'valid plan max age normalized');eq(p.isSaved,true,'valid plan marked saved');eq(counters.persist,1,'valid plan persists once');eq(counters.audit,1,'valid plan audits once');
+  const p=basePlan();p.adSets[0].budget='12.5';p.adSets[0].ageMin='20';p.adSets[0].ageMax='60';const {s,counters}=planSubject(p);await s.saveAdsPlan(p);eq(p.adSets[0].budget,12.5,'valid plan budget normalized');eq(p.adSets[0].ageMin,20,'valid plan min age normalized');eq(p.adSets[0].ageMax,60,'valid plan max age normalized');eq(p.isSaved,true,'valid plan marked saved');eq(counters.persist,0,'valid plan suppresses legacy debounced persist');eq(counters.barrier,1,'valid plan durable barrier once');eq(counters.audit,1,'valid plan audits once');
 }
 
-console.log('BUSINESS_AD_PERSISTED_MUTATIONS_OK: delete=stale-fail-closed+month-lock-rechecked-on-confirm+single-write; adSpend=finite-nonnegative; plan=budget-finite-nonnegative+age-18-65+ordered; valid-normalization+persist-audit=preserved; provenance=final-shipped-vm');
+console.log('BUSINESS_AD_PERSISTED_MUTATIONS_OK: delete=stale-fail-closed+month-lock-rechecked-on-confirm+single-write; adSpend=finite-nonnegative; plan=budget-finite-nonnegative+age-18-65+ordered; valid-normalization+durable-ACK+audit=preserved; provenance=final-shipped-vm');
