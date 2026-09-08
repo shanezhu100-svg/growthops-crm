@@ -93,3 +93,4 @@ await import('./test_business_backup_snapshot_persistence_ack.mjs');
 await import('./test_business_irreversible_export_audit_barrier.mjs');
 await import('./test_business_finance_month_lock_persistence_ack.mjs');
 await import('./test_business_reconciliation_persistence_ack.mjs');
+await import('./test_business_ad_plan_persistence_ack.mjs');
