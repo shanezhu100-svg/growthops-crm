@@ -121,13 +121,14 @@ eq(defaultLead.convertedAt,'','default converted timestamp');
 }
 
 {
-  let persisted=0,notified='';
+  let persisted=0,barriers=0,notified='';
   const lead={id:'lead-missing',convertedClientId:'gone',convertedAt:'2026-08-01T00:00:00.000Z',stage:'WON'};
-  const s=makeSubject({clients:[],persist:()=>{persisted+=1},notify:msg=>{notified=msg},navigateTo:()=>fail('missing linked client must not navigate')});
-  s.openConvertedLeadClient(lead);
+  const s=makeSubject({clients:[],leads:[lead],persist:()=>{persisted+=1},persistLeadLinkRepairBarrier:()=>{barriers+=1;return Promise.resolve(true)},notify:msg=>{notified=msg},navigateTo:()=>fail('missing linked client must not navigate')});
+  await s.openConvertedLeadClient(lead);
   eq(lead.convertedClientId,null,'missing linked client clears converted id');
   eq(lead.convertedAt,'','missing linked client clears converted timestamp');
-  eq(persisted,1,'missing linked client repair persists');
+  eq(persisted,0,'missing linked client suppresses legacy debounced persistence');
+  eq(barriers,1,'missing linked client repair durable barrier count');
   if(!notified.includes('已不存在'))fail('missing linked client recovery notification missing');
 }
 
@@ -229,3 +230,4 @@ eq(defaultLead.convertedAt,'','default converted timestamp');
 }
 
 console.log('BUSINESS_LEAD_LIFECYCLE_OK: default+save+terminal-state+filter+stats+convert+client-link+first-receivable+missing-link-repair+stale-edit-fail-closed+lead+client-durable-ACK=executed');
+await import('./test_business_lead_link_repair_persistence_ack.mjs');
