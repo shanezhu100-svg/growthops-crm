@@ -37,10 +37,11 @@ const ok=(v,m)=>{if(!v)fail(m)};
 function deletionSubject({records=null,lockSequence=[true,true]}={}){
   const record={id:'r1',date:'2026-08-31',spend:12,currency:'USD'};
   const account={accountName:'Account',adAccountId:'acct-1',adDataRecords:records??[{...record}]};
-  const counters={persist:0,audit:0,accountSync:0,clientSync:0,notify:[],confirm:null,lockCalls:0};
-  const s=Object.assign({},methods,{selectedAdsClient:{name:'Client'},selectedAdsAccount:account,selectedAdsPlatform:'FB',editingAdDataRecordId:null,
+  const counters={persist:0,barrier:0,audit:0,accountSync:0,clientSync:0,notify:[],confirm:null,lockCalls:0};
+  const client={name:'Client'};
+  const s=Object.assign({},methods,{selectedAdsClient:client,selectedAdsAccount:account,selectedAdsPlatform:'FB',editingAdDataRecordId:null,
     assertMonthUnlocked(){const value=lockSequence[Math.min(counters.lockCalls,lockSequence.length-1)];counters.lockCalls+=1;return value;},
-    askConfirm(_options,cb){counters.confirm=cb;},formatMoney(v,c){return `${c}:${v}`;},syncAccountAnalyticsFromRecords(){counters.accountSync+=1;},syncClientPlatformAnalytics(){counters.clientSync+=1;},persist(){counters.persist+=1;},logAudit(){counters.audit+=1;},notify(m){counters.notify.push(String(m));}});
+    askConfirm(_options,cb){counters.confirm=cb;},formatMoney(v,c){return `${c}:${v}`;},syncAccountAnalyticsFromRecords(){counters.accountSync+=1;},syncClientPlatformAnalytics(){counters.clientSync+=1;},persist(){counters.persist+=1;},persistAdStructureBarrier(){counters.barrier+=1;return Promise.resolve(true)},logAudit(){counters.audit+=1;},notify(m){counters.notify.push(String(m));}});
   return {s,record,account,counters};
 }
 
@@ -49,9 +50,10 @@ function deletionSubject({records=null,lockSequence=[true,true]}={}){
   const {s,record,account,counters}=deletionSubject({lockSequence:[true,false]});
   s.deleteAdDataRecord(record);
   ok(typeof counters.confirm==='function','delete should request confirmation when initially unlocked');
-  counters.confirm();
+  await counters.confirm();
   eq(account.adDataRecords.length,1,'delete must not remove record after month becomes locked');
   eq(counters.persist,0,'locked-at-confirm delete must not persist');
+  eq(counters.barrier,0,'locked-at-confirm delete must not cross barrier');
   eq(counters.audit,0,'locked-at-confirm delete must not audit success');
 }
 
@@ -59,34 +61,36 @@ function deletionSubject({records=null,lockSequence=[true,true]}={}){
 {
   const {s,record,account,counters}=deletionSubject({records:[],lockSequence:[true,true]});
   s.deleteAdDataRecord(record);
-  if(counters.confirm)counters.confirm();
+  if(counters.confirm)await counters.confirm();
   eq(account.adDataRecords.length,0,'stale delete keeps record set unchanged');
   eq(counters.persist,0,'stale delete must not persist');
+  eq(counters.barrier,0,'stale delete must not cross barrier');
   eq(counters.audit,0,'stale delete must not audit success');
   ok(counters.notify.some(m=>m.includes('不存在')||m.includes('刷新')),'stale delete should explain stale target');
 }
 
-// Valid unlocked delete still performs one atomic durable write.
+// Valid unlocked delete performs one durable barrier and suppresses legacy persist.
 {
   const {s,record,account,counters}=deletionSubject({lockSequence:[true,true]});
-  s.deleteAdDataRecord(record);counters.confirm();
+  s.deleteAdDataRecord(record);await counters.confirm();
   eq(account.adDataRecords.length,0,'valid delete removes exactly the target');
-  eq(counters.persist,1,'valid delete persists once');
+  eq(counters.persist,0,'valid delete suppresses legacy persist');
+  eq(counters.barrier,1,'valid delete durable barrier once');
   eq(counters.audit,1,'valid delete audits once');
   eq(counters.accountSync,1,'valid delete syncs account analytics once');
   eq(counters.clientSync,1,'valid delete syncs client analytics once');
 }
 
 function spendSubject(value){
-  const account={adSpend:value,adSpendCurrency:''};const counters={persist:0,notify:[]};
-  const s=Object.assign({},methods,{persist(){counters.persist+=1;},notify(m){counters.notify.push(String(m));}});return {s,account,counters};
+  const account={adSpend:value,adSpendCurrency:''};const counters={persist:0,barrier:0,notify:[]};
+  const s=Object.assign({},methods,{persist(){counters.persist+=1;},persistAdStructureBarrier(){counters.barrier+=1;return Promise.resolve(true)},notify(m){counters.notify.push(String(m));}});return {s,account,counters};
 }
 for(const bad of [-1,'not-a-number','Infinity',Number.POSITIVE_INFINITY]){
   const {s,account,counters}=spendSubject(bad);const before=account.adSpend;s.saveAdSpend(account);
-  eq(account.adSpend,before,`invalid adSpend must remain unchanged: ${String(bad)}`);eq(counters.persist,0,`invalid adSpend must not persist: ${String(bad)}`);
+  eq(account.adSpend,before,`invalid adSpend must remain unchanged: ${String(bad)}`);eq(counters.persist,0,`invalid adSpend must not persist: ${String(bad)}`);eq(counters.barrier,0,`invalid adSpend must not cross barrier: ${String(bad)}`);
 }
 {
-  const {s,account,counters}=spendSubject('12.5');s.saveAdSpend(account);eq(account.adSpend,12.5,'valid adSpend normalized to number');eq(account.adSpendCurrency,'USD','valid adSpend defaults currency');eq(counters.persist,1,'valid adSpend persists once');
+  const {s,account,counters}=spendSubject('12.5');await s.saveAdSpend(account);eq(account.adSpend,12.5,'valid adSpend normalized to number');eq(account.adSpendCurrency,'USD','valid adSpend defaults currency');eq(counters.persist,0,'valid adSpend suppresses legacy persist');eq(counters.barrier,1,'valid adSpend durable barrier once');
 }
 
 function planSubject(campaign){
@@ -103,4 +107,4 @@ for(const mutate of [
   const p=basePlan();p.adSets[0].budget='12.5';p.adSets[0].ageMin='20';p.adSets[0].ageMax='60';const {s,counters}=planSubject(p);await s.saveAdsPlan(p);eq(p.adSets[0].budget,12.5,'valid plan budget normalized');eq(p.adSets[0].ageMin,20,'valid plan min age normalized');eq(p.adSets[0].ageMax,60,'valid plan max age normalized');eq(p.isSaved,true,'valid plan marked saved');eq(counters.persist,0,'valid plan suppresses legacy debounced persist');eq(counters.barrier,1,'valid plan durable barrier once');eq(counters.audit,1,'valid plan audits once');
 }
 
-console.log('BUSINESS_AD_PERSISTED_MUTATIONS_OK: delete=stale-fail-closed+month-lock-rechecked-on-confirm+single-write; adSpend=finite-nonnegative; plan=budget-finite-nonnegative+age-18-65+ordered; valid-normalization+durable-ACK+audit=preserved; provenance=final-shipped-vm');
+console.log('BUSINESS_AD_PERSISTED_MUTATIONS_OK: delete=stale-fail-closed+month-lock-rechecked-on-confirm+durable-ACK; adSpend=finite-nonnegative+durable-ACK; plan=budget-finite-nonnegative+age-18-65+ordered+durable-ACK; valid-normalization+audit=preserved; provenance=final-shipped-vm');
