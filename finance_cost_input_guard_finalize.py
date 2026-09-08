@@ -15,6 +15,7 @@ import irreversible_export_audit_barrier_finalize  # noqa: F401
 import client_save_persistence_ack_finalize  # noqa: F401
 import lead_save_persistence_ack_finalize  # noqa: F401
 import lead_link_repair_persistence_ack_finalize  # noqa: F401
+import resource_catalog_persistence_ack_finalize  # noqa: F401
 
 ROOT = Path(__file__).resolve().parent
 APP_DIR = ROOT / 'dist' / 'app'
