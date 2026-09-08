@@ -16,6 +16,8 @@ import client_save_persistence_ack_finalize  # noqa: F401
 import lead_save_persistence_ack_finalize  # noqa: F401
 import lead_link_repair_persistence_ack_finalize  # noqa: F401
 import resource_catalog_persistence_ack_finalize  # noqa: F401
+import ad_structure_persistence_ack_finalize  # noqa: F401
+import ad_plan_persistence_ack_finalize  # noqa: F401
 
 ROOT = Path(__file__).resolve().parent
 APP_DIR = ROOT / 'dist' / 'app'
@@ -43,7 +45,7 @@ if not APP_DIR.is_dir():
     fail('dist/app missing')
 files = sorted(APP_DIR.glob('app-inline-*.js'))
 if not files:
-    fail('no final app-inline JS artifacts')
+    fail('no final runtime artifact changed')
 
 found = {'saveFinanceCost': 0, 'ensureAutomaticAssetCosts': 0, 'createReceivableForClientMonth': 0}
 changed = []
