@@ -40,7 +40,7 @@ function extractMethod(name){
 const methods={};
 for(const name of ['saveRecharge','saveRenewal','saveStandaloneAlert']){
   const source=extractMethod(name);
-  const compiled=vm.runInNewContext(`({${source}})`,{Number,String,Object,Array,Math,Set,JSON,Date},{timeout:1000});
+  const compiled=vm.runInNewContext(`({${source}})`,{Number,String,Object,Array,Math,Set,JSON,Date,Promise,Error},{timeout:1000});
   if(typeof compiled[name]!=='function')throw new Error(`BUSINESS_CLIENT_REMINDER_DATE_MUTATIONS_FAILED: ${name} not executable`);
   methods[name]=compiled[name];
 }
@@ -51,7 +51,7 @@ const ok=(value,message)=>{if(!value)fail(message)};
 
 function rechargeState(date){
   const account={id:'acct-1',rechargeHistory:[]},notices=[],audits=[],lockMonths=[];
-  let persistCount=0;
+  let persistCount=0,barrierCount=0;
   const ctx={
     rechargeForm:{clientId:'client-1',platform:'FB',accountId:'acct-1',clientName:'Client One',accountName:'Account One',date,currency:'USD',amount:'10',note:''},
     showRechargeModal:true,
@@ -59,13 +59,14 @@ function rechargeState(date){
     assertMonthUnlocked(month){lockMonths.push(month);return true},
     localDateKey(){return '2026-09-02'},
     persist(){persistCount+=1},
+    persistRechargeBarrier(){barrierCount+=1;return Promise.resolve(true)},
     logAudit(action,detail){audits.push([action,detail])},
     notify(message){notices.push(message)},
     formatMoney(value,currency){return `${currency} ${value}`},
     hasUsdBalanceData(){return false},
     accountBalanceText(){return '$0'},
   };
-  return {ctx,account,notices,audits,lockMonths,get persistCount(){return persistCount}};
+  return {ctx,account,notices,audits,lockMonths,get persistCount(){return persistCount},get barrierCount(){return barrierCount}};
 }
 
 for(const date of ['2026-02-30','2026/09/02','not-a-date']){
@@ -74,22 +75,27 @@ for(const date of ['2026-02-30','2026/09/02','not-a-date']){
   eq(state.account.rechargeHistory.length,0,`invalid recharge date mutation ${date}`);
   eq(state.lockMonths.length,0,`invalid recharge date lock check ${date}`);
   eq(state.persistCount,0,`invalid recharge date persist ${date}`);
+  eq(state.barrierCount,0,`invalid recharge date barrier ${date}`);
   eq(state.audits.length,0,`invalid recharge date audit ${date}`);
   ok(state.notices.some(message=>String(message).includes('日期')),`invalid recharge date notice ${date}`);
 }
 {
   const state=rechargeState('');
-  methods.saveRecharge.call(state.ctx);
+  await methods.saveRecharge.call(state.ctx);
   eq(state.account.rechargeHistory.length,1,'blank recharge date defaults to local date');
   eq(state.account.rechargeHistory[0].date,'2026-09-02','blank recharge default date value');
   eq(state.lockMonths[0],'2026-09','blank recharge default lock month');
+  eq(state.persistCount,0,'blank recharge legacy persist suppressed');
+  eq(state.barrierCount,1,'blank recharge durable barrier');
 }
 {
   const state=rechargeState('2028-02-29');
-  methods.saveRecharge.call(state.ctx);
+  await methods.saveRecharge.call(state.ctx);
   eq(state.account.rechargeHistory.length,1,'leap recharge date accepted');
   eq(state.account.rechargeHistory[0].date,'2028-02-29','leap recharge date preserved');
   eq(state.lockMonths[0],'2028-02','leap recharge lock month');
+  eq(state.persistCount,0,'leap recharge legacy persist suppressed');
+  eq(state.barrierCount,1,'leap recharge durable barrier');
 }
 
 function renewalState(newDueDate){
@@ -164,4 +170,4 @@ for(const date of ['2026-02-30','2026/12/31','not-a-date']){
   eq(state.audits.length,1,'leap standalone audit');
 }
 
-console.log('BUSINESS_CLIENT_REMINDER_DATE_MUTATIONS_OK: recharge+renewal+standalone=yyyy-mm-dd+calendar-valid; recharge-empty=local-default; leap-day=accepted; invalid=denied-before-mutation+persist+audit');
+console.log('BUSINESS_CLIENT_REMINDER_DATE_MUTATIONS_OK: recharge+renewal+standalone=yyyy-mm-dd+calendar-valid; recharge=local-default+leap-day+durable-ACK; renewal+standalone=legacy-phase-preserved; invalid=denied-before-mutation+persist+barrier+audit');
