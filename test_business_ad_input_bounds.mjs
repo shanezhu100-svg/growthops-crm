@@ -29,7 +29,7 @@ const fields = ['spend', 'impressions', 'reach', 'clicks', 'leads', 'conversions
 const invalidValues = [-1, 'abc', 'Infinity'];
 
 function makeSubject({ overrides = {}, existing = false } = {}) {
-  const counters = { persist: 0, accountSync: 0, clientSync: 0, audit: 0, notify: [] };
+  const counters = { persist: 0, barrier: 0, accountSync: 0, clientSync: 0, audit: 0, notify: [] };
   const existingRecord = {
     id: 'record-existing', date: '2026-08-31', campaignId: 'campaign-1', campaignName: 'Campaign',
     adSetId: 'adset-1', adSetName: 'Set', adId: 'ad-1', adName: 'Ad', currency: 'USD',
@@ -67,6 +67,7 @@ function makeSubject({ overrides = {}, existing = false } = {}) {
     syncAccountAnalyticsFromRecords(){ counters.accountSync++; },
     syncClientPlatformAnalytics(){ counters.clientSync++; },
     persist(){ counters.persist++; },
+    persistAdStructureBarrier(){ counters.barrier++; return Promise.resolve(true); },
     logAudit(){ counters.audit++; },
     notify(message){ counters.notify.push(String(message)); },
     formatMoney(value, currency){ return `${currency}:${Number(value).toFixed(2)}`; },
@@ -84,6 +85,7 @@ for (const field of fields) {
     subject.saveAdDataRecord();
     assert(account.adDataRecords.length === 0, `${field}=${String(invalid)} created a record`);
     assert(counters.persist === 0, `${field}=${String(invalid)} reached persist`);
+    assert(counters.barrier === 0, `${field}=${String(invalid)} reached durable barrier`);
     assert(counters.accountSync === 0 && counters.clientSync === 0, `${field}=${String(invalid)} reached analytics sync`);
     assert(counters.audit === 0, `${field}=${String(invalid)} reached audit`);
     assert(counters.notify.length >= 1, `${field}=${String(invalid)} did not produce validation feedback`);
@@ -95,16 +97,17 @@ for (const field of fields) {
   subject.saveAdDataRecord();
   assert(account.adDataRecords.length === 1, `${field} invalid edit changed record count`);
   assert(JSON.stringify(account.adDataRecords[0]) === JSON.stringify(existingRecord), `${field} invalid edit mutated existing record`);
-  assert(counters.persist === 0 && counters.audit === 0, `${field} invalid edit reached persist/audit`);
+  assert(counters.persist === 0 && counters.barrier === 0 && counters.audit === 0, `${field} invalid edit reached persist/barrier/audit`);
 }
 
 const zeroOverrides = Object.fromEntries(fields.map(field => [field, 0]));
 const zeroCase = makeSubject({ overrides: zeroOverrides });
-zeroCase.subject.saveAdDataRecord();
+await zeroCase.subject.saveAdDataRecord();
 assert(zeroCase.account.adDataRecords.length === 1, 'all-zero valid record was not saved');
 for (const field of fields) assert(zeroCase.account.adDataRecords[0][field] === 0, `zero ${field} was not preserved`);
-assert(zeroCase.counters.persist === 1, 'all-zero valid record did not persist exactly once');
+assert(zeroCase.counters.persist === 0, 'all-zero valid record must suppress legacy debounced persist');
+assert(zeroCase.counters.barrier === 1, 'all-zero valid record did not cross durable ACK exactly once');
 assert(zeroCase.counters.accountSync === 1 && zeroCase.counters.clientSync === 1, 'all-zero valid record did not sync analytics exactly once');
 assert(zeroCase.counters.audit === 1, 'all-zero valid record did not audit exactly once');
 
-console.log('BUSINESS_AD_INPUT_BOUNDS_OK: spend+impressions+reach+clicks+leads+conversions+revenue=finite-nonnegative; negative+nan+infinity=denied-before-mutation/sync/persist/audit; edit=unchanged-on-invalid; zero=preserved');
+console.log('BUSINESS_AD_INPUT_BOUNDS_OK: spend+impressions+reach+clicks+leads+conversions+revenue=finite-nonnegative; negative+nan+infinity=denied-before-mutation/sync/persist/barrier/audit; edit=unchanged-on-invalid; zero=preserved+single-durable-ACK');
