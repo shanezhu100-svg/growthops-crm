@@ -22,27 +22,40 @@ const proof = vm.runInNewContext(`({${proofSource}})`, Object.create(null), { ti
 if (typeof proof.adRecordMetrics !== 'function') throw new Error('BUSINESS_PERSISTED_MUTATION_INVENTORY_FAILED: shipped provenance method not executable');
 
 // Inventory the final shipped Vue method object rather than canonical/source snippets.
-// A method is mutation-like when it crosses one of the durable/user-confirmed write
-// boundaries already used by the CRM runtime. This deliberately excludes pure
-// computed/display helpers so the review list stays focused on state-changing paths.
+// Internal _legacy* methods are implementation details of reviewed public wrappers:
+// when a wrapper delegates to one, inherit that legacy method's direct write signals
+// onto the public method instead of inventing a second mutation surface.
 const defRe = /(?:^|[,]\s*|\n\s*)([A-Za-z_$][A-Za-z0-9_$]*)\s*\([^)]*\)\s*\{/gm;
 const defs = [...bundle.matchAll(defRe)];
 if (defs.length < 20) throw new Error(`BUSINESS_PERSISTED_MUTATION_INVENTORY_FAILED: method parser drifted; defs=${defs.length}`);
 const reserved = new Set(['if','for','while','switch','catch','with','function','return']);
-
-const candidates = new Map();
+const sources = new Map();
 for (let i = 0; i + 1 < defs.length; i += 1) {
   const name = defs[i][1];
-  if (reserved.has(name)) continue;
   const start = defs[i].index + defs[i][0].indexOf(name);
   const next = defs[i + 1].index + defs[i + 1][0].indexOf(defs[i + 1][1]);
-  const source = bundle.slice(start, next);
+  sources.set(name, bundle.slice(start, next));
+}
+
+function directSignals(source) {
   const signals = [];
   if (/\bthis\.persist\s*\(/.test(source)) signals.push('persist');
   if (/\bthis\.logAudit\s*\(/.test(source)) signals.push('audit');
   if (/\b(?:window\.)?confirm\s*\(/.test(source)) signals.push('confirm');
   if (/\bthis\.(?:clients|leads|openingDeals|openingProviders|financeReceivables|financeCosts|adData|ads|receivablePayments)\s*=/.test(source)) signals.push('state-replace');
   if (/\bthis\.(?:clients|leads|openingDeals|openingProviders|financeReceivables|financeCosts|adData|ads|receivablePayments)\.(?:push|unshift|splice)\s*\(/.test(source)) signals.push('state-mutate');
+  return signals;
+}
+
+const candidates = new Map();
+for (const [name, source] of sources) {
+  if (reserved.has(name) || name.startsWith('_legacy')) continue;
+  const signals = directSignals(source);
+  for (const match of source.matchAll(/\bthis\.(_legacy[A-Za-z_$][A-Za-z0-9_$]*)\s*\(/g)) {
+    const legacySource = sources.get(match[1]);
+    if (!legacySource) throw new Error(`BUSINESS_PERSISTED_MUTATION_INVENTORY_FAILED: delegated method missing: ${match[1]}`);
+    signals.push(...directSignals(legacySource));
+  }
   if (signals.length) candidates.set(name, [...new Set(signals)].sort());
 }
 
@@ -52,8 +65,7 @@ const rendered = names.map(name => `${name}[${candidates.get(name).join('+')}]`)
 
 // Reviewed shipped mutation surface. Pin both method identity and durable-boundary
 // signals: a newly introduced write path, a removed method, or a method that stops
-// crossing its reviewed persist/audit/state boundary must be explicitly reviewed
-// instead of silently drifting into Production.
+// crossing its reviewed persist/audit/state boundary must be explicitly reviewed.
 const EXPECTED = [
   'addAdCampaign[persist]',
   'addAdSet[persist]',
@@ -148,5 +160,5 @@ const unmentioned = names.filter(name => !new RegExp(`\\b${name}\\b`).test(busin
 
 console.log(
   `BUSINESS_PERSISTED_MUTATION_INVENTORY_OK: methods=${names.length}; ` +
-  `surface=name+signals-pinned; provenance=read+vm-execute; unmentioned-business-test-debt=${unmentioned.length}`
+  `surface=public-name+direct/delegated-signals-pinned; provenance=read+vm-execute; unmentioned-business-test-debt=${unmentioned.length}`
 );
