@@ -42,7 +42,7 @@ const methodNames=['saveRecharge','saveRechargeReminder','saveRenewal','saveStan
 const methods={};
 for(const name of methodNames){
   const source=extractMethod(name);
-  const compiled=vm.runInNewContext(`({${source}})`,{Number,String,Object,Array,Math,Set,JSON,Date},{timeout:1000});
+  const compiled=vm.runInNewContext(`({${source}})`,{Number,String,Object,Array,Math,Set,JSON,Date,Promise,Error},{timeout:1000});
   if(typeof compiled[name]!=='function')throw new Error(`BUSINESS_CLIENT_REMINDER_MONEY_MUTATIONS_FAILED: ${name} not executable`);
   methods[name]=compiled[name];
 }
@@ -54,7 +54,7 @@ const ok=(value,message)=>{if(!value)fail(message)};
 function rechargeContext(amount,{locked=false,accountExists=true}={}){
   const account={id:'acct-1',rechargeHistory:[]};
   const notices=[],audits=[];
-  let persistCount=0,lockChecks=0;
+  let persistCount=0,barrierCount=0,lockChecks=0;
   const ctx={
     rechargeForm:{clientId:'client-1',platform:'FB',accountId:'acct-1',clientName:'Client One',accountName:'Account One',date:'2026-09-02',currency:'USD',amount,note:'topup'},
     showRechargeModal:true,
@@ -62,32 +62,35 @@ function rechargeContext(amount,{locked=false,accountExists=true}={}){
     assertMonthUnlocked(month){lockChecks+=1;eq(month,'2026-09','recharge lock month');return !locked},
     localDateKey(){return '2026-09-02'},
     persist(){persistCount+=1},
+    persistRechargeBarrier(){barrierCount+=1;return Promise.resolve(true)},
     logAudit(action,detail){audits.push([action,detail])},
     notify(message){notices.push(message)},
     formatMoney(value,currency){return `${currency} ${value}`},
     hasUsdBalanceData(){return false},
     accountBalanceText(){return '$0'},
   };
-  return {ctx,account,notices,audits,get persistCount(){return persistCount},get lockChecks(){return lockChecks}};
+  return {ctx,account,notices,audits,get persistCount(){return persistCount},get barrierCount(){return barrierCount},get lockChecks(){return lockChecks}};
 }
 
-// Valid positive recharge is persisted/audited exactly once.
+// Valid positive recharge is cloud-ACKed/audited exactly once; legacy debounced persist is suppressed.
 {
   const state=rechargeContext('125.50');
-  methods.saveRecharge.call(state.ctx);
+  await methods.saveRecharge.call(state.ctx);
   eq(state.account.rechargeHistory.length,1,'valid recharge row count');
   eq(state.account.rechargeHistory[0].amount,125.5,'valid recharge numeric amount');
-  eq(state.persistCount,1,'valid recharge persist');
+  eq(state.persistCount,0,'valid recharge legacy persist suppressed');
+  eq(state.barrierCount,1,'valid recharge durable barrier');
   eq(state.audits.length,1,'valid recharge audit');
-  eq(state.ctx.showRechargeModal,false,'valid recharge closes modal');
+  eq(state.ctx.showRechargeModal,false,'valid recharge closes modal after ACK');
 }
 
-// Locked months stop before mutation/persist/audit.
+// Locked months stop before mutation/persist/barrier/audit.
 {
   const state=rechargeContext('50',{locked:true});
   methods.saveRecharge.call(state.ctx);
   eq(state.account.rechargeHistory.length,0,'locked recharge mutation');
   eq(state.persistCount,0,'locked recharge persist');
+  eq(state.barrierCount,0,'locked recharge barrier');
   eq(state.audits.length,0,'locked recharge audit');
   eq(state.lockChecks,1,'locked recharge lock check');
 }
@@ -99,6 +102,7 @@ for(const amount of ['0','-1','not-a-number','Infinity']){
   methods.saveRecharge.call(state.ctx);
   eq(state.account.rechargeHistory.length,0,`invalid recharge mutation ${amount}`);
   eq(state.persistCount,0,`invalid recharge persist ${amount}`);
+  eq(state.barrierCount,0,`invalid recharge barrier ${amount}`);
   eq(state.audits.length,0,`invalid recharge audit ${amount}`);
   ok(state.notices.some(message=>String(message).includes('有效的充值金额')),`invalid recharge notice ${amount}`);
 }
@@ -108,6 +112,7 @@ for(const amount of ['0','-1','not-a-number','Infinity']){
   const state=rechargeContext('50',{accountExists:false});
   methods.saveRecharge.call(state.ctx);
   eq(state.persistCount,0,'missing account recharge persist');
+  eq(state.barrierCount,0,'missing account recharge barrier');
   eq(state.audits.length,0,'missing account recharge audit');
   eq(state.ctx.showRechargeModal,false,'missing account recharge modal');
 }
@@ -287,4 +292,4 @@ function renewalContext({target,standaloneAlerts=[],clients=[],dismissedAlerts=[
   eq(auditCount,0,'invalid standalone alert audit');
 }
 
-console.log('BUSINESS_CLIENT_REMINDER_MONEY_MUTATIONS_OK: recharge=finite-positive+month-lock+account-scope; recharge-reminder=persist-only; renewal=standalone+contract+ip-exact-source+stale-fail-closed+auto-billing; standalone-alert=type-guard; persist+audit=phase-pinned');
+console.log('BUSINESS_CLIENT_REMINDER_MONEY_MUTATIONS_OK: recharge=finite-positive+month-lock+account-scope+durable-ACK; recharge-reminder=persist-only; renewal=standalone+contract+ip-exact-source+stale-fail-closed+auto-billing; standalone-alert=type-guard; persist+audit=phase-pinned');

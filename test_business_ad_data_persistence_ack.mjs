@@ -31,3 +31,4 @@ function make({barrier='deferred',record=true}={}){const gate=deferred(),calls={
 {const {subject,account,calls}=make();delete subject.persistAdStructureBarrier;const before=clone(account.adDataRecords);const result=subject.saveAdDataRecord();eq(result,undefined,'missing barrier save returns synchronously');same(account.adDataRecords,before,'missing barrier restores record state');eq(calls.persist,0,'missing barrier zero persist');ok(calls.notify.some(m=>m.includes('持久化服务不可用')),'missing barrier notice')}
 
 console.log('BUSINESS_AD_DATA_PERSISTENCE_ACK_OK: final-runtime record-save+delete+manual-spend=success-after-shared-ACK; failure=record+derived-account/client-analytics+campaign+audit rollback+rollback-persisted; concurrency=array+field authority preserved; modal/editing success UI ACK-gated; missing-barrier=fail-closed');
+await import('./test_business_recharge_persistence_ack.mjs');
