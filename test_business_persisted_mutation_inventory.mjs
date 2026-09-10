@@ -51,9 +51,10 @@ const candidates = new Map();
 for (const [name, source] of sources) {
   if (reserved.has(name) || name.startsWith('_legacy')) continue;
   const signals = directSignals(source);
-  for (const match of source.matchAll(/\bthis\.(_legacy[A-Za-z_$][A-Za-z0-9_$]*)\s*\(/g)) {
-    const legacySource = sources.get(match[1]);
-    if (!legacySource) throw new Error(`BUSINESS_PERSISTED_MUTATION_INVENTORY_FAILED: delegated method missing: ${match[1]}`);
+  const delegatedLegacyNames = [...new Set([...source.matchAll(/(_legacy[A-Za-z_$][A-Za-z0-9_$]*)/g)].map(match => match[1]))];
+  for (const legacyName of delegatedLegacyNames) {
+    const legacySource = sources.get(legacyName);
+    if (!legacySource) continue;
     signals.push(...directSignals(legacySource));
   }
   if (signals.length) candidates.set(name, [...new Set(signals)].sort());
