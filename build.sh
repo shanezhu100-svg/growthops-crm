@@ -151,6 +151,7 @@ python3 test_vue_duplicate_attribute_output.py
 python3 vue_runtime_only_finalize.py
 python3 vue_runtime_compiled_marker_finalize.py
 python3 test_vue_runtime_only_output.py
+python3 test_collection_plan_ui_output.py
 # Repair only referential debris created by a successful permanent client delete:
 # stale converted-lead pointers and client-scoped SOP progress. Financial-history
 # blockers and historical lead stages remain unchanged.
