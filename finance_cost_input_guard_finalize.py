@@ -20,6 +20,7 @@ import ad_structure_persistence_ack_finalize  # noqa: F401
 import ad_plan_persistence_ack_finalize  # noqa: F401
 import ad_data_persistence_ack_finalize  # noqa: F401
 import recharge_persistence_ack_finalize  # noqa: F401
+import renewal_persistence_ack_finalize  # noqa: F401
 
 ROOT = Path(__file__).resolve().parent
 APP_DIR = ROOT / 'dist' / 'app'
