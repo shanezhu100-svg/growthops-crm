@@ -5,6 +5,7 @@ import re
 ROOT = Path(__file__).resolve().parent
 DIST = ROOT / 'dist'
 
+# Keep production artifact pins synchronized with test_cloudflare_p1_verify_guard.py.
 EXPECTED_SHA256 = {
     'index.html': '142947f80f8a9617dfe71843538056799e98d2b9e50a701df243011e97f043c2',
     'tailwind.css': '082358f4ff9c6d67ccb8e628ed27669967e15cfa7908f2e4c36a1e89c0a3f7b6',
