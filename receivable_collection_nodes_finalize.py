@@ -10,20 +10,15 @@ def fail(message: str) -> None:
     raise SystemExit('RECEIVABLE_COLLECTION_NODES_FINALIZE_FAILED: ' + message)
 
 
-def method_bounds(text: str, name: str):
-    match = re.search(rf'(?:^|[,\n])\s*({re.escape(name)}\([^)]*\)\s*\{{)', text, flags=re.M)
-    if not match:
-        return None
-    start = match.start() + match.group(0).index(match.group(1))
-    open_pos = text.find('{', start)
-    if open_pos < 0:
-        fail(f'{name} opening brace missing')
+def scan_balanced(text: str, start: int, open_char: str, close_char: str, label: str) -> int:
+    if start < 0 or start >= len(text) or text[start] != open_char:
+        fail(f'{label} expected {open_char}')
     depth = 0
     quote = ''
     escaped = False
     line_comment = False
     block_comment = False
-    i = open_pos
+    i = start
     while i < len(text):
         ch = text[i]
         nxt = text[i + 1] if i + 1 < len(text) else ''
@@ -60,14 +55,33 @@ def method_bounds(text: str, name: str):
             quote = ch
             i += 1
             continue
-        if ch == '{':
+        if ch == open_char:
             depth += 1
-        elif ch == '}':
+        elif ch == close_char:
             depth -= 1
             if depth == 0:
-                return start, i + 1
+                return i
         i += 1
-    fail(f'{name} closing brace missing')
+    fail(f'{label} unmatched {open_char}')
+
+
+def method_bounds(text: str, name: str):
+    # Do not treat destructured/default parameter braces as the method body.
+    # Locate the method name, balance the full parameter list first, then balance
+    # the actual body. createReceivableForClientMonth uses `{allowFuture=false}={}`.
+    match = re.search(rf'(?:^|[,\n])\s*({re.escape(name)})\s*\(', text, flags=re.M)
+    if not match:
+        return None
+    start = match.start() + match.group(0).index(match.group(1))
+    paren = text.find('(', start + len(name))
+    paren_end = scan_balanced(text, paren, '(', ')', f'{name} parameters')
+    open_pos = paren_end + 1
+    while open_pos < len(text) and text[open_pos].isspace():
+        open_pos += 1
+    if open_pos >= len(text) or text[open_pos] != '{':
+        fail(f'{name} body opening brace missing after parameters')
+    body_end = scan_balanced(text, open_pos, '{', '}', f'{name} body')
+    return start, body_end + 1
 
 
 def rename_method(source: str, old_name: str, new_name: str) -> str:
