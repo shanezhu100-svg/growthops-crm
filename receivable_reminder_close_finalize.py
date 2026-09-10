@@ -67,4 +67,3 @@ print(
 # Collection-node semantics intentionally run after the formal-receivable reminder
 # authority above, so the wrapper inherits the duplicate-suppression contract.
 import receivable_collection_nodes_finalize  # noqa: E402,F401
-import collection_plan_ui_probe  # noqa: E402,F401
