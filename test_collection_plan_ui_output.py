@@ -2,7 +2,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 APP_DIR = ROOT / 'dist' / 'app'
-REGISTRY = APP_DIR / 'vue-render-registry.js'
+REGISTRY = ROOT / 'dist' / 'vendor' / 'vue-3.5.41.renders.js'
 BUILD = (ROOT / 'build.sh').read_text(encoding='utf-8')
 
 
