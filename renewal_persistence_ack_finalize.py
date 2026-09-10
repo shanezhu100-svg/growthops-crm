@@ -120,7 +120,7 @@ for path in files:
     start, end = bounds
     source = text[start:end].strip().rstrip(',').strip()
     required = (
-        '请输入有效的续费日期',
+        '请选择有效的到期日期',
         '该提醒已不存在，请刷新页面后重试',
         '合同到期日期已变化，请刷新页面后重试',
         '网络环境已不存在，请刷新页面后重试',
