@@ -7,8 +7,8 @@ ROOT = Path(__file__).resolve().parent
 REGISTRY = ROOT / 'dist' / 'vendor' / 'vue-3.5.41.renders.js'
 EXPECTED_INPUT_SHA = '301f02dcb24dac94fbffa89426afe0983b6ba5d201dd1599a028e367c4a2aca9'
 EXPECTED_INPUT_BYTES = 1194207
-EXPECTED_OUTPUT_SHA = '862d7721758f700c194968f5fd6927c4792de56f7bf608529a4880dee71780a1'
-EXPECTED_OUTPUT_BYTES = 1187638
+EXPECTED_OUTPUT_SHA = '96c7ec34ff5fc8bd8f6b78afd6e3301759a83ea65b8fabe874f707fd2ef34ef0'
+EXPECTED_OUTPUT_BYTES = 1196036
 
 # Vue 3.5.41 packages/shared/src/globalsAllowList.ts. Runtime-compiled templates
 # deliberately do not capture these JavaScript globals through the component proxy.
