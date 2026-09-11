@@ -7,6 +7,7 @@ await import('./test_business_client_lifecycle_mutations.mjs');
 await import('./test_business_client_lifecycle_persistence_ack.mjs');
 await import('./test_business_client_delete_persistence_ack.mjs');
 await import('./test_business_client_save_persistence_ack.mjs');
+await import('./test_business_client_collection_plan_persistence_ack.mjs');
 await import('./test_business_lead_save_persistence_ack.mjs');
 await import('./test_business_finance_settlement_mutations.mjs');
 await import('./test_business_finance_cost_mutations.mjs');
