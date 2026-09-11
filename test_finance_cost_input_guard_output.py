@@ -10,10 +10,9 @@ def fail(message: str) -> None:
     raise SystemExit('FINANCE_COST_INPUT_GUARD_OUTPUT_FAILED: ' + message)
 
 
-def extract(name: str) -> str:
-    files = sorted(APP_DIR.glob('app-inline-*.js'))
+def method_hits(name: str):
     hits = []
-    for path in files:
+    for path in sorted(APP_DIR.glob('app-inline-*.js')):
         text = path.read_text(encoding='utf-8')
         match = re.search(rf'(?:^|[,\n])\s*({re.escape(name)}\([^)]*\)\s*\{{)', text, re.M)
         if not match:
@@ -25,6 +24,11 @@ def extract(name: str) -> str:
             fail(f'{name} boundary parser drifted')
         end = start + defs[1].start() + defs[1].group(0).index(defs[1].group(1))
         hits.append(text[start:end])
+    return hits
+
+
+def extract(name: str) -> str:
+    hits = method_hits(name)
     if len(hits) != 1:
         fail(f'{name} expected exactly once, found {len(hits)}')
     return hits[0]
@@ -32,7 +36,21 @@ def extract(name: str) -> str:
 
 save = extract('saveFinanceCost')
 auto = extract('ensureAutomaticAssetCosts')
-receivable = extract('createReceivableForClientMonth')
+legacy_hits = method_hits('_legacyCreateReceivableForClientMonth')
+if len(legacy_hits) > 1:
+    fail(f'_legacyCreateReceivableForClientMonth expected at most once, found {len(legacy_hits)}')
+if legacy_hits:
+    receivable_name = '_legacyCreateReceivableForClientMonth'
+    receivable = legacy_hits[0]
+    # The public wrapper must remain present: callers are not allowed to bypass the
+    # reviewed API merely because the state-mutating implementation was delegated.
+    wrapper = extract('createReceivableForClientMonth')
+    if '_legacyCreateReceivableForClientMonth' not in wrapper:
+        fail('public createReceivableForClientMonth no longer delegates to reviewed implementation')
+else:
+    receivable_name = 'createReceivableForClientMonth'
+    receivable = extract(receivable_name)
+
 for marker in (
     'financeCostAmountCheck=',
     '!Number.isFinite(financeCostAmountCheck)',
@@ -54,7 +72,7 @@ for marker in (
     '!Number.isFinite(amount)||amount<=0',
 ):
     if receivable.count(marker) != 1:
-        fail(f'createReceivableForClientMonth marker drift: {marker}')
+        fail(f'{receivable_name} marker drift: {marker}')
 if 'if(env.autoCost===false||Number(env.ipMonthlyFee||0)<=0)return;' in auto:
     fail('legacy non-finite-permissive IP monthly fee guard remains')
 if "Number(client.monthlyFee||0)<=0||this.isMonthLocked(month)" in receivable:
@@ -71,4 +89,9 @@ for call in (finalizer, output_gate):
 if not (BUILD.index(finalizer) < BUILD.index(output_gate) < BUILD.index(business_root)):
     fail('finance cost input guard must finalize+verify before business regressions')
 
-print('FINANCE_COST_INPUT_GUARD_OUTPUT_OK: manual-cost=finite-nonnegative; auto-ip-fee=finite-positive; auto-receivable=monthly-fee+calculated-amount-finite-positive; legacy-nonfinite-paths=absent; build-order=guarded')
+print(
+    'FINANCE_COST_INPUT_GUARD_OUTPUT_OK: manual-cost=finite-nonnegative; '
+    'auto-ip-fee=finite-positive; auto-receivable=monthly-fee+calculated-amount-finite-positive; '
+    f'receivable-implementation={receivable_name}; public-wrapper=preserved; '
+    'legacy-nonfinite-paths=absent; build-order=guarded'
+)

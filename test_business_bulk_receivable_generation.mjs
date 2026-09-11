@@ -38,7 +38,7 @@ function extractMethod(name){
   return bundle.slice(start,end+1).trim();
 }
 
-const names=['generateReceivablesForPeriod','ensureAutomaticReceivables','createReceivableForClientMonth'];
+const names=['generateReceivablesForPeriod','ensureAutomaticReceivables','_legacyCreateReceivableForClientMonth','financeReceivableBuildCollectionNodes','createReceivableForClientMonth'];
 const methods={};
 for(const name of names){
   const source=extractMethod(name);
@@ -112,6 +112,8 @@ function createContext({client={},month='2026-09',allowFuture=false,receivables=
     financeServiceFeeForClientMonth(){feeCalls+=1;return fee},
     monthDueDate(){return scheduled},accountUid(){uidCalls+=1;return 'ar-new'},
     normalizeReceivable(row){return row},
+    _legacyCreateReceivableForClientMonth:methods._legacyCreateReceivableForClientMonth,
+    financeReceivableBuildCollectionNodes:methods.financeReceivableBuildCollectionNodes,
   };
   const base={id:'client-1',archived:false,billingMode:'FULL_MONTH',monthlyFee:100,currency:'USD',startDate:'2026-01-01',endDate:'2026-12-31',renewalAlertDay:15,...client};
   return {ctx,client:base,month,allowFuture,get feeCalls(){return feeCalls},get uidCalls(){return uidCalls}};
@@ -143,8 +145,6 @@ for(const scenario of [
 }
 
 // Billing inputs and calculated service-fee amounts must be finite and positive.
-// NaN/Infinity must never enter formal receivables because every downstream finance
-// total assumes a real numeric amount.
 for(const monthlyFee of ['not-a-number','Infinity']){
   const state=createContext({client:{monthlyFee}});
   const added=methods.createReceivableForClientMonth.call(state.ctx,state.client,state.month,{allowFuture:false});
@@ -171,6 +171,23 @@ for(const fee of [NaN,Infinity,-Infinity,0,-1]){
   eq(row.dueDate,'2026-09-20','first-month due date clamp');
   eq(row.directCostDate,'2026-09-01','direct cost month date');
   eq(state.uidCalls,1,'valid helper uid once');
+  eq(Array.isArray(row.collectionNodes),false,'legacy client keeps implicit single collection node');
+}
+
+// A configured semi-monthly client still has one monthly accounting master row,
+// but that row receives two collection nodes for reminder/audit settlement.
+{
+  const state=createContext({client:{collectionPlan:{mode:'SEMI_MONTHLY',firstDay:15,firstRatio:0.5}},fee:2000,scheduled:'2026-09-15'});
+  const added=methods.createReceivableForClientMonth.call(state.ctx,state.client,'2026-09',{allowFuture:false});
+  eq(added,1,'semi-monthly master row added count');
+  eq(state.ctx.financeReceivables.length,1,'semi-monthly remains one monthly master');
+  const row=state.ctx.financeReceivables[0];
+  eq(row.amount,2000,'semi-monthly master amount unchanged');
+  eq(row.collectionNodes.length,2,'semi-monthly collection node count');
+  eq(row.collectionNodes[0].dueDate,'2026-09-15','semi-monthly first node date');
+  eq(row.collectionNodes[0].amount,1000,'semi-monthly first node amount');
+  eq(row.collectionNodes[1].dueDate,'2026-09-30','semi-monthly month-end node date');
+  eq(row.collectionNodes[1].amount,1000,'semi-monthly month-end node amount');
 }
 
 // Automatic completion skips archived clients, respects exact clientId scope, and
@@ -205,4 +222,4 @@ for(const fee of [NaN,Infinity,-Infinity,0,-1]){
   eq(auditCount,0,'automatic no-op audit');
 }
 
-console.log('BUSINESS_BULK_RECEIVABLE_GENERATION_OK: bulk=locked-atomic+active-matrix+client-filter+future-opt-in; helper=duplicate+eligibility+finite-positive+due-date; automatic=archived-skip+client-scope+persist-on-change; provenance=final-shipped-vm');
+console.log('BUSINESS_BULK_RECEIVABLE_GENERATION_OK: bulk=locked-atomic+active-matrix+client-filter+future-opt-in; helper=duplicate+eligibility+finite-positive+due-date; collection-plan=legacy-single+semi-monthly-master-with-two-nodes; automatic=archived-skip+client-scope+persist-on-change; provenance=final-shipped-vm');

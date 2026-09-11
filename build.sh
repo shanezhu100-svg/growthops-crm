@@ -108,6 +108,9 @@ python3 test_production_auth_copy_output.py
 # Normalize the one reviewed duplicate Vue :class binding inherited from the
 # immutable byte-sliced canonical source before strict compiler/tooling stages.
 python3 vue_duplicate_attribute_finalize.py
+# Collection-plan fields must exist before inline application scripts are extracted
+# and before Vue templates are precompiled into the final runtime render registry.
+python3 collection_plan_ui_finalize.py
 # Convert browser dependencies to verified same-origin build artifacts. Prove first
 # that direct-CDN downloaders deny redirects before urllib can touch Location.
 python3 test_build_http_redirect_guard.py
@@ -148,6 +151,7 @@ python3 test_vue_duplicate_attribute_output.py
 python3 vue_runtime_only_finalize.py
 python3 vue_runtime_compiled_marker_finalize.py
 python3 test_vue_runtime_only_output.py
+python3 test_collection_plan_ui_output.py
 # Repair only referential debris created by a successful permanent client delete:
 # stale converted-lead pointers and client-scoped SOP progress. Financial-history
 # blockers and historical lead stages remain unchanged.

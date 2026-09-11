@@ -5,17 +5,17 @@ VERIFY = (ROOT / 'cloudflare_p1_verify.py').read_text(encoding='utf-8')
 BUILD = (ROOT / 'build.sh').read_text(encoding='utf-8')
 
 EXPECTED_PINS = {
-    'index.html': '142947f80f8a9617dfe71843538056799e98d2b9e50a701df243011e97f043c2',
+    'index.html': 'aaae7aca411ed8619e09c7452b698f1f16cd7da60a6293a56e09edb9acf9797b',
     'tailwind.css': '082358f4ff9c6d67ccb8e628ed27669967e15cfa7908f2e4c36a1e89c0a3f7b6',
     'app/app-inline-01.js': '52ade14219e58afb7b9f4535440479add87f8a59a0404e7fe504cfde5f06c53e',
     'app/app-inline-02.js': 'bca2a9f4935004057b74bf975392fe70cd89b6f388e42e1daacea7fa67b9fdae',
-    'app/app-inline-03.js': 'f844223b6b852f2b24c4275861fe3b2f7e2b5f29d1cdaf268e25c407e5fe04c3',
+    'app/app-inline-03.js': '75353c6bf7bb9471165a88229dc4860234394678e22fff131f380344c13c069a',
     'app/app-style-01.css': '33a4a117d6b9e820b389e09d87a4ccb94242fb043e80ea087f72c17f46861a70',
     'app/app-style-02.css': '01ed16d03067a8879b877440574fbc6d98af53e0909685e1a23271169c149997',
     'app/app-style-03.css': '64bd5db676657f40c7962080ce62f3b74125865c3f084a67ce21d0fc77ed00b6',
     'app/app-style-04.css': '59de39d8388f561c5229cfa39f7d4c5299b34997c21e3c142d9ced067850a11e',
     'vendor/vue-3.5.41.runtime.global.js': '45c904194aaf24112c8f4fc4386b87e107a32eede80c410ce93be459ebdee088',
-    'vendor/vue-3.5.41.renders.js': '732e24b96d4c1a280026d58cb6edb485afbfe6feffb5284df27123360bdb2cc4',
+    'vendor/vue-3.5.41.renders.js': '54b42c0fcec674bf824ea0d6e82d214a138506b62e1e20535ba639492a1a96aa',
     'vendor/xlsx-0.18.5.full.min.js': 'c9506197caf809a075b6dee1da0d36fb19da7158ffe8a88e7b0c96c5d8623c99',
     'vendor/fontawesome/css/all.min.css': '5ceaaba22d75b58e04150311f596306562a3e595e27ed4b1dfa451b82dda9e50',
     'vendor/fontawesome/webfonts/fa-brands-400.ttf': 'e28096fa75a96ac77020155ea3a6dd7312983e84115366d4cf49a0c312ec6d51',

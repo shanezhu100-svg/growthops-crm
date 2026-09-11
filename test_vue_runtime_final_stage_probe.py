@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parent
 INDEX = ROOT / 'dist' / 'index.html'
 APP_FILES = [ROOT / 'dist' / 'app' / f'app-inline-{idx:02d}.js' for idx in range(1, 4)]
 EXPECTED_TEMPLATES = {
-    'root': ('6a4b1cddf1e55886910b59c914cba446ba0cf3300551f22f8d332dbe6d971385', 355148),
+    'root': ('cdfc7d20145c9e9a633ecf4d9515346cdcc8c363a1cb28aa44b3f7a4f653b047', 356707),
     'component01': ('2f51f5b5ec5ef5bbe12bac62b317a4ad4154cb545779ef8cecb908d016642088', 461),
     'component02': ('f53ef37adfd6f610d2419ab6872195fed96961e80706d572341c923643f7e3f8', 196),
     'component03': ('abceefaa3412391b9b1d384e543144f7b8e2fa30384b9cfd38b1cbb09aeaa788', 126),

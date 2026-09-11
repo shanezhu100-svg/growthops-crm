@@ -63,3 +63,7 @@ print(
     'automatic-outstanding=preserved; unresolved-link=preserved; '
     + 'artifact=' + ','.join(f'{name}:{sha[:12]}' for name, sha in changed)
 )
+
+# Collection-node semantics intentionally run after the formal-receivable reminder
+# authority above, so the wrapper inherits the duplicate-suppression contract.
+import receivable_collection_nodes_finalize  # noqa: E402,F401
