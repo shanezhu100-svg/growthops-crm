@@ -15,9 +15,10 @@ APP_FILES = [ROOT / 'dist' / 'app' / f'app-inline-{idx:02d}.js' for idx in range
 # functions before output verification succeeds under the eval-free CSP.
 # Collection-plan UI adds 14 reviewed Vue directives: 7 numeric option bindings,
 # 4 conditional branches, and 3 additional form-model bindings beyond the replaced
-# monthly-only controls. No event handler or loop surface is added.
+# monthly-only controls. The contract renewal window adds one reviewed v-model for
+# its independent lead-time field; no event handler, loop, binding, or branch is added.
 COMPILER_DEBT_BUDGET = {
-    'directives': 1341,
+    'directives': 1342,
     'events': 299,
     'bindings': 373,
     'loops': 124,
