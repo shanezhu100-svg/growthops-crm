@@ -25,16 +25,44 @@ if (typeof proof.adRecordMetrics !== 'function') throw new Error('BUSINESS_PERSI
 // Internal _legacy* methods are implementation details of reviewed public wrappers:
 // when a wrapper delegates to one, inherit that legacy method's direct write signals
 // onto the public method instead of inventing a second mutation surface.
+//
+// Method ends are brace-aware. The old "next regex hit" boundary truncated multiline
+// methods at nested control flow such as `if (...) {`, which could hide later persist/
+// audit calls (deleteAlert was the concrete regression that exposed this blind spot).
 const defRe = /(?:^|[,]\s*|\n\s*)([A-Za-z_$][A-Za-z0-9_$]*)\s*\([^)]*\)\s*\{/gm;
 const defs = [...bundle.matchAll(defRe)];
 if (defs.length < 20) throw new Error(`BUSINESS_PERSISTED_MUTATION_INVENTORY_FAILED: method parser drifted; defs=${defs.length}`);
 const reserved = new Set(['if','for','while','switch','catch','with','function','return']);
+
+function methodEnd(text, open) {
+  let depth = 0, quote = '', escaped = false, lineComment = false, blockComment = false;
+  for (let i = open; i < text.length; i += 1) {
+    const ch = text[i], next = text[i + 1] || '';
+    if (lineComment) { if (ch === '\n') lineComment = false; continue; }
+    if (blockComment) { if (ch === '*' && next === '/') { blockComment = false; i += 1; } continue; }
+    if (quote) {
+      if (escaped) { escaped = false; continue; }
+      if (ch === '\\') { escaped = true; continue; }
+      if (ch === quote) quote = '';
+      continue;
+    }
+    if (ch === '/' && next === '/') { lineComment = true; i += 1; continue; }
+    if (ch === '/' && next === '*') { blockComment = true; i += 1; continue; }
+    if (ch === '"' || ch === "'" || ch === '`') { quote = ch; continue; }
+    if (ch === '{') depth += 1;
+    else if (ch === '}' && --depth === 0) return i + 1;
+  }
+  throw new Error('BUSINESS_PERSISTED_MUTATION_INVENTORY_FAILED: brace-aware method boundary missing closing brace');
+}
+
 const sources = new Map();
-for (let i = 0; i + 1 < defs.length; i += 1) {
-  const name = defs[i][1];
-  const start = defs[i].index + defs[i][0].indexOf(name);
-  const next = defs[i + 1].index + defs[i + 1][0].indexOf(defs[i + 1][1]);
-  sources.set(name, bundle.slice(start, next));
+for (const def of defs) {
+  const name = def[1];
+  const start = def.index + def[0].indexOf(name);
+  const open = bundle.indexOf('{', start);
+  if (open < 0) throw new Error(`BUSINESS_PERSISTED_MUTATION_INVENTORY_FAILED: ${name} opening brace missing`);
+  const end = methodEnd(bundle, open);
+  sources.set(name, bundle.slice(start, end));
 }
 
 function directSignals(source) {
@@ -79,6 +107,7 @@ const EXPECTED = [
   'deleteAuthUser[audit+persist]',
   'deleteBackupSnapshot[audit]',
   'deleteClient[audit+persist+state-replace]',
+  'deleteAlert[audit+persist]',
   'deleteExternalAsset[audit+persist]',
   'deleteFinanceCost[audit+persist+state-replace]',
   'deleteLead[audit+persist+state-replace]',
@@ -161,5 +190,5 @@ const unmentioned = names.filter(name => !new RegExp(`\\b${name}\\b`).test(busin
 
 console.log(
   `BUSINESS_PERSISTED_MUTATION_INVENTORY_OK: methods=${names.length}; ` +
-  `surface=public-name+direct/delegated-signals-pinned; provenance=read+vm-execute; unmentioned-business-test-debt=${unmentioned.length}`
+  `surface=public-name+brace-aware-direct/delegated-signals-pinned; provenance=read+vm-execute; unmentioned-business-test-debt=${unmentioned.length}`
 );
