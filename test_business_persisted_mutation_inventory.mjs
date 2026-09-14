@@ -125,6 +125,8 @@ const EXPECTED = [
   'deleteFinanceCost[audit+persist+state-replace]',
   'deleteLead[audit+persist+state-replace]',
   'deleteMediaTool[audit+persist]',
+  'deleteOpeningDeal[audit+persist+state-replace]',
+  'deleteOpeningProvider[audit+persist+state-replace]',
   'deleteReceivable[audit+persist+state-replace]',
   'deleteReceivablePayment[audit+persist]',
   'deleteReminderType[audit+persist]',
