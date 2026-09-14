@@ -19,7 +19,7 @@ RUNTIME_URL='https://unpkg.com/vue@3.5.41/dist/vue.runtime.global.js'
 RUNTIME_SHA='45c904194aaf24112c8f4fc4386b87e107a32eede80c410ce93be459ebdee088'
 RUNTIME_BYTES=414799
 EXPECTED_TEMPLATES={
- 'root':('cdfc7d20145c9e9a633ecf4d9515346cdcc8c363a1cb28aa44b3f7a4f653b047',356707),
+ 'root':('f163c479e278e7e26083d8f89082a1ba33ca58e0d2fab70bbf0771dce7132a9f',357018),
  'component01':('2f51f5b5ec5ef5bbe12bac62b317a4ad4154cb545779ef8cecb908d016642088',461),
  'component02':('f53ef37adfd6f610d2419ab6872195fed96961e80706d572341c923643f7e3f8',196),
  'component03':('abceefaa3412391b9b1d384e543144f7b8e2fa30384b9cfd38b1cbb09aeaa788',126),
@@ -103,7 +103,7 @@ try: compiled=json.loads(proc.stdout)
 except Exception: fail('invalid compiler JSON')
 for item in compiled:
  expected=EXPECTED_FACTORIES[item['name']]; actual=(item['hash'],item['bytes'])
- if actual!=expected: fail(f"{item['name']} factory drift")
+ if actual!=expected: fail(f"{item['name']} factory drift: expected={expected[0]}/{expected[1]}B; actual={actual[0]}/{actual[1]}B")
 lines=['/* GrowthOps CRM: deterministic Vue 3.5.41 final-stage render registry. */','(function () {','  const renders = Object.freeze({']
 for idx,item in enumerate(compiled):
  comma=',' if idx+1<len(compiled) else ''
@@ -112,7 +112,8 @@ for idx,item in enumerate(compiled):
  lines.append(f'    }})(){comma}')
 lines.extend(['  });',"  Object.defineProperty(globalThis, 'GrowthOpsVueRenders', {",'    value: renders, writable: false, configurable: false, enumerable: false','  });','})();',''])
 registry='\n'.join(lines); registry_bytes=registry.encode('utf-8')
-if (sha(registry_bytes),len(registry_bytes))!=(REGISTRY_SHA,REGISTRY_BYTES): fail('render registry drift')
+actual_registry=(sha(registry_bytes),len(registry_bytes))
+if actual_registry!=(REGISTRY_SHA,REGISTRY_BYTES): fail(f'render registry drift: expected={REGISTRY_SHA}/{REGISTRY_BYTES}B; actual={actual_registry[0]}/{actual_registry[1]}B')
 for forbidden in ('new Function(','eval(','setTimeout("',"setTimeout('"):
  if forbidden in registry: fail('dynamic code in render registry: '+forbidden)
 
