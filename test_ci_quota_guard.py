@@ -7,6 +7,7 @@ workflow = (root / '.github/workflows/crm-build.yml').read_text(encoding='utf-8'
 build = (root / 'build.sh').read_text(encoding='utf-8')
 ignore_script = (root / 'vercel-ignore-build.sh').read_text(encoding='utf-8')
 browser_smoke_source = (root / 'test_browser_mount_smoke.py').read_text(encoding='utf-8')
+node_version = (root / '.node-version').read_text(encoding='utf-8').strip()
 
 
 def require(ok, message):
@@ -33,6 +34,7 @@ require('actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' in workflow,
 require('actions/setup-node@820762786026740c76f36085b0efc47a31fe5020' in workflow, 'setup-node action must stay pinned to reviewed v7 SHA')
 require('persist-credentials: false' in workflow, 'checkout credentials must not persist')
 require("node-version: '24.x'" in workflow, 'CI Node version must match Vercel 24.x runtime')
+require(node_version == '24', 'hosting builds must pin Node 24 via .node-version to match required CI/Vercel runtime')
 require('package-manager-cache: false' in workflow, 'unneeded package-manager cache must stay disabled')
 require('run: sh build.sh' in workflow, 'PR CI must execute canonical build.sh')
 require('cancel-in-progress: true' in workflow, 'stale PR CI must be cancelled')
@@ -75,4 +77,4 @@ require(
     'browser retry must wrap process completion only; DOM semantic assertions must remain outside retry loop',
 )
 
-print('CI_QUOTA_GUARD_OK: vercel-git=main-only; non-main=globstar-deployment-disabled; nonruntime-main=ignored-conservatively; slash-branches=covered; pr-ci=github-actions; runner=ubuntu-24.04; secrets=none; permissions=contents-read; actions=sha-pinned; node=24.x; canonical-build=sh-build.sh; vue-runtime-only=portable+github-recheck; browser-mount+credential-regression=github-only; browser-smoke=fresh-profile+process-group+bounded-retry')
+print('CI_QUOTA_GUARD_OK: vercel-git=main-only; non-main=globstar-deployment-disabled; nonruntime-main=ignored-conservatively; slash-branches=covered; pr-ci=github-actions; runner=ubuntu-24.04; secrets=none; permissions=contents-read; actions=sha-pinned; node=24.x; hosting-node=.node-version-24; canonical-build=sh-build.sh; vue-runtime-only=portable+github-recheck; browser-mount+credential-regression=github-only; browser-smoke=fresh-profile+process-group+bounded-retry')

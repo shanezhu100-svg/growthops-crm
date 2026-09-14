@@ -92,7 +92,11 @@ for path in files:
         source = source.replace(old, new, 1)
         text = text[:start] + source + text[end:]
 
-    bounds = method_bounds(text, 'createReceivableForClientMonth')
+    # Collection-node support wraps the public helper and keeps the original state
+    # mutation in _legacyCreateReceivableForClientMonth. Guard whichever implementation
+    # actually contains the reviewed mutation anchors; the public API remains unchanged.
+    receivable_impl = '_legacyCreateReceivableForClientMonth' if method_bounds(text, '_legacyCreateReceivableForClientMonth') is not None else 'createReceivableForClientMonth'
+    bounds = method_bounds(text, receivable_impl)
     if bounds is not None:
         found['createReceivableForClientMonth'] += 1
         start, end = bounds
@@ -105,11 +109,11 @@ for path in files:
         amount_old = "const amount=this.financeServiceFeeForClientMonth(client,month);if(amount<=0)return 0;"
         amount_new = "const amount=this.financeServiceFeeForClientMonth(client,month);if(!Number.isFinite(amount)||amount<=0)return 0;"
         if source.count(monthly_old) != 1:
-            fail(f'createReceivableForClientMonth monthly-fee anchor expected once, found {source.count(monthly_old)}')
+            fail(f'{receivable_impl} monthly-fee anchor expected once, found {source.count(monthly_old)}')
         if source.count(amount_old) != 1:
-            fail(f'createReceivableForClientMonth calculated-amount anchor expected once, found {source.count(amount_old)}')
+            fail(f'{receivable_impl} calculated-amount anchor expected once, found {source.count(amount_old)}')
         if 'receivableMonthlyFeeCheck=' in source or '!Number.isFinite(amount)||amount<=0' in source:
-            fail('createReceivableForClientMonth finite guards already present')
+            fail(f'{receivable_impl} finite guards already present')
         source = source.replace(monthly_old, monthly_new, 1).replace(amount_old, amount_new, 1)
         text = text[:start] + source + text[end:]
 
@@ -127,6 +131,7 @@ print(
     'FINANCE_COST_INPUT_GUARD_FINALIZE_OK: '
     'manual-cost=finite-nonnegative; automatic-ip-monthly-fee=finite-positive; '
     'automatic-receivable-monthly-fee+calculated-amount=finite-positive; '
+    'receivable-wrapper=public-or-delegated-mutation-aware; '
     'nan+infinity=denied-before-cost-or-receivable-mutation; existing-lock+audit+persistence=preserved; '
     + 'artifacts=' + ','.join(f'{name}:{sha[:12]}' for name, sha in changed)
 )
