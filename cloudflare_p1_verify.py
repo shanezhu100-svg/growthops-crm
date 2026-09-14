@@ -6,6 +6,7 @@ ROOT = Path(__file__).resolve().parent
 DIST = ROOT / 'dist'
 
 # Keep production artifact pins synchronized with test_cloudflare_p1_verify_guard.py.
+# Hosting builds pin Node through .node-version so Preview executes the same major as required CI.
 EXPECTED_SHA256 = {
     'index.html': 'aaae7aca411ed8619e09c7452b698f1f16cd7da60a6293a56e09edb9acf9797b',
     'tailwind.css': '082358f4ff9c6d67ccb8e628ed27669967e15cfa7908f2e4c36a1e89c0a3f7b6',
