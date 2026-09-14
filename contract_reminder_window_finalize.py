@@ -157,3 +157,7 @@ print(
     'dismissal=stage-aware+dynamic-final-stage; legacy-client=25-day-default; '
     f'index={sha[:12]}'
 )
+
+# Execute the pre-extraction guard while dist/index.html still contains both the
+# Vue template and embedded application source patched above.
+import test_contract_reminder_window_output  # noqa: E402,F401
