@@ -72,3 +72,8 @@ print(
     'fully-stale=denied-before-persist+audit; audit-count=actual-restored; '
     f'artifact={changed[0][0]}:{changed[0][1][:12]}'
 )
+
+# The integrity rewrite above establishes the exact confirmation-time mutation
+# boundary. Convert that reviewed persist path to the shared durable cloud ACK
+# before later reminder/finance finalizers run.
+import dismissed_alert_restore_persistence_ack_finalize  # noqa: E402,F401
