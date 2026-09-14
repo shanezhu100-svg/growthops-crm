@@ -26,15 +26,17 @@ if (typeof proof.adRecordMetrics !== 'function') throw new Error('BUSINESS_PERSI
 // when a wrapper delegates to one, inherit that legacy method's direct write signals
 // onto the public method instead of inventing a second mutation surface.
 //
-// Method ends are brace-aware. The old "next regex hit" boundary truncated multiline
-// methods at nested control flow such as `if (...) {`, which could hide later persist/
-// audit calls (deleteAlert was the concrete regression that exposed this blind spot).
+// Keep the broad historical regex discovery pass so unknown new public methods remain
+// visible. When its *next* hit is a reserved control-flow keyword, that hit is nested
+// implementation rather than a method boundary; only then repair the current method's
+// end with a brace-aware scanner. This fixes multiline deleteAlert without deep-scanning
+// every regex false-positive in the bundle.
 const defRe = /(?:^|[,]\s*|\n\s*)([A-Za-z_$][A-Za-z0-9_$]*)\s*\([^)]*\)\s*\{/gm;
 const defs = [...bundle.matchAll(defRe)];
 if (defs.length < 20) throw new Error(`BUSINESS_PERSISTED_MUTATION_INVENTORY_FAILED: method parser drifted; defs=${defs.length}`);
 const reserved = new Set(['if','for','while','switch','catch','with','function','return']);
 
-function methodEnd(text, open) {
+function methodEnd(text, open, name) {
   let depth = 0, quote = '', escaped = false, lineComment = false, blockComment = false;
   for (let i = open; i < text.length; i += 1) {
     const ch = text[i], next = text[i + 1] || '';
@@ -52,17 +54,28 @@ function methodEnd(text, open) {
     if (ch === '{') depth += 1;
     else if (ch === '}' && --depth === 0) return i + 1;
   }
-  throw new Error('BUSINESS_PERSISTED_MUTATION_INVENTORY_FAILED: brace-aware method boundary missing closing brace');
+  throw new Error(`BUSINESS_PERSISTED_MUTATION_INVENTORY_FAILED: ${name} repaired boundary missing closing brace`);
 }
 
 const sources = new Map();
-for (const def of defs) {
-  const name = def[1];
-  const start = def.index + def[0].indexOf(name);
-  const open = bundle.indexOf('{', start);
-  if (open < 0) throw new Error(`BUSINESS_PERSISTED_MUTATION_INVENTORY_FAILED: ${name} opening brace missing`);
-  const end = methodEnd(bundle, open);
+let repairedReservedBoundaries = 0;
+for (let i = 0; i + 1 < defs.length; i += 1) {
+  const name = defs[i][1];
+  const start = defs[i].index + defs[i][0].indexOf(name);
+  const nextName = defs[i + 1][1];
+  let end = defs[i + 1].index + defs[i + 1][0].indexOf(nextName);
+  if (!reserved.has(name) && reserved.has(nextName)) {
+    const open = bundle.indexOf('{', start);
+    if (open < 0) throw new Error(`BUSINESS_PERSISTED_MUTATION_INVENTORY_FAILED: ${name} opening brace missing`);
+    end = methodEnd(bundle, open, name);
+    repairedReservedBoundaries += 1;
+  }
   sources.set(name, bundle.slice(start, end));
+}
+if (!repairedReservedBoundaries) throw new Error('BUSINESS_PERSISTED_MUTATION_INVENTORY_FAILED: expected at least one reserved-boundary repair');
+const deleteAlertSource = sources.get('deleteAlert') || '';
+if (!deleteAlertSource.includes('this.persist()') || !deleteAlertSource.includes("this.logAudit('删除独立提醒'")) {
+  throw new Error('BUSINESS_PERSISTED_MUTATION_INVENTORY_FAILED: deleteAlert multiline mutation boundary is still truncated');
 }
 
 function directSignals(source) {
@@ -189,6 +202,6 @@ const businessText = businessFiles.map(name => fs.readFileSync(path.join(root, n
 const unmentioned = names.filter(name => !new RegExp(`\\b${name}\\b`).test(businessText));
 
 console.log(
-  `BUSINESS_PERSISTED_MUTATION_INVENTORY_OK: methods=${names.length}; ` +
-  `surface=public-name+brace-aware-direct/delegated-signals-pinned; provenance=read+vm-execute; unmentioned-business-test-debt=${unmentioned.length}`
+  `BUSINESS_PERSISTED_MUTATION_INVENTORY_OK: methods=${names.length}; repaired-reserved-boundaries=${repairedReservedBoundaries}; ` +
+  `surface=public-name+selective-brace-aware-direct/delegated-signals-pinned; provenance=read+vm-execute; unmentioned-business-test-debt=${unmentioned.length}`
 );
