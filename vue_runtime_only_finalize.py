@@ -19,21 +19,21 @@ RUNTIME_URL='https://unpkg.com/vue@3.5.41/dist/vue.runtime.global.js'
 RUNTIME_SHA='45c904194aaf24112c8f4fc4386b87e107a32eede80c410ce93be459ebdee088'
 RUNTIME_BYTES=414799
 EXPECTED_TEMPLATES={
- 'root':('cdfc7d20145c9e9a633ecf4d9515346cdcc8c363a1cb28aa44b3f7a4f653b047',356707),
+ 'root':('f163c479e278e7e26083d8f89082a1ba33ca58e0d2fab70bbf0771dce7132a9f',357018),
  'component01':('2f51f5b5ec5ef5bbe12bac62b317a4ad4154cb545779ef8cecb908d016642088',461),
  'component02':('f53ef37adfd6f610d2419ab6872195fed96961e80706d572341c923643f7e3f8',196),
  'component03':('abceefaa3412391b9b1d384e543144f7b8e2fa30384b9cfd38b1cbb09aeaa788',126),
  'component04':('c761ce8b7a5d43b432bedbc10082909bd3eba1add514f37d73802226c1275de4',1936),
 }
 EXPECTED_FACTORIES={
- 'root':('f6a7b33d3ade6b8d663aff878d5e03d790fd22bb3948a67491eacced67c9fb72',1103109),
+ 'root':('7bbbb1c4d1a2c74b9a08df6228170ec22c1f593d8a878b761289889499fe0274',1104997),
  'component01':('12ce20f7003c90017ebf8cd31e97bc632eb90518176775dbfe663c9b9166fae6',1550),
  'component02':('7a99ecc1e3f6f9d2d14501681e630c40fa59f94144a50d72f392aa757732dcd7',756),
  'component03':('658b8af682a2023c6e01515def82b39f1fcaf5fe7a7315c582e298ff0c3a85be',646),
  'component04':('0ca46a8239700de84f36e527fc8bef3d737fdb09fb78fa64c5242a9ba4d8bb87',4776),
 }
-REGISTRY_SHA='301f02dcb24dac94fbffa89426afe0983b6ba5d201dd1599a028e367c4a2aca9'
-REGISTRY_BYTES=1194207
+REGISTRY_SHA='e50a51bb875e00f90a17c2e01cbf3dfa696472e367cfc017060195e59f69360e'
+REGISTRY_BYTES=1196227
 
 
 def fail(message:str)->None: raise SystemExit('VUE_RUNTIME_ONLY_FINALIZE_FAILED: '+message)
@@ -103,7 +103,7 @@ try: compiled=json.loads(proc.stdout)
 except Exception: fail('invalid compiler JSON')
 for item in compiled:
  expected=EXPECTED_FACTORIES[item['name']]; actual=(item['hash'],item['bytes'])
- if actual!=expected: fail(f"{item['name']} factory drift")
+ if actual!=expected: fail(f"{item['name']} factory drift: expected={expected[0]}/{expected[1]}B; actual={actual[0]}/{actual[1]}B")
 lines=['/* GrowthOps CRM: deterministic Vue 3.5.41 final-stage render registry. */','(function () {','  const renders = Object.freeze({']
 for idx,item in enumerate(compiled):
  comma=',' if idx+1<len(compiled) else ''
@@ -112,7 +112,8 @@ for idx,item in enumerate(compiled):
  lines.append(f'    }})(){comma}')
 lines.extend(['  });',"  Object.defineProperty(globalThis, 'GrowthOpsVueRenders', {",'    value: renders, writable: false, configurable: false, enumerable: false','  });','})();',''])
 registry='\n'.join(lines); registry_bytes=registry.encode('utf-8')
-if (sha(registry_bytes),len(registry_bytes))!=(REGISTRY_SHA,REGISTRY_BYTES): fail('render registry drift')
+actual_registry=(sha(registry_bytes),len(registry_bytes))
+if actual_registry!=(REGISTRY_SHA,REGISTRY_BYTES): fail(f'render registry drift: expected={REGISTRY_SHA}/{REGISTRY_BYTES}B; actual={actual_registry[0]}/{actual_registry[1]}B')
 for forbidden in ('new Function(','eval(','setTimeout("',"setTimeout('"):
  if forbidden in registry: fail('dynamic code in render registry: '+forbidden)
 

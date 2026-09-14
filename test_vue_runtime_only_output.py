@@ -13,7 +13,7 @@ RUNTIME=DIST/'vendor'/'vue-3.5.41.runtime.global.js'
 REGISTRY=DIST/'vendor'/'vue-3.5.41.renders.js'
 COMPILER=DIST/'vendor'/'vue-3.5.41.global.js'
 RUNTIME_SHA='45c904194aaf24112c8f4fc4386b87e107a32eede80c410ce93be459ebdee088'; RUNTIME_BYTES=414799
-REGISTRY_SHA='54b42c0fcec674bf824ea0d6e82d214a138506b62e1e20535ba639492a1a96aa'; REGISTRY_BYTES=1195835
+REGISTRY_SHA='bb51e519b8346e86729cc395f19eb445c56ac8716b30f938c6d880f025848ca8'; REGISTRY_BYTES=1197855
 
 def fail(m): raise SystemExit('VUE_RUNTIME_ONLY_OUTPUT_FAILED: '+m)
 def digest(p): return hashlib.sha256(p.read_bytes()).hexdigest()
@@ -60,9 +60,6 @@ if not (parser.srcs.index(runtime_src)<parser.srcs.index(registry_src)<parser.sr
 if '/vendor/vue-3.5.41.global.js' in parser.srcs or 'vue-3.5.41.global.js' in html:
  fail('compiler-inclusive script reference remains')
 
-# Final browser subresource surface: executable code is constrained to same-origin.
-# Independently keep network-bearing HTML/CSS references from silently reintroducing
-# a third-party CDN or exfiltration endpoint. Normal <a href> navigation is excluded.
 def unsafe_network_value(value):
  value=(value or '').strip().lower()
  return value.startswith(('http://','https://','//','javascript:'))

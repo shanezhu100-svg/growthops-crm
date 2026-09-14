@@ -49,3 +49,8 @@ print(
     'invalid-plan=normalized-safe-default; history=new-receivables-only+no-retroactive-rewrite; '
     f'detail=truthful-collection-summary; index={sha[:12]}'
 )
+
+# Contract renewal reminder lead time is a separate concept from receivable due day.
+# Chain it here so it sees the collection-plan form/model already normalized and still
+# runs before inline extraction + Vue precompilation.
+import contract_reminder_window_finalize  # noqa: E402,F401
