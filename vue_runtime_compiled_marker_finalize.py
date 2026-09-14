@@ -7,8 +7,8 @@ ROOT = Path(__file__).resolve().parent
 REGISTRY = ROOT / 'dist' / 'vendor' / 'vue-3.5.41.renders.js'
 EXPECTED_INPUT_SHA = 'e50a51bb875e00f90a17c2e01cbf3dfa696472e367cfc017060195e59f69360e'
 EXPECTED_INPUT_BYTES = 1196227
-EXPECTED_OUTPUT_SHA = '96c7ec34ff5fc8bd8f6b78afd6e3301759a83ea65b8fabe874f707fd2ef34ef0'
-EXPECTED_OUTPUT_BYTES = 1196036
+EXPECTED_OUTPUT_SHA = '896bc00c2e838461732874d04c713907b3bf5c04f60d85257b50d83b288f66ea'
+EXPECTED_OUTPUT_BYTES = 1198056
 
 # Vue 3.5.41 packages/shared/src/globalsAllowList.ts. Runtime-compiled templates
 # deliberately do not capture these JavaScript globals through the component proxy.
@@ -48,12 +48,6 @@ if text.count(tail_anchor) != 1:
 if 'RuntimeCompiledProxy' in text or "'_rc'" in text or '"_rc"' in text:
     fail('runtime-compiled compatibility layer already present before finalize')
 
-# The compiler-inclusive Vue build calls registerRuntimeCompiler(), which installs
-# RuntimeCompiledPublicInstanceProxyHandlers. The runtime-only build intentionally
-# does not register a compiler, so merely restoring render._rc is insufficient:
-# `with (_ctx)` factories would resolve component fields as JavaScript free names.
-# Recreate the small runtime-compiled context adapter around Vue's existing public
-# instance proxy. No compiler or dynamic code generation is shipped.
 globals_json = json.dumps(list(GLOBALS_ALLOWED), separators=(',', ':'))
 compat_lines = [
     '  });',
@@ -127,7 +121,4 @@ print(
     'runtime-compiled-proxy=vue-3.5.41-compatible; withProxy-cache=weakmap; dynamic-code=0'
 )
 
-# Apply the reviewed company-summary correction only after the render registry is
-# deterministic. This changes one display literal plus financeCostText's ALL-scope
-# authority; it does not alter render structure or the selected-client cost basis.
 import finance_company_cost_summary_finalize  # noqa: E402,F401
