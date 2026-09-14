@@ -51,6 +51,10 @@ print(
 # display fields, so its durability barrier must observe the fully finalized deal path.
 import opening_provider_persistence_ack_finalize  # noqa: F401,E402
 
+# Provider deletion shares the provider durability barrier but has a much narrower
+# rollback domain: the provider row, delete audit, and success-only modal state.
+import opening_provider_delete_persistence_ack_finalize  # noqa: F401,E402
+
 # Confirmation-gated lifecycle writes reuse the same final serialized save queue but
 # remain a separate rollback domain from opening/provider accounting mutations.
 import client_lifecycle_persistence_ack_finalize  # noqa: F401,E402

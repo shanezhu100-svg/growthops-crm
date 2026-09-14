@@ -51,3 +51,4 @@ for(const date of ['2026-02-30','2026/12/31','not-a-date']){const state=standalo
 
 console.log('BUSINESS_CLIENT_REMINDER_DATE_MUTATIONS_OK: recharge+renewal+standalone=yyyy-mm-dd+calendar-valid+durable-ACK; invalid=denied-before-mutation+persist+barrier+audit');
 await import('./test_business_standalone_alert_persistence_ack.mjs');
+await import('./test_business_delete_alert_persistence_ack.mjs');
