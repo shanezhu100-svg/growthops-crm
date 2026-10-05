@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parent
 REGISTRY = ROOT / 'dist' / 'vendor' / 'vue-3.5.41.renders.js'
 EXPECTED_INPUT_SHA = 'ada70ef3923de1f558fd062cac78dc645e24d7b995cd533f97c281846ca57c62'
 EXPECTED_INPUT_BYTES = 1196227
-EXPECTED_OUTPUT_SHA = '896bc00c2e838461732874d04c713907b3bf5c04f60d85257b50d83b288f66ea'
+EXPECTED_OUTPUT_SHA = '330b79c8560978cb39abc865307f4d9bca135f10d9584c3393f6558e67d0ec23'
 EXPECTED_OUTPUT_BYTES = 1198056
 
 # Vue 3.5.41 packages/shared/src/globalsAllowList.ts. Runtime-compiled templates
