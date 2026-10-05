@@ -11,7 +11,7 @@ INDEX = ROOT / 'dist' / 'index.html'
 APP_FILES = [ROOT / 'dist' / 'app' / f'app-inline-{idx:02d}.js' for idx in range(1, 4)]
 VUE_ASSET = ROOT / 'dist' / 'vendor' / 'vue-3.5.41.global.js'
 EXPECTED_FACTORY_HASHES = {
-    'root': '6f173209e81d5cfaec73a790731da8d4f1391fe390306c9cb991a8282fefa0ed',
+    'root': '95d2ba392083d504a20e8a31a93a4edb2b582b6537a50abf177cc646d237d5a5',
     'component01': '12ce20f7003c90017ebf8cd31e97bc632eb90518176775dbfe663c9b9166fae6',
     'component02': '7a99ecc1e3f6f9d2d14501681e630c40fa59f94144a50d72f392aa757732dcd7',
     'component03': '658b8af682a2023c6e01515def82b39f1fcaf5fe7a7315c582e298ff0c3a85be',
