@@ -86,13 +86,13 @@ if not INDEX.is_file():
 html = INDEX.read_text(encoding='utf-8')
 
 payment_anchor = '''<form-field label="月结默认到期日"><input v-model.number="form.renewalAlertDay" type="number" min="1" max="31" class="field" /><div class="text-[10px] text-slate-400 mt-1">月结一次时使用；半月收款由节点日期覆盖提醒。</div></form-field>'''
-reminder_field = payment_anchor + '''<form-field label="合同续费提前提醒（天）"><input v-model.number="form.contractReminderDays" type="number" min="7" max="180" step="1" class="field" /><div class="text-[10px] text-slate-400 mt-1">进入提前提醒窗口后持续显示；到期前 7 / 3 / 1 天自动升级提醒。</div></form-field>'''
+reminder_field = payment_anchor + '''<form-field label="合同续费提前提醒（天）"><input v-model.number="form.contractReminderDays" type="number" min="1" max="180" step="1" class="field" /><div class="text-[10px] text-slate-400 mt-1">进入提前提醒窗口后持续显示；到期前 7 / 3 / 1 天自动升级提醒。</div></form-field>'''
 html = replace_once(html, payment_anchor, reminder_field, 'contract reminder form field')
 
 normalize_anchor = "if(!c.ipCurrency)"
 normalize_new = (
     "const contractReminderDaysRaw=Number(c.contractReminderDays),"
-    "contractReminderDays=Number.isFinite(contractReminderDaysRaw)?Math.min(180,Math.max(7,Math.trunc(contractReminderDaysRaw))):25;"
+    "contractReminderDays=Number.isFinite(contractReminderDaysRaw)?Math.min(180,Math.max(1,Math.trunc(contractReminderDaysRaw))):25;"
     "c.contractReminderDays=contractReminderDays;"
     + normalize_anchor
 )
@@ -110,7 +110,7 @@ push_source = html[start:end]
 expected_push = "pushDueAlert(list,c,typeKey,date,type,cost,target,networkId=null){if(!date)return;const days=this.daysUntil(date),stage=this.autoDueReminderStage(date);if(stage)list.push({id:`${typeKey}-${c.id}${networkId?`-${networkId}`:''}`,typeKey,clientId:c.id,networkId,clientName:c.name,type,dueDate:date,daysLeft:days,cost,target,isStandalone:false,...stage})}"
 if push_source.strip() != expected_push:
     fail('pushDueAlert reviewed source drifted')
-contract_method = "contractDueReminderStage(c,date){if(!date)return null;const raw=Number(c?.contractReminderDays),lead=Number.isFinite(raw)?Math.min(180,Math.max(7,Math.trunc(raw))):25,days=this.daysUntil(date);if(days>lead||days<-30)return null;let index=1,daysBefore=lead;if(days<=7){index=2;daysBefore=7}if(days<=3){index=3;daysBefore=3}if(days<=1){index=4;daysBefore=1}return{reminderIndex:index,reminderTotal:4,reminderDaysBefore:daysBefore,reminderDate:this.addDays(date,-daysBefore),reminderWindowDays:lead}},\n    "
+contract_method = "contractDueReminderStage(c,date){if(!date)return null;const raw=Number(c?.contractReminderDays),lead=Number.isFinite(raw)?Math.min(180,Math.max(1,Math.trunc(raw))):25,days=this.daysUntil(date);if(days>lead||days<-30)return null;let index=1,daysBefore=lead;if(days<=7){index=2;daysBefore=7}if(days<=3){index=3;daysBefore=3}if(days<=1){index=4;daysBefore=1}return{reminderIndex:index,reminderTotal:4,reminderDaysBefore:daysBefore,reminderDate:this.addDays(date,-daysBefore),reminderWindowDays:lead}},\n    "
 new_push = "pushDueAlert(list,c,typeKey,date,type,cost,target,networkId=null){if(!date)return;const days=this.daysUntil(date),stage=typeKey==='CONTRACT'?this.contractDueReminderStage(c,date):this.autoDueReminderStage(date);if(stage)list.push({id:`${typeKey}-${c.id}${networkId?`-${networkId}`:''}`,typeKey,clientId:c.id,networkId,clientName:c.name,type,dueDate:date,daysLeft:days,cost,target,isStandalone:false,...stage})}"
 html = html[:start] + contract_method + new_push + html[end:]
 
@@ -152,7 +152,7 @@ INDEX.write_text(html, encoding='utf-8')
 sha = hashlib.sha256(html.encode('utf-8')).hexdigest()
 print(
     'CONTRACT_REMINDER_WINDOW_FINALIZE_OK: '
-    'payment-due-day=unchanged+receivable-only; contract-reminder-days=separate+default-25+range-7-180; '
+    'payment-due-day=unchanged+receivable-only; contract-reminder-days=separate+default-25+range-1-180; '
     'contract-window=continuous-from-N-days; escalation=N+7+3+1; ip+receivable=existing-7+3+1; '
     'dismissal=stage-aware+dynamic-final-stage; legacy-client=25-day-default; '
     f'index={sha[:12]}'
