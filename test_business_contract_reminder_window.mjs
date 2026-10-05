@@ -78,6 +78,8 @@ s=stageAt(-5);eq(s.reminderIndex,4,'contract overdue remains in final stage thro
 eq(stageAt(-31),null,'contract older than 30 days leaves active window');
 s=stageAt(30,30);eq(s.reminderIndex,1,'custom renewal lead days honored');
 s=stageAt(180,999);eq(s.reminderDaysBefore,180,'renewal lead is capped at 180 days');
+s=stageAt(3,3);eq(s.reminderIndex,3,'3-day configured window starts directly at the 3-day escalation');eq(s.reminderDaysBefore,3,'3-day configured window is preserved');
+s=stageAt(1,1);eq(s.reminderIndex,4,'1-day configured window starts directly at the final escalation');eq(s.reminderDaysBefore,1,'1-day configured window is preserved');
 
 {
   const ctx={daysUntil(){return 8},addDays(){return'2026-09-23'}};

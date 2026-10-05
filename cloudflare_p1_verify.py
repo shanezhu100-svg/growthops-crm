@@ -8,17 +8,17 @@ DIST = ROOT / 'dist'
 # Keep production artifact pins synchronized with test_cloudflare_p1_verify_guard.py.
 # Hosting builds pin Node through .node-version so Preview executes the same major as required CI.
 EXPECTED_SHA256 = {
-    'index.html': 'edb39788701931b38f7a5607d8efdb5f497d7cc935a1836f65d064fc4407c38f',
+    'index.html': 'a0ee6f1a4a50434da325592e5be542a07874a2070719619b750ba7f32ced8f4b',
     'tailwind.css': '082358f4ff9c6d67ccb8e628ed27669967e15cfa7908f2e4c36a1e89c0a3f7b6',
     'app/app-inline-01.js': '52ade14219e58afb7b9f4535440479add87f8a59a0404e7fe504cfde5f06c53e',
     'app/app-inline-02.js': 'bca2a9f4935004057b74bf975392fe70cd89b6f388e42e1daacea7fa67b9fdae',
-    'app/app-inline-03.js': '19efcd4af5a746b75f234b3382191d7c3ae722fcf013f680546a16edb8b5b41e',
+    'app/app-inline-03.js': 'b52217b98867ddaede6c241669519313ef050f1027be2ff4aeef6b191b7b3d05',
     'app/app-style-01.css': '33a4a117d6b9e820b389e09d87a4ccb94242fb043e80ea087f72c17f46861a70',
     'app/app-style-02.css': '01ed16d03067a8879b877440574fbc6d98af53e0909685e1a23271169c149997',
     'app/app-style-03.css': '64bd5db676657f40c7962080ce62f3b74125865c3f084a67ce21d0fc77ed00b6',
     'app/app-style-04.css': '59de39d8388f561c5229cfa39f7d4c5299b34997c21e3c142d9ced067850a11e',
     'vendor/vue-3.5.41.runtime.global.js': '45c904194aaf24112c8f4fc4386b87e107a32eede80c410ce93be459ebdee088',
-    'vendor/vue-3.5.41.renders.js': 'bb51e519b8346e86729cc395f19eb445c56ac8716b30f938c6d880f025848ca8',
+    'vendor/vue-3.5.41.renders.js': '7ee20351f1ae465129412757f106708e52a477fa9d243535d1690aeb16a9a3cd',
     'vendor/xlsx-0.18.5.full.min.js': 'c9506197caf809a075b6dee1da0d36fb19da7158ffe8a88e7b0c96c5d8623c99',
     'vendor/fontawesome/css/all.min.css': '5ceaaba22d75b58e04150311f596306562a3e595e27ed4b1dfa451b82dda9e50',
     'vendor/fontawesome/webfonts/fa-brands-400.ttf': 'e28096fa75a96ac77020155ea3a6dd7312983e84115366d4cf49a0c312ec6d51',

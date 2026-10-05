@@ -32,11 +32,15 @@ if html.count('合同续费提前提醒（天）') != 1:
     fail('contract reminder field must render exactly once')
 if html.count('contractDueReminderStage(c,date)') < 1:
     fail('contract stage helper missing')
+if 'form.contractReminderDays\" type=\"number\" min=\"1\" max=\"180\"' not in html:
+    fail('contract reminder field must allow 1-180 days')
+if 'Math.max(1,Math.trunc(contractReminderDaysRaw))' not in html:
+    fail('client normalization must preserve 1-day and 3-day reminder windows')
 if "stage=typeKey==='CONTRACT'?this.autoDueReminderStage(date)" in html:
     fail('contract reminder still routed through generic 7/3/1 stage')
 
 print(
     'TEST_CONTRACT_REMINDER_WINDOW_OUTPUT_OK: '
-    'ui=separate-payment-vs-renewal-fields; default=25-days; range=7-180; '
+    'ui=separate-payment-vs-renewal-fields; default=25-days; range=1-180; '
     'contract=continuous-window+N/7/3/1; ip+receivable=unchanged-7/3/1; dismissal=dynamic-total'
 )
