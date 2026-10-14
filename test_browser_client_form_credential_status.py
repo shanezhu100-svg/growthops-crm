@@ -124,6 +124,7 @@ fixture = r'''<!doctype html>
         const button=host.querySelector('button[aria-label="显示密码和 2FA"]');
         const icon=button?.querySelector('i.fa-eye');
         if(!input||!button||!icon)return false;
+        button.scrollIntoView({block:'center',inline:'nearest'});
         const br=button.getBoundingClientRect();
         const ir=input.getBoundingClientRect();
         const xr=icon.getBoundingClientRect();
