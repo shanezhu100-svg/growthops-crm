@@ -73,7 +73,7 @@ def scan_balanced(text: str, start: int, open_char: str, close_char: str, label:
 
 
 def method_bounds(text: str, name: str):
-    match = re.search(rf'(?:^|[,\n])\s*({re.escape(name)})\s*\(', text, flags=re.M)
+    match = re.search(rf'(?:^|[,\n])\s*({re.escape(name)})\s*\([^)]*\)\s*\{', text, flags=re.M)
     if not match:
         return None
     start = match.start() + match.group(0).index(match.group(1))
