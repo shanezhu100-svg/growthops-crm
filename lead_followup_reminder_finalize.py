@@ -154,6 +154,40 @@ alerts = replace_once(
 )
 html = html[:alerts_start] + alerts + html[alerts_end:]
 
+# Mirror lead follow-up reminders into the potential-customer page so the
+# operational queue is visible where lead work actually happens. Reuse the
+# existing DUE quick filter instead of adding new Vue directive/interpolation debt.
+leads_start = html.find('<!-- Leads / 潜在客户 -->')
+leads_end = html.find('<!-- Account Opening Channels / 开户商渠道 -->', leads_start)
+if leads_start < 0 or leads_end <= leads_start:
+    fail('leads template section not found')
+leads = html[leads_start:leads_end]
+leads = replace_once(
+    leads,
+    '<div class="text-[10px] text-amber-600">待跟进 / 已逾期</div>',
+    '<div class="text-[10px] text-amber-600">跟进提醒</div>',
+    'lead page reminder card title',
+)
+leads = replace_once(
+    leads,
+    '点击查看今天及以前需跟进的潜客',
+    '未来 3 天 / 今天 / 已逾期',
+    'lead page reminder card hint',
+)
+leads = replace_once(
+    leads,
+    "leadPoolFilter==='ACTIVE' && leadQuickFilter==='DUE' ? '待跟进 / 已逾期客户'",
+    "leadPoolFilter==='ACTIVE' && leadQuickFilter==='DUE' ? '潜客跟进提醒'",
+    'lead page reminder list heading',
+)
+leads = replace_once(
+    leads,
+    '当前没有待跟进或已逾期客户',
+    '当前没有未来 3 天内、今天或逾期的跟进提醒',
+    'lead page reminder empty state',
+)
+html = html[:leads_start] + leads + html[leads_end:]
+
 # Lead reminder timing: enter the window at T-3, escalate at T-1 and T0. The
 # T0 stage remains active while overdue until nextFollowUp changes or the lead
 # leaves the active pipeline.
@@ -171,6 +205,39 @@ lead_stage_method = (
 if 'leadFollowupReminderStage(date)' in html:
     fail('leadFollowupReminderStage already exists')
 html = html[:auto_end] + ',\n    ' + lead_stage_method + html[auto_end:]
+
+
+def patch_filtered_leads(source: str) -> str:
+    old = "if(quick==='DUE')return !!l.nextFollowUp&&String(l.nextFollowUp)<=today;"
+    new = "if(quick==='DUE')return !!this.leadFollowupReminderStage(l.nextFollowUp);"
+    if source.count(old) != 1:
+        fail('filteredLeads DUE rule drifted')
+    return source.replace(old, new, 1)
+
+
+html = patch_method(html, 'filteredLeads', patch_filtered_leads)
+
+
+def patch_lead_stats(source: str) -> str:
+    old = "due:active.filter(l=>l.nextFollowUp&&l.nextFollowUp<=today).length"
+    new = "due:active.filter(l=>!!this.leadFollowupReminderStage(l.nextFollowUp)).length"
+    if source.count(old) != 1:
+        fail('leadStats due rule drifted')
+    return source.replace(old, new, 1)
+
+
+html = patch_method(html, 'leadStats', patch_lead_stats)
+
+
+def patch_lead_followup_class(source: str) -> str:
+    old = "return this.daysUntil(lead.nextFollowUp)<=0?'text-rose-600':'text-slate-700'"
+    new = "const days=this.daysUntil(lead.nextFollowUp);return days<=0?'text-rose-600':days<=3?'text-amber-600':'text-slate-700'"
+    if source.count(old) != 1:
+        fail('leadFollowupClass rule drifted')
+    return source.replace(old, new, 1)
+
+
+html = patch_method(html, 'leadFollowupClass', patch_lead_followup_class)
 
 
 def patch_alert_list(source: str) -> str:
@@ -337,7 +404,7 @@ print(
     'LEAD_FOLLOWUP_REMINDER_FINALIZE_OK: '
     'window=3d+1d+today+overdue-continuous; active-stages=NEW+CONTACTED+QUALIFIED+PROPOSAL; '
     'won+lost+converted=excluded; dismissal=stage-aware+restorable; action=opens-lead; '
-    'copy=followup-semantic; '
+    'copy=followup-semantic; lead-page=3d-queue+color-coded; '
     f'index={sha[:12]}'
 )
 
