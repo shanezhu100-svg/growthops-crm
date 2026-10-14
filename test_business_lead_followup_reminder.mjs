@@ -9,13 +9,13 @@ if(!files.length)throw new Error('BUSINESS_LEAD_FOLLOWUP_REMINDER_FAILED: no fin
 const bundle=files.map(name=>fs.readFileSync(path.join(appDir,name),'utf8')).join('\n');
 
 function extractMethod(name){
-  const signature=new RegExp(\`(?:^|[,\\\\n])\\\\s*(\${name}\\\\([^)]*\\\\)\\\\s*\\\\{)\`,'m');
+  const signature=new RegExp(`(?:^|[,\\n])\\s*(${name}\\([^)]*\\)\\s*\\{)`,'m');
   const match=signature.exec(bundle);
-  if(!match)throw new Error(\`BUSINESS_LEAD_FOLLOWUP_REMINDER_FAILED: \${name} not found\`);
+  if(!match)throw new Error(`BUSINESS_LEAD_FOLLOWUP_REMINDER_FAILED: ${name} not found`);
   const start=match.index+match[0].indexOf(match[1]);
   const tail=bundle.slice(start);
   const defs=[...tail.matchAll(/(?:^|[,]\s*|\n\s*)([A-Za-z_$][A-Za-z0-9_$]*)\s*\([^)]*\)\s*\{/g)];
-  if(defs.length<2||defs[0][1]!==name)throw new Error(\`BUSINESS_LEAD_FOLLOWUP_REMINDER_FAILED: \${name} parser drifted\`);
+  if(defs.length<2||defs[0][1]!==name)throw new Error(`BUSINESS_LEAD_FOLLOWUP_REMINDER_FAILED: ${name} parser drifted`);
   const next=defs[1].index+defs[1][0].indexOf(defs[1][1]);
   return tail.slice(0,next).replace(/,\s*$/,'').trim();
 }
@@ -31,7 +31,7 @@ if(source._legacyAlertList.includes('LEAD_FOLLOWUP'))throw new Error('BUSINESS_L
 if(!source.alertList.includes('this.$options?.computed?._legacyAlertList'))throw new Error('BUSINESS_LEAD_FOLLOWUP_REMINDER_FAILED: alert wrapper lost computed authority');
 if(bundle.includes("typeKey:'LEAD_FOLLOWUP'"))throw new Error('BUSINESS_LEAD_FOLLOWUP_REMINDER_FAILED: final runtime still ships lead reminder-center alert type');
 
-const subject=vm.runInNewContext(\`({\${names.map(name=>source[name]).join(',')}})\`,{Number,String,Object,Array,Math,Date,JSON,Set,Promise},{timeout:1000});
+const subject=vm.runInNewContext(`({${names.map(name=>source[name]).join(',')}})`,{Number,String,Object,Array,Math,Date,JSON,Set,Promise},{timeout:1000});
 
 const dayMap={D4:4,D3:3,D2:2,D1:1,D0:0,DM5:-5};
 Object.assign(subject,{
@@ -44,15 +44,15 @@ Object.assign(subject,{
   autoDueReminderStage(){return null;},
   contractDueReminderStage(){return null;},
   alertTypeName(k){return k;},
-  formatMoney(v,c){return \`\${c||'USD'}:\${Number(v||0)}\`;},
+  formatMoney(v,c){return `${c||'USD'}:${Number(v||0)}`;},
   daysUntil(date){return Object.prototype.hasOwnProperty.call(dayMap,date)?dayMap[date]:9999;},
-  addDays(date,n){return \`\${date}:\${n}\`;},
+  addDays(date,n){return `${date}:${n}`;},
   localDateKey(){return'D0';},
   leadSearch:'',leadPoolFilter:'ACTIVE',leadQuickFilter:'ALL',
 });
 subject.$options={computed:{_legacyAlertList:subject._legacyAlertList}};
 
-const fail=(label,expected,actual)=>{throw new Error(\`BUSINESS_LEAD_FOLLOWUP_REMINDER_FAILED: \${label}; expected=\${expected}; actual=\${actual}\`);};
+const fail=(label,expected,actual)=>{throw new Error(`BUSINESS_LEAD_FOLLOWUP_REMINDER_FAILED: ${label}; expected=${expected}; actual=${actual}`);};
 const eq=(actual,expected,label)=>{if(actual!==expected)fail(label,expected,actual);};
 const stage=date=>subject.leadFollowupReminderStage(date);
 
@@ -64,8 +64,8 @@ eq(stage('D0').reminderIndex,3,'today final stage index');
 eq(stage('DM5').reminderIndex,3,'overdue remains final stage');
 
 const lead=(id,stageKey,nextFollowUp,extra={})=>({
-  id,company:\`Company-\${id}\`,contact:\`Contact-\${id}\`,contactInfo:\`Info-\${id}\`,
-  stage:stageKey,nextFollowUp,owner:\`Owner-\${id}\`,convertedClientId:null,...extra
+  id,company:`Company-${id}`,contact:`Contact-${id}`,contactInfo:`Info-${id}`,
+  stage:stageKey,nextFollowUp,owner:`Owner-${id}`,convertedClientId:null,...extra
 });
 subject.leads=[
   lead('d3','NEW','D3'),
