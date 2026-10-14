@@ -32,7 +32,7 @@ forbidden = (
     "noticeText(item){if(item.typeKey==='LEAD_FOLLOWUP')",
     "hint:'潜客跟进 / 合同 / IP / 应收 / 广告余额'",
     '统一汇总潜在客户跟进、合同、IP、收入应收回款与广告账户低余额提醒',
-    "keys.add(\`LEAD_FOLLOWUP-",
+    "keys.add(`LEAD_FOLLOWUP-",
 )
 present = [marker for marker in forbidden if marker in html]
 if present:
