@@ -297,24 +297,6 @@ def patch_restore_dismissed(source: str) -> str:
 html = patch_method(html, 'restoreDismissedAlerts', patch_restore_dismissed)
 
 
-def patch_delete_alert(source: str) -> str:
-    updated = source
-    replacements = (
-        ("title:'忽略本次到期提醒'", "title:'忽略本次提醒'"),
-        ('不会修改原始到期日期、应收账单或客户资料。', '不会修改原始跟进 / 到期日期、应收账单或客户 / 潜客资料。'),
-        ("this.logAudit('忽略到期提醒',", "this.logAudit(item.typeKey==='LEAD_FOLLOWUP'?'忽略潜客跟进提醒':'忽略到期提醒',"),
-        ("?'当前到期周期提醒已忽略':'当前阶段提醒已忽略，后续阶段仍会再次提醒'", "?'当前提醒已忽略':'当前阶段提醒已忽略，后续阶段仍会再次提醒'"),
-    )
-    for old, new in replacements:
-        if updated.count(old) != 1:
-            fail(f'deleteAlert copy anchor count={updated.count(old)}: {old}')
-        updated = updated.replace(old, new, 1)
-    return updated
-
-
-html = patch_method(html, 'deleteAlert', patch_delete_alert)
-
-
 def patch_handle_complete(source: str) -> str:
     anchor = "handleAlertComplete(item){if(item.typeKey==='AD_RECHARGE')"
     if source.count(anchor) != 1:
