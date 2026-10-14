@@ -8,6 +8,16 @@ const files=fs.readdirSync(appDir).filter(name=>/^app-inline-\d+\.js$/.test(name
 if(!files.length)throw new Error('BUSINESS_RECEIVABLE_REMINDER_CLOSE_FAILED: no final app-inline JS artifacts');
 const bundle=files.map(name=>fs.readFileSync(path.join(appDir,name),'utf8')).join('\n');
 
+// alertList is an Options API computed getter. Its legacy getter must stay in
+// computed, while argument-taking collection helpers must live in methods.
+const legacyPos=bundle.indexOf('_legacyAlertList(){');
+const computedPos=bundle.lastIndexOf('computed:{',legacyPos);
+const methodsPos=bundle.indexOf('methods:{',legacyPos);
+const alertPos=bundle.indexOf('alertList(){',legacyPos+1);
+const helperPos=bundle.indexOf('financeReceivableCollectionNodes(r){');
+if(!(computedPos>=0&&legacyPos>computedPos&&alertPos>legacyPos&&methodsPos>alertPos))throw new Error('BUSINESS_RECEIVABLE_REMINDER_CLOSE_FAILED: alert computed placement drifted');
+if(!(helperPos>methodsPos))throw new Error('BUSINESS_RECEIVABLE_REMINDER_CLOSE_FAILED: collection helpers must be methods, not computed getters');
+
 function extractMethod(name){
   const signature=new RegExp(`(?:^|[,\\n])\\s*(${name}\\([^)]*\\)\\s*\\{)`,'m');
   const match=signature.exec(bundle);
@@ -22,6 +32,8 @@ function extractMethod(name){
 
 const names=['_legacyAlertList','financeReceivableCollectionNodes','financeReceivableCollectionAllocation','financeReceivableBuildCollectionNodes','alertList','financeReceivablePaid','financeReceivableUnpaid','saveReceivablePayment'];
 const source=Object.fromEntries(names.map(name=>[name,extractMethod(name)]));
+if(!source.alertList.includes('this.$options?.computed?._legacyAlertList'))throw new Error('BUSINESS_RECEIVABLE_REMINDER_CLOSE_FAILED: alertList must delegate to computed legacy getter');
+if(source.alertList.includes('this.$options?.methods?._legacyAlertList'))throw new Error('BUSINESS_RECEIVABLE_REMINDER_CLOSE_FAILED: alertList still delegates through methods');
 const subject=vm.runInNewContext(`({${names.map(name=>source[name]).join(',')}})`,{Number,String,Object,Array,Math,Date,JSON,Set,Promise},{timeout:1000});
 
 let uid=0;
@@ -40,6 +52,7 @@ Object.assign(subject,{
   accountUid(prefix){uid+=1;return `${prefix}-${uid}`;},
   persist(){return true;},persistReceivablePaymentBarrier:async()=>{},logAudit(){},notify(){},
 });
+subject.$options={computed:{_legacyAlertList:subject._legacyAlertList}};
 
 const fail=(label,expected,actual)=>{throw new Error(`BUSINESS_RECEIVABLE_REMINDER_CLOSE_FAILED: ${label}; expected=${expected}; actual=${actual}`);};
 const eq=(actual,expected,label)=>{if(actual!==expected)fail(label,expected,actual);};

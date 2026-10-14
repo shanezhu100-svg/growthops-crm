@@ -15,7 +15,7 @@ CSS_URL = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;8
 IMPORT = "@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');"
 LOCAL_CSS_TAG = '<link rel="stylesheet" href="/vendor/inter/inter.css" />'
 USER_AGENT = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
-CSS_SHA256 = 'ccb4927c1e665717c1f91e480fbbad168db8c70373b7ccf7abf2f70131c04de3'
+CSS_SHA256 = '723b1183fdc255d32daeaa3bea36345a64ab2d56664b5703adb41391d2161233'
 CSS_SIZE = 12355
 DOWNLOAD_ATTEMPTS = 3
 EXPECTED_WEIGHTS = (400, 500, 600, 700, 800)

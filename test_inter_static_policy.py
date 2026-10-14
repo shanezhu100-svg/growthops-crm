@@ -6,7 +6,7 @@ BUILD = (ROOT / 'build.sh').read_text(encoding='utf-8')
 
 required = (
     "CSS_URL = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap'",
-    "CSS_SHA256 = 'ccb4927c1e665717c1f91e480fbbad168db8c70373b7ccf7abf2f70131c04de3'",
+    "CSS_SHA256 = '723b1183fdc255d32daeaa3bea36345a64ab2d56664b5703adb41391d2161233'",
     'CSS_SIZE = 12355',
     "'latin': ('3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62', 48256, 'inter-latin.woff2')",
     "'latin-ext': ('34b9c504cab7a73e37b746343a449132e56cf7b5481af2cb81dc74dcff25c956', 85068, 'inter-latin-ext.woff2')",
