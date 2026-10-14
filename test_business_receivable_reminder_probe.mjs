@@ -2,6 +2,7 @@
 // persisted-mutation inventory and focused mutation regressions on this root so
 // shipped write boundaries remain reviewable without adding redundant roots.
 await import('./test_business_receivable_reminder_close.mjs');
+await import('./test_business_lead_followup_reminder.mjs');
 await import('./test_business_persisted_mutation_inventory.mjs');
 await import('./test_business_client_lifecycle_mutations.mjs');
 await import('./test_business_client_lifecycle_persistence_ack.mjs');
