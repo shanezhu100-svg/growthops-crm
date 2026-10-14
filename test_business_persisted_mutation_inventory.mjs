@@ -152,7 +152,7 @@ const EXPECTED = [
   'removeSopStep[audit]',
   'restoreBackupSnapshot[audit]',
   'restoreClient[audit+persist]',
-  'restoreDismissedAlerts[audit+persist]',
+  'restoreDismissedAlerts[audit]',
   'runFinanceMonthCheck[persist]',
   'saveAdDataRecord[audit+persist]',
   'saveAdSpend[persist]',
