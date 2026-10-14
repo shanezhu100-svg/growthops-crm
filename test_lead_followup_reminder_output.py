@@ -31,8 +31,8 @@ required = (
     "noticeText(item){if(item.typeKey==='LEAD_FOLLOWUP')",
     '请及时跟进并更新下一次跟进日期',
     "hint:'潜客跟进 / 合同 / IP / 应收 / 广告余额'",
-    "if(quick==='DUE')return !!this.leadFollowupReminderStage(l.nextFollowUp);",
-    "due:active.filter(l=>!!this.leadFollowupReminderStage(l.nextFollowUp)).length",
+    "if(quick==='DUE')return !!l.nextFollowUp&&(typeof this.leadFollowupReminderStage==='function'?!!this.leadFollowupReminderStage(l.nextFollowUp):String(l.nextFollowUp)<=today);",
+    "due:active.filter(l=>l.nextFollowUp&&(typeof this.leadFollowupReminderStage==='function'?!!this.leadFollowupReminderStage(l.nextFollowUp):String(l.nextFollowUp)<=today)).length",
     "days<=3?'text-amber-600':'text-slate-700'",
 )
 missing = [marker for marker in required if marker not in html]
