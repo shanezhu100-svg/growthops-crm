@@ -12,12 +12,12 @@ VUE_ASSET = ROOT / 'dist' / 'vendor' / 'vue-3.5.41.global.js'
 
 EXPECTED = {
     'root': {
-        'templateHash': '4bdb680e392477cb9dd5c05ee5459c468e46816ace95678be14eb4b599a29171',
-        'templateBytes': 357071,
-        'renderHash': '329d8ecc246f3c16515d965c30b58c97308991ef8e7492c6ff194ca4e65bb9ae',
-        'renderBytes': 967508,
-        'factoryHash': '95d2ba392083d504a20e8a31a93a4edb2b582b6537a50abf177cc646d237d5a5',
-        'factoryBytes': 1105174,
+        'templateHash': '953976baf7b70ac200e169eccc2df901b15a7f19f61eeffc94cefedb90f3321f',
+        'templateBytes': 357278,
+        'renderHash': '339df8929e2b62a9f1effabbea3739651397205e34f1ab5a64c8d081dafc62d0',
+        'renderBytes': 967715,
+        'factoryHash': 'a9eaf45b274d8fa662adffe8adadfa22fc918dc2e78c4b4570dd02e69ad3a098',
+        'factoryBytes': 1105381,
         'functionCalls': 2173,
     },
     'component-01': {
@@ -265,6 +265,6 @@ for item in first:
 
 print(
     'VUE_PRECOMPILE_FEASIBILITY_OK: units=5; deterministic=2-vm-pass; '
-    'root-factory=95d2ba392083/1105174B; components=4; full-template+render+factory-hashes=pinned; '
+    'root-factory=a9eaf45b274d/1105381B; components=4; full-template+render+factory-hashes=pinned; '
     'compiler-Function-call-inventory=pinned; runtime=unchanged'
 )
