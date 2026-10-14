@@ -175,7 +175,7 @@ html = html[:auto_end] + ',\n    ' + lead_stage_method + html[auto_end:]
 
 def patch_filtered_leads(source: str) -> str:
     old = "if(quick==='DUE')return !!l.nextFollowUp&&String(l.nextFollowUp)<=today;"
-    new = "if(quick==='DUE')return !!this.leadFollowupReminderStage(l.nextFollowUp);"
+    new = "if(quick==='DUE')return !!l.nextFollowUp&&(typeof this.leadFollowupReminderStage==='function'?!!this.leadFollowupReminderStage(l.nextFollowUp):String(l.nextFollowUp)<=today);"
     if source.count(old) != 1:
         fail('filteredLeads DUE rule drifted')
     return source.replace(old, new, 1)
@@ -186,7 +186,7 @@ html = patch_method(html, 'filteredLeads', patch_filtered_leads)
 
 def patch_lead_stats(source: str) -> str:
     old = "due:active.filter(l=>l.nextFollowUp&&l.nextFollowUp<=today).length"
-    new = "due:active.filter(l=>!!this.leadFollowupReminderStage(l.nextFollowUp)).length"
+    new = "due:active.filter(l=>l.nextFollowUp&&(typeof this.leadFollowupReminderStage==='function'?!!this.leadFollowupReminderStage(l.nextFollowUp):String(l.nextFollowUp)<=today)).length"
     if source.count(old) != 1:
         fail('leadStats due rule drifted')
     return source.replace(old, new, 1)
