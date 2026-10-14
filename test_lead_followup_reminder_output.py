@@ -15,8 +15,8 @@ html = INDEX.read_text(encoding='utf-8')
 required = (
     '统一汇总潜在客户跟进、合同、IP、收入应收回款与广告账户低余额提醒',
     "item.typeKey==='LEAD_FOLLOWUP' ? followupLabel(item.dueDate)",
-    "item.typeKey==='LEAD_FOLLOWUP' ? '跟进日期' : '到期日期'",
-    "item.typeKey==='LEAD_FOLLOWUP' ? '阶段 / 负责人' : '费用'",
+    "<template v-if=\"item.typeKey==='LEAD_FOLLOWUP'\">跟进日期</template><template v-else>到期日期</template>",
+    "<template v-if=\"item.typeKey==='LEAD_FOLLOWUP'\">阶段 / 负责人</template><template v-else>费用</template>",
     "item.typeKey==='LEAD_FOLLOWUP' ? '联系人'",
     "item.typeKey==='LEAD_FOLLOWUP'?'查看潜客':'完成续费'",
     "leadFollowupReminderStage(date){if(!date)return null;const days=this.daysUntil(date);if(days>3)return null;",
