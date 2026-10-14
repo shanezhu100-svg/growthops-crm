@@ -31,6 +31,9 @@ required = (
     "noticeText(item){if(item.typeKey==='LEAD_FOLLOWUP')",
     '请及时跟进并更新下一次跟进日期',
     "hint:'潜客跟进 / 合同 / IP / 应收 / 广告余额'",
+    "if(quick==='DUE')return !!l.nextFollowUp&&(typeof this.leadFollowupReminderStage==='function'?!!this.leadFollowupReminderStage(l.nextFollowUp):String(l.nextFollowUp)<=today);",
+    "due:active.filter(l=>l.nextFollowUp&&(typeof this.leadFollowupReminderStage==='function'?!!this.leadFollowupReminderStage(l.nextFollowUp):String(l.nextFollowUp)<=today)).length",
+    "days<=3?'text-amber-600':'text-slate-700'",
 )
 missing = [marker for marker in required if marker not in html]
 if missing:
@@ -46,5 +49,5 @@ print(
     'LEAD_FOLLOWUP_REMINDER_OUTPUT_OK: '
     'template=filter+lead-labels+open-action; window=3/1/0+overdue; '
     'active-only=won+lost+converted-excluded; dismissal=stage-aware+restorable; '
-    'copy=followup-semantic'
+    'copy=followup-semantic; lead-page=3d-queue+color-coded'
 )

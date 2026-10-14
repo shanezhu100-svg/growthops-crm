@@ -2,15 +2,20 @@ from pathlib import Path
 import http.server
 import json
 import mimetypes
+import os
 import re
 import shutil
+import signal
 import socket
 import subprocess
+import tempfile
 import threading
 
 ROOT = Path(__file__).resolve().parent
 DIST = ROOT / 'dist'
 HOTFIX = DIST / 'cloud-security-hotfix.js'
+BROWSER_ATTEMPT_TIMEOUT_SECONDS = 30
+MAX_BROWSER_ATTEMPTS = 2
 
 
 def fail(message: str) -> None:
@@ -119,6 +124,7 @@ fixture = r'''<!doctype html>
         const button=host.querySelector('button[aria-label="显示密码和 2FA"]');
         const icon=button?.querySelector('i.fa-eye');
         if(!input||!button||!icon)return false;
+        button.scrollIntoView({block:'center',inline:'nearest'});
         const br=button.getBoundingClientRect();
         const ir=input.getBoundingClientRect();
         const xr=icon.getBoundingClientRect();
@@ -268,13 +274,14 @@ server = http.server.ThreadingHTTPServer(('127.0.0.1', port), Handler)
 thread = threading.Thread(target=server.serve_forever, daemon=True)
 thread.start()
 
-cmd = [
+base_cmd = [
     browser,
     '--headless=new',
     '--no-sandbox',
     '--disable-gpu',
     '--disable-dev-shm-usage',
     '--disable-background-networking',
+    '--disable-component-update',
     '--disable-default-apps',
     '--disable-extensions',
     '--disable-sync',
@@ -287,17 +294,70 @@ cmd = [
     f'http://127.0.0.1:{port}/fixture.html',
 ]
 
+
+def run_browser_attempt(attempt: int):
+    # Process isolation only: semantic assertions below are unchanged. A runner
+    # shutdown hang gets one clean retry with a fresh Chrome profile/process group.
+    with tempfile.TemporaryDirectory(prefix=f'growthops-credential-status-{attempt}-') as profile:
+        cmd = [*base_cmd, f'--user-data-dir={profile}']
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=True,
+        )
+        try:
+            stdout, stderr = proc.communicate(timeout=BROWSER_ATTEMPT_TIMEOUT_SECONDS)
+            return proc.returncode, stdout or '', stderr or '', False
+        except subprocess.TimeoutExpired as exc:
+            partial_stdout = exc.stdout if isinstance(exc.stdout, str) else ''
+            partial_stderr = exc.stderr if isinstance(exc.stderr, str) else ''
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            try:
+                tail_stdout, tail_stderr = proc.communicate(timeout=5)
+            except subprocess.TimeoutExpired:
+                tail_stdout, tail_stderr = '', ''
+            return (
+                None,
+                partial_stdout + (tail_stdout or ''),
+                partial_stderr + (tail_stderr or ''),
+                True,
+            )
+
+
+proc_returncode = None
+dom = ''
+stderr = ''
+process_failures = []
 try:
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30, check=False)
+    for attempt in range(1, MAX_BROWSER_ATTEMPTS + 1):
+        returncode, stdout, raw_stderr, timed_out = run_browser_attempt(attempt)
+        normalized_stderr = re.sub(r'\s+', ' ', raw_stderr or '').strip()
+        if timed_out:
+            process_failures.append(
+                f'attempt={attempt}: timeout>{BROWSER_ATTEMPT_TIMEOUT_SECONDS}s; stderr={normalized_stderr[-800:]}'
+            )
+            continue
+        if returncode != 0:
+            process_failures.append(
+                f'attempt={attempt}: exit={returncode}; stderr={normalized_stderr[-800:]}'
+            )
+            continue
+        proc_returncode = returncode
+        dom = stdout
+        stderr = normalized_stderr
+        break
 finally:
     server.shutdown()
     server.server_close()
 
-stderr = re.sub(r'\s+', ' ', proc.stderr or '').strip()
-if proc.returncode != 0:
-    fail(f'Chromium exit={proc.returncode}; stderr={stderr[-1600:]}')
+if proc_returncode != 0:
+    fail('Chromium process did not complete cleanly after bounded retry: ' + ' | '.join(process_failures))
 
-dom = proc.stdout or ''
 if 'data-credential-regression="pass"' not in dom:
     attrs = {}
     for name in (
@@ -335,5 +395,7 @@ print(
     f'browser={Path(browser).name}; currentPage=client-form; stale-assets-id=0; '
     'safe-summary-client=client-1; facebook+tiktok=in-input-login+masked-eye; '
     'font-readiness=polled+timer-settled; click=preserves-saved-account; typing=mutation-handoff; '
-    'eye=visible+font-icon+hit-testable; initial-edit-values=blank; reveal-rpc=not-called'
+    f'eye=visible+font-icon+hit-testable; initial-edit-values=blank; reveal-rpc=not-called; '
+    f'process-isolation=fresh-profile+process-group; attempts<={MAX_BROWSER_ATTEMPTS}; '
+    f'attempt-timeout={BROWSER_ATTEMPT_TIMEOUT_SECONDS}s'
 )

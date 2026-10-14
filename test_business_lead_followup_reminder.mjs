@@ -24,7 +24,8 @@ const names=[
   '_legacyAlertList','alertList','leadFollowupReminderStage','alertDismissKey',
   'isAlertDismissed','leadStageText','alertIgnoreFollowupText',
   'handleAlertComplete','noticeText','activeDismissedAlertCount',
-  'financeReceivableCollectionNodes','financeReceivableCollectionAllocation'
+  'financeReceivableCollectionNodes','financeReceivableCollectionAllocation',
+  'filteredLeads','leadStats','leadFollowupClass'
 ];
 const source=Object.fromEntries(names.map(name=>[name,extractMethod(name)]));
 if(!source._legacyAlertList.includes("typeKey:'LEAD_FOLLOWUP'"))throw new Error('BUSINESS_LEAD_FOLLOWUP_REMINDER_FAILED: final alert generator missing lead reminders');
@@ -54,6 +55,8 @@ Object.assign(subject,{
   $nextTick(fn){fn();},
   openLeadModal(lead){openedLead=lead;},
   openRenewalModal(){throw new Error('BUSINESS_LEAD_FOLLOWUP_REMINDER_FAILED: lead alert fell through to renewal');},
+  localDateKey(){return'D0';},
+  leadSearch:'',leadPoolFilter:'ACTIVE',leadQuickFilter:'ALL',
 });
 subject.$options={computed:{_legacyAlertList:subject._legacyAlertList}};
 
@@ -92,6 +95,18 @@ eq(alerts.some(a=>a.id==='LEAD_FOLLOWUP-won'),false,'won lead excluded');
 eq(alerts.some(a=>a.id==='LEAD_FOLLOWUP-lost'),false,'lost lead excluded');
 eq(alerts.some(a=>a.id==='LEAD_FOLLOWUP-converted'),false,'converted lead excluded');
 
+subject.leadQuickFilter='DUE';
+const pageRows=subject.filteredLeads();
+eq(pageRows.length,4,'lead page reminder queue matches 3-day reminder window');
+eq(pageRows.some(l=>l.id==='d3'),true,'3-day lead appears on lead page queue');
+eq(pageRows.some(l=>l.id==='future'),false,'4-day lead stays outside lead page queue');
+eq(subject.leadStats().due,4,'lead page reminder card count matches reminder window');
+eq(subject.leadFollowupClass(subject.leads.find(l=>l.id==='d3')),'text-amber-600','3-day lead uses warning color');
+eq(subject.leadFollowupClass(subject.leads.find(l=>l.id==='today')),'text-rose-600','today lead uses urgent color');
+eq(subject.leadFollowupClass(subject.leads.find(l=>l.id==='late')),'text-rose-600','overdue lead uses urgent color');
+eq(subject.leadFollowupClass(subject.leads.find(l=>l.id==='future')),'text-slate-700','outside-window lead stays neutral');
+subject.leadQuickFilter='ALL';
+
 const lateAlert=alerts.find(a=>a.id==='LEAD_FOLLOWUP-late');
 eq(lateAlert.daysLeft,-5,'overdue lead days preserved');
 eq(lateAlert.reminderIndex,3,'overdue lead uses final reminder stage');
@@ -128,4 +143,4 @@ eq(leadNotice.includes('【潜客跟进提醒】Company-late'),true,'lead notice
 eq(leadNotice.includes('已逾期 5 天'),true,'lead notice overdue wording');
 eq(leadNotice.includes('请及时跟进并更新下一次跟进日期'),true,'lead notice action wording');
 
-console.log('BUSINESS_LEAD_FOLLOWUP_REMINDER_OK: window=3/1/0+overdue; active-only=NEW+CONTACTED+QUALIFIED+PROPOSAL; won+lost+converted=excluded; dismissal=stage-aware; reschedule=new-key; action=opens-lead; copy=followup-semantic');
+console.log('BUSINESS_LEAD_FOLLOWUP_REMINDER_OK: window=3/1/0+overdue; active-only=NEW+CONTACTED+QUALIFIED+PROPOSAL; won+lost+converted=excluded; dismissal=stage-aware; reschedule=new-key; action=opens-lead; lead-page=3d-queue+color-coded; copy=followup-semantic');

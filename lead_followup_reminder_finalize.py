@@ -173,6 +173,39 @@ if 'leadFollowupReminderStage(date)' in html:
 html = html[:auto_end] + ',\n    ' + lead_stage_method + html[auto_end:]
 
 
+def patch_filtered_leads(source: str) -> str:
+    old = "if(quick==='DUE')return !!l.nextFollowUp&&String(l.nextFollowUp)<=today;"
+    new = "if(quick==='DUE')return !!l.nextFollowUp&&(typeof this.leadFollowupReminderStage==='function'?!!this.leadFollowupReminderStage(l.nextFollowUp):String(l.nextFollowUp)<=today);"
+    if source.count(old) != 1:
+        fail('filteredLeads DUE rule drifted')
+    return source.replace(old, new, 1)
+
+
+html = patch_method(html, 'filteredLeads', patch_filtered_leads)
+
+
+def patch_lead_stats(source: str) -> str:
+    old = "due:active.filter(l=>l.nextFollowUp&&l.nextFollowUp<=today).length"
+    new = "due:active.filter(l=>l.nextFollowUp&&(typeof this.leadFollowupReminderStage==='function'?!!this.leadFollowupReminderStage(l.nextFollowUp):String(l.nextFollowUp)<=today)).length"
+    if source.count(old) != 1:
+        fail('leadStats due rule drifted')
+    return source.replace(old, new, 1)
+
+
+html = patch_method(html, 'leadStats', patch_lead_stats)
+
+
+def patch_lead_followup_class(source: str) -> str:
+    old = "return this.daysUntil(lead.nextFollowUp)<=0?'text-rose-600':'text-slate-700'"
+    new = "const days=this.daysUntil(lead.nextFollowUp);return days<=0?'text-rose-600':days<=3?'text-amber-600':'text-slate-700'"
+    if source.count(old) != 1:
+        fail('leadFollowupClass rule drifted')
+    return source.replace(old, new, 1)
+
+
+html = patch_method(html, 'leadFollowupClass', patch_lead_followup_class)
+
+
 def patch_alert_list(source: str) -> str:
     anchor = '});this.financeReceivables.filter(r=>this.financeReceivableUnpaid(r)>0).forEach(r=>{'
     if source.count(anchor) != 1:
@@ -337,7 +370,7 @@ print(
     'LEAD_FOLLOWUP_REMINDER_FINALIZE_OK: '
     'window=3d+1d+today+overdue-continuous; active-stages=NEW+CONTACTED+QUALIFIED+PROPOSAL; '
     'won+lost+converted=excluded; dismissal=stage-aware+restorable; action=opens-lead; '
-    'copy=followup-semantic; '
+    'copy=followup-semantic; lead-page=3d-queue+color-coded; '
     f'index={sha[:12]}'
 )
 
