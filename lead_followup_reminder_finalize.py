@@ -154,40 +154,6 @@ alerts = replace_once(
 )
 html = html[:alerts_start] + alerts + html[alerts_end:]
 
-# Mirror lead follow-up reminders into the potential-customer page so the
-# operational queue is visible where lead work actually happens. Reuse the
-# existing DUE quick filter instead of adding new Vue directive/interpolation debt.
-leads_start = html.find('<!-- Leads / 潜在客户 -->')
-leads_end = html.find('<!-- Account Opening Channels / 开户商渠道 -->', leads_start)
-if leads_start < 0 or leads_end <= leads_start:
-    fail('leads template section not found')
-leads = html[leads_start:leads_end]
-leads = replace_once(
-    leads,
-    '<div class="text-[10px] text-amber-600">待跟进 / 已逾期</div>',
-    '<div class="text-[10px] text-amber-600">跟进提醒</div>',
-    'lead page reminder card title',
-)
-leads = replace_once(
-    leads,
-    '点击查看今天及以前需跟进的潜客',
-    '未来 3 天 / 今天 / 已逾期',
-    'lead page reminder card hint',
-)
-leads = replace_once(
-    leads,
-    "leadPoolFilter==='ACTIVE' && leadQuickFilter==='DUE' ? '待跟进 / 已逾期客户'",
-    "leadPoolFilter==='ACTIVE' && leadQuickFilter==='DUE' ? '潜客跟进提醒'",
-    'lead page reminder list heading',
-)
-leads = replace_once(
-    leads,
-    '当前没有待跟进或已逾期客户',
-    '当前没有未来 3 天内、今天或逾期的跟进提醒',
-    'lead page reminder empty state',
-)
-html = html[:leads_start] + leads + html[leads_end:]
-
 # Lead reminder timing: enter the window at T-3, escalate at T-1 and T0. The
 # T0 stage remains active while overdue until nextFollowUp changes or the lead
 # leaves the active pipeline.
