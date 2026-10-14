@@ -131,13 +131,13 @@ alerts = replace_once(
 alerts = replace_once(
     alerts,
     '<span class="text-slate-400">到期日期</span>',
-    '<span class="text-slate-400">{{ item.typeKey===\'LEAD_FOLLOWUP\' ? \'跟进日期\' : \'到期日期\' }}</span>',
+    '<span class="text-slate-400"><template v-if="item.typeKey===\'LEAD_FOLLOWUP\'">跟进日期</template><template v-else>到期日期</template></span>',
     'lead date label',
 )
 alerts = replace_once(
     alerts,
     '<span class="text-slate-400">费用</span>',
-    '<span class="text-slate-400">{{ item.typeKey===\'LEAD_FOLLOWUP\' ? \'阶段 / 负责人\' : \'费用\' }}</span>',
+    '<span class="text-slate-400"><template v-if="item.typeKey===\'LEAD_FOLLOWUP\'">阶段 / 负责人</template><template v-else>费用</template></span>',
     'lead detail label',
 )
 alerts = replace_once(
