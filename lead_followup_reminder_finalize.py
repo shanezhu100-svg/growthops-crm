@@ -178,7 +178,7 @@ def patch_alert_list(source: str) -> str:
     if source.count(anchor) != 1:
         fail(f'alertList lead insertion anchor count={source.count(anchor)}')
     lead_loop = (
-        "});this.leads.filter(lead=>lead&&lead.nextFollowUp&&!lead.convertedClientId"
+        "});(Array.isArray(this.leads)?this.leads:[]).filter(lead=>lead&&lead.nextFollowUp&&!lead.convertedClientId"
         "&&!['WON','LOST'].includes(lead.stage)).forEach(lead=>{"
         "const stage=this.leadFollowupReminderStage(lead.nextFollowUp);if(!stage)return;"
         "const days=this.daysUntil(lead.nextFollowUp),owner=String(lead.owner||'').trim(),"
@@ -211,7 +211,7 @@ def patch_active_dismissed(source: str) -> str:
     if source.count(anchor) != 1:
         fail(f'activeDismissedAlertCount anchor count={source.count(anchor)}')
     lead_keys = (
-        "});this.leads.filter(lead=>lead&&lead.nextFollowUp&&!lead.convertedClientId"
+        "});(Array.isArray(this.leads)?this.leads:[]).filter(lead=>lead&&lead.nextFollowUp&&!lead.convertedClientId"
         "&&!['WON','LOST'].includes(lead.stage)).forEach(lead=>{"
         "const stage=this.leadFollowupReminderStage(lead.nextFollowUp);"
         "if(stage)keys.add(`LEAD_FOLLOWUP-${lead.id}|${lead.nextFollowUp}|${stage.reminderIndex}`)});"
@@ -278,7 +278,7 @@ def patch_restore_dismissed(source: str) -> str:
     if source.count(anchor) != 1:
         fail(f'restoreDismissedAlerts lead anchor count={source.count(anchor)}')
     lead_keys = (
-        "});this.leads.filter(lead=>lead&&lead.nextFollowUp&&!lead.convertedClientId"
+        "});(Array.isArray(this.leads)?this.leads:[]).filter(lead=>lead&&lead.nextFollowUp&&!lead.convertedClientId"
         "&&!['WON','LOST'].includes(lead.stage)).forEach(lead=>{"
         "const stage=this.leadFollowupReminderStage(lead.nextFollowUp);"
         "if(stage)keys.add(`LEAD_FOLLOWUP-${lead.id}|${lead.nextFollowUp}|${stage.reminderIndex}`)});"
@@ -303,7 +303,7 @@ def patch_handle_complete(source: str) -> str:
         fail('handleAlertComplete source drifted')
     lead_action = (
         "handleAlertComplete(item){if(item.typeKey==='LEAD_FOLLOWUP'){"
-        "const lead=this.leads.find(lead=>String(lead.id)===String(item.leadId));"
+        "const lead=(Array.isArray(this.leads)?this.leads:[]).find(lead=>String(lead.id)===String(item.leadId));"
         "if(!lead){this.notify('潜在客户已不存在或已删除');return}"
         "this.leadPoolFilter='ACTIVE';this.leadQuickFilter='ALL';this.navigateTo('leads');"
         "this.$nextTick(()=>this.openLeadModal(lead));return}"
