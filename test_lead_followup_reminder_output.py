@@ -31,8 +31,6 @@ required = (
     "noticeText(item){if(item.typeKey==='LEAD_FOLLOWUP')",
     '请及时跟进并更新下一次跟进日期',
     "hint:'潜客跟进 / 合同 / IP / 应收 / 广告余额'",
-    '跟进提醒',
-    '未来 3 天 / 今天 / 已逾期',
     "if(quick==='DUE')return !!this.leadFollowupReminderStage(l.nextFollowUp);",
     "due:active.filter(l=>!!this.leadFollowupReminderStage(l.nextFollowUp)).length",
     "days<=3?'text-amber-600':'text-slate-700'",
